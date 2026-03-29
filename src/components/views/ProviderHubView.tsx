@@ -227,6 +227,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
             Privacy / routing controls
           </div>
           <div className="flex justify-between"><span className="text-muted-foreground">Global mode</span><span className="font-mono text-primary uppercase">{localInferenceRuntime.routing.activeMode}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">App routing profile</span><span className="font-mono text-info uppercase">{localInferenceRuntime.routing.appModeProfile}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Sensitive tasks</span><span className="font-mono text-success">local only enforced</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Fallback readiness</span><span className="font-mono text-foreground">{localInferenceRuntime.resources.autoFallbackReady ? "ready" : "not-ready"}</span></div>
         </div>
@@ -271,6 +272,36 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
               <span className="truncate">{assignment.agentRole}</span>
               <span className="font-mono text-foreground text-right truncate">
                 {assignment.preferredBackend} → {assignment.fallbackBackend}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Routing presets</h2>
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {Object.entries(localInferenceRuntime.routing.presets).map(([presetId, preset]) => (
+            <div key={presetId} className="flex justify-between gap-2">
+              <span className="truncate font-mono text-foreground">{presetId}</span>
+              <span className="font-mono text-right truncate">
+                {preset.provider} / {preset.profile}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Per-agent default routing</h2>
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {Object.entries(localInferenceRuntime.routing.agentRoutingDefaults).map(([agentId, defaults]) => (
+            <div key={agentId} className="flex justify-between gap-2">
+              <span className="truncate">{agentId}</span>
+              <span className="font-mono text-foreground text-right truncate">
+                {"firstPass" in defaults
+                  ? `${defaults.firstPass} → ${defaults.finalPass}`
+                  : `${defaults.primary} → ${defaults.fallback}`}
               </span>
             </div>
           ))}

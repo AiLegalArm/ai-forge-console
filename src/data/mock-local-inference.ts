@@ -1,4 +1,5 @@
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
+import { agentRoutingDefaults, appRoutingModes, routingPresets } from "@/lib/routing-presets";
 
 export const localInferenceRuntime: LocalInferenceRuntimeState = {
   ollama: {
@@ -72,6 +73,7 @@ export const localInferenceRuntime: LocalInferenceRuntimeState = {
   ],
   routing: {
     activeMode: "hybrid",
+    appModeProfile: "balanced",
     conversationOverrides: {
       "main-session-1": "local_preferred",
       "audit-session-1": "sensitive_local_only",
@@ -167,6 +169,12 @@ export const localInferenceRuntime: LocalInferenceRuntimeState = {
         allowedBackends: ["local", "ollama"],
       },
     ],
+    presets: {
+      ...routingPresets.cloud,
+      ...routingPresets.local,
+    },
+    agentRoutingDefaults,
+    appRoutingModes,
   },
   resources: {
     maxConcurrentJobs: 2,
