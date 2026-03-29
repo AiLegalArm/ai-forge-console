@@ -34,7 +34,14 @@ export type AuditEvidenceType =
   | "runtime_event"
   | "audit_snapshot"
   | "provider_context"
-  | "quality_signal";
+  | "quality_signal"
+  | "screenshot"
+  | "console_finding"
+  | "network_finding"
+  | "ux_observation"
+  | "design_note"
+  | "component_handoff"
+  | "scenario_trace";
 
 export interface AuditEvidenceReference {
   id: string;

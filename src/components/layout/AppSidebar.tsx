@@ -1,6 +1,7 @@
 import {
   FolderKanban, Files, GitBranch, Wand2, Library, Bot, Plug, ShieldCheck,
   Database, Rocket, Globe, Package, Settings, ChevronLeft, X, MessageSquare,
+  Palette, MonitorPlay,
 } from "lucide-react";
 import type { NavSection } from "./AppLayout";
 import { useI18n } from "@/lib/i18n";
@@ -18,6 +19,8 @@ const navItems: { id: NavSection; icon: React.ElementType; labelKey: string }[] 
   { id: "supabase-import", icon: Database, labelKey: "nav.supabase-import" },
   { id: "deploy", icon: Rocket, labelKey: "nav.deploy" },
   { id: "domains", icon: Globe, labelKey: "nav.domains" },
+  { id: "design", icon: Palette, labelKey: "nav.design" },
+  { id: "browser", icon: MonitorPlay, labelKey: "nav.browser" },
   { id: "release", icon: Package, labelKey: "nav.release" },
   { id: "settings", icon: Settings, labelKey: "nav.settings" },
 ];

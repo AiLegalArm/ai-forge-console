@@ -2,6 +2,8 @@ import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
 import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
+import type { BrowserSession, DesignSession } from "@/types/agents";
+import type { EvidenceFlowState } from "@/types/evidence";
 
 export type PrivacyMode = "private" | "team";
 export type SyncStatus = "disconnected" | "connected" | "syncing" | "dirty" | "up_to_date" | "conflict" | "blocked" | "error";
@@ -34,6 +36,9 @@ export interface WorkspaceRuntimeState {
   pendingApprovals: WorkflowApproval[];
   workflow: WorkflowState;
   auditors: AuditorControlState;
+  designSession: DesignSession;
+  browserSession: BrowserSession;
+  evidenceFlow: EvidenceFlowState;
   localInference: LocalInferenceRuntimeState;
 }
 

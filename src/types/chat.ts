@@ -28,6 +28,9 @@ export interface ChatLinkedContext {
   agentName?: string;
   auditFindingId?: string;
   auditFindingTitle?: string;
+  evidenceIds?: string[];
+  reviewId?: string;
+  branchName?: string;
 }
 
 export interface ChatProviderMetadata {

@@ -64,6 +64,7 @@ export const auditFindings: AuditorFinding[] = [
     evidence: [
       evidence("ev-sec-task", "task", "Task runtime snapshot", "task-rbac-audit#snapshot-2"),
       evidence("ev-sec-runtime", "runtime_event", "Permission escalation event", "runtime://auth/invite/escalation"),
+      evidence("ev-sec-browser-network", "network_finding", "Invite 429 trace", "artifact://browser/network/invite-429.har"),
     ],
     recommendation: "Narrow permission scope to org-admin and enforce policy checks before token minting.",
     linked: { taskId: "task-rbac-audit", chatSessionId: "audit-session-1", branchName: "audit/sec-014-remediation", reviewId: "pr-rbac-42" },
@@ -163,6 +164,8 @@ export const auditFindings: AuditorFinding[] = [
     evidence: [
       evidence("ev-release-audit", "audit_snapshot", "Release gate snapshot", "snapshot://release/rc-2026-03-29-rbac"),
       evidence("ev-release-state", "quality_signal", "Deploy readiness state", "release://readiness/no-go"),
+      evidence("ev-release-browser", "scenario_trace", "Failed invite scenario", "artifact://browser/traces/scenario-invite-flow.json"),
+      evidence("ev-release-design", "design_note", "Designer UX concern", "design://sessions/design-session-1/notes"),
     ],
     recommendation: "Resolve open critical findings and rerun release checklist before requesting deploy approval.",
     linked: { taskId: "task-rbac-release", releaseCandidateId: "rc-2026-03-29-rbac", reviewId: "pr-rbac-42" },

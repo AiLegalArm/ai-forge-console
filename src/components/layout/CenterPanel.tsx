@@ -26,7 +26,7 @@ interface CenterPanelProps {
 }
 
 export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: CenterPanelProps) {
-  const isWorkspace = ["workspace", "files", "git", "deploy", "domains"].includes(activeSection);
+  const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
     return (

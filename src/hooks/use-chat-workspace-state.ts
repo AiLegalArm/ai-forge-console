@@ -3,6 +3,8 @@ import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
+import { browserSession, designSession } from "@/data/mock-agent-workspace";
+import { evidenceFlowState } from "@/data/mock-evidence";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
@@ -138,6 +140,9 @@ export function useChatWorkspaceState() {
     pendingApprovals,
     workflow,
     auditors: auditorControlState,
+    designSession,
+    browserSession,
+    evidenceFlow: evidenceFlowState,
     localInference: localInferenceRuntime,
   };
 

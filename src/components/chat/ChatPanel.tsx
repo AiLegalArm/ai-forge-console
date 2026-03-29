@@ -106,6 +106,12 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             Audit findings: {auditSummary.critical} critical • {auditSummary.high} high • score {auditSummary.score}
           </div>
         )}
+        {activeTab === "review" && (
+          <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
+            Review evidence: {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} linked items •
+            blockers {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
+          </div>
+        )}
 
         {activeApproval && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono">
@@ -151,6 +157,9 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             {msg.linked?.taskTitle && (
               <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task ↔ {msg.linked.taskTitle}</p>
             )}
+            {msg.linked?.evidenceIds?.length ? (
+              <p className="text-[10px] text-info mt-1 font-mono">Evidence ↔ {msg.linked.evidenceIds.join(", ")}</p>
+            ) : null}
           </div>
         ))}
       </div>

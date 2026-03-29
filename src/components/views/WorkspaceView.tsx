@@ -19,6 +19,10 @@ import {
   GitCommitHorizontal,
   Upload,
   ShieldAlert,
+  Palette,
+  MonitorPlay,
+  Camera,
+  AlertTriangle,
 } from "lucide-react";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
@@ -47,6 +51,8 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   if (section === "git") return <GitView workspaceState={workspaceState} />;
   if (section === "deploy") return <DeployView />;
   if (section === "domains") return <DomainsView />;
+  if (section === "design") return <DesignView workspaceState={workspaceState} />;
+  if (section === "browser") return <BrowserView workspaceState={workspaceState} />;
 
   return (
     <div className="flex flex-col h-full">
@@ -73,6 +79,8 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
   const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
+  const taskEvidence = activeTask?.id ? workspaceState.evidenceFlow.linkedByTaskId[activeTask.id] ?? [] : [];
+  const blockerEvidence = workspaceState.evidenceFlow.records.filter((record) => record.blocking);
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
@@ -92,6 +100,9 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
                 <span className="text-[10px] text-foreground truncate">{task.title}</span>
               </div>
               <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
+              {task.designBrowserBlockers ? (
+                <div className="text-[9px] text-warning font-mono pl-4">design/browser blockers: {task.designBrowserBlockers}</div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -128,10 +139,23 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Evidence drawer</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Task evidence</span><span className="text-foreground font-mono">{taskEvidence.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Blocking evidence</span><span className="text-destructive font-mono">{blockerEvidence.length}</span></div>
+          {taskEvidence.slice(0, 2).map((evidenceId) => (
+            <div key={evidenceId} className="text-muted-foreground truncate">• {workspaceState.evidenceFlow.records.find((entry) => entry.id === evidenceId)?.title ?? evidenceId}</div>
+          ))}
+        </div>
+      </div>
+
+      <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Audit / Review</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">Audit linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Review linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Design state</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Browser run</span><span className="text-foreground font-mono">{workspaceState.browserSession.runState}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Mode</span><span className="text-primary font-mono uppercase">{mode}</span></div>
         </div>
       </div>
@@ -186,6 +210,57 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
           <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">48K tok</span></div>
           <div className="flex justify-between text-muted-foreground"><span>AGENTS.md</span><span className="text-success font-mono">{t("ctx.synced")}</span></div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DesignView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+  const session = workspaceState.designSession;
+  return (
+    <div className="p-4 space-y-3">
+      <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Palette className="h-4 w-4 text-primary" /> Design Agent</h1>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-2">
+        <div className="flex justify-between"><span className="text-muted-foreground">State</span><span className="font-mono text-primary">{session.state}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Brief</span><span className="font-mono text-foreground">{session.brief.title}</span></div>
+        <div className="text-muted-foreground">Page structure: {session.layoutProposal.pageStructure.join(" → ")}</div>
+        <div className="text-muted-foreground">Components: {session.layoutProposal.componentInventory.join(", ")}</div>
+        <div className="text-muted-foreground">Variants: {session.layoutProposal.statesAndVariants.join(", ")}</div>
+        <div className="text-muted-foreground">Tokens: {session.tokenHandoff.designTokens.join(", ")}</div>
+      </div>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
+        <div className="font-mono text-primary">UX concerns / handoff</div>
+        {session.findings.map((finding) => (
+          <div key={finding.id} className="flex items-start gap-2 text-muted-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-warning" />
+            <span>{finding.title}: {finding.concern}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BrowserView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+  const session = workspaceState.browserSession;
+  return (
+    <div className="p-4 space-y-3">
+      <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><MonitorPlay className="h-4 w-4 text-primary" /> Browser Agent</h1>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-2">
+        <div className="flex justify-between"><span className="text-muted-foreground">Scenario</span><span className="font-mono text-foreground">{session.scenario.title}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Run state</span><span className={`font-mono ${session.runState === "failed" ? "text-destructive" : "text-primary"}`}>{session.runState}</span></div>
+        {session.scenario.steps.map((step) => (
+          <div key={step.id} className="flex justify-between gap-2">
+            <span className="text-muted-foreground truncate">{step.label}</span>
+            <span className={`font-mono ${step.status === "failed" ? "text-destructive" : "text-success"}`}>{step.status}</span>
+          </div>
+        ))}
+      </div>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
+        <div className="font-mono text-primary flex items-center gap-1"><Camera className="h-3.5 w-3.5" /> Evidence captured</div>
+        {session.findings.map((finding) => (
+          <div key={finding.id} className="text-muted-foreground">• {finding.findingType}: {finding.summary}</div>
+        ))}
       </div>
     </div>
   );
