@@ -1,7 +1,7 @@
 import type { CloudProviderConfigState, HybridModelRegistryEntry } from "@/types/local-inference";
 
 const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_TIMEOUT_MS = 4000;
+const DEFAULT_TIMEOUT_MS = 25000;
 
 type SafeResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -12,6 +12,56 @@ interface OpenRouterModelsResponse {
     context_length?: number;
   }>;
 }
+
+interface OpenRouterChatResponse {
+  id?: string;
+  model?: string;
+  choices?: Array<{
+    message?: {
+      role?: string;
+      content?: string;
+    };
+    finish_reason?: string;
+  }>;
+}
+
+export type OpenRouterExecutionState = "idle" | "sending" | "waiting" | "streaming_ready" | "completed" | "failed";
+
+export interface OpenRouterChatInput {
+  model: string;
+  userInput: string;
+  systemPrompt?: string;
+  contextMessages?: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  temperature?: number;
+}
+
+export interface OpenRouterChatSuccess {
+  provider: "openrouter";
+  model: string;
+  outputText: string;
+  executionState: "completed";
+  responseId?: string;
+  finishReason?: string;
+  receivedAtIso: string;
+}
+
+export interface OpenRouterChatFailure {
+  provider: "openrouter";
+  model: string;
+  executionState: "failed";
+  errorCode:
+    | "missing_api_key"
+    | "invalid_api_key"
+    | "network_error"
+    | "timeout"
+    | "model_unavailable"
+    | "malformed_response"
+    | "provider_error";
+  errorMessage: string;
+  receivedAtIso: string;
+}
+
+export type OpenRouterChatResult = OpenRouterChatSuccess | OpenRouterChatFailure;
 
 export interface OpenRouterSnapshot {
   config: CloudProviderConfigState;
@@ -37,6 +87,108 @@ export class OpenRouterProviderService {
       baseUrl: this.baseUrl,
       lastHealthCheckIso: null,
       failureState: configured ? "unchecked" : "missing_api_key",
+    };
+  }
+
+  async executeChatCompletion(input: OpenRouterChatInput): Promise<OpenRouterChatResult> {
+    const apiKey = this.resolveApiKey();
+    const receivedAtIso = new Date().toISOString();
+
+    if (!apiKey) {
+      return {
+        provider: "openrouter",
+        model: input.model,
+        executionState: "failed",
+        errorCode: "missing_api_key",
+        errorMessage: "OPENROUTER_API_KEY is not configured.",
+        receivedAtIso,
+      };
+    }
+
+    const payload = this.buildChatCompletionsRequest(input.model, this.buildMessages(input), input.temperature ?? 0.2);
+    const requestResult = await this.fetchWithTimeout("/chat/completions", apiKey, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (!requestResult.ok) {
+      const error = requestResult.error;
+      if (error === "openrouter_timeout") {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "timeout",
+          errorMessage: "OpenRouter request timed out.",
+          receivedAtIso,
+        };
+      }
+
+      if (error === "openrouter_network_error") {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "network_error",
+          errorMessage: "Unable to reach OpenRouter. Check network connectivity.",
+          receivedAtIso,
+        };
+      }
+
+      if (error === "openrouter_http_401" || error === "openrouter_http_403") {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "invalid_api_key",
+          errorMessage: "OpenRouter authentication failed. Verify OPENROUTER_API_KEY.",
+          receivedAtIso,
+        };
+      }
+
+      if (error === "openrouter_http_404") {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "model_unavailable",
+          errorMessage: "Selected model is not available on OpenRouter.",
+          receivedAtIso,
+        };
+      }
+
+      return {
+        provider: "openrouter",
+        model: input.model,
+        executionState: "failed",
+        errorCode: "provider_error",
+        errorMessage: "OpenRouter returned an error response.",
+        receivedAtIso,
+      };
+    }
+
+    const response = requestResult.data as OpenRouterChatResponse;
+    const outputText = response.choices?.[0]?.message?.content;
+
+    if (typeof outputText !== "string" || outputText.trim().length === 0) {
+      return {
+        provider: "openrouter",
+        model: input.model,
+        executionState: "failed",
+        errorCode: "malformed_response",
+        errorMessage: "OpenRouter response did not contain assistant text.",
+        receivedAtIso,
+      };
+    }
+
+    return {
+      provider: "openrouter",
+      model: response.model ?? input.model,
+      outputText,
+      executionState: "completed",
+      responseId: response.id,
+      finishReason: response.choices?.[0]?.finish_reason,
+      receivedAtIso,
     };
   }
 
@@ -115,8 +267,16 @@ export class OpenRouterProviderService {
     };
   }
 
+  private buildMessages(input: OpenRouterChatInput) {
+    const systemMessage = input.systemPrompt?.trim()
+      ? [{ role: "system" as const, content: input.systemPrompt.trim() }]
+      : [];
+
+    return [...systemMessage, ...(input.contextMessages ?? []), { role: "user" as const, content: input.userInput }];
+  }
+
   private async healthCheck(apiKey: string): Promise<SafeResult<true>> {
-    const response = await this.fetchWithTimeout("/models", apiKey);
+    const response = await this.fetchWithTimeout("/models", apiKey, { method: "GET" });
     if (!response.ok) {
       return response as { ok: false; error: string };
     }
@@ -124,7 +284,7 @@ export class OpenRouterProviderService {
   }
 
   private async fetchModels(apiKey: string): Promise<SafeResult<HybridModelRegistryEntry[]>> {
-    const response = await this.fetchWithTimeout("/models", apiKey);
+    const response = await this.fetchWithTimeout("/models", apiKey, { method: "GET" });
     if (!response.ok) {
       return response as { ok: false; error: string };
     }
@@ -160,13 +320,17 @@ export class OpenRouterProviderService {
     return { ok: true, data: normalized };
   }
 
-  private async fetchWithTimeout(path: string, apiKey: string): Promise<SafeResult<unknown>> {
+  private async fetchWithTimeout(
+    path: string,
+    apiKey: string,
+    init: Pick<RequestInit, "method" | "body">,
+  ): Promise<SafeResult<unknown>> {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        method: "GET",
+        ...init,
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -195,9 +359,7 @@ export class OpenRouterProviderService {
   }
 
   private resolveApiKey(): string | undefined {
-    const fromRuntime = import.meta.env.OPENROUTER_API_KEY as string | undefined;
-    const fromVite = import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined;
-    return fromRuntime ?? fromVite;
+    return import.meta.env.OPENROUTER_API_KEY as string | undefined;
   }
 
   private rankCost(modelId: string): HybridModelRegistryEntry["costTier"] {

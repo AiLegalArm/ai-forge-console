@@ -95,9 +95,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <Waypoints className="h-3 w-3" />
           <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
-        <span className="text-[10px] text-muted-foreground hidden sm:inline">
-          {workspaceState.routingMode.replace(/_/g, " ")} • {activeSession?.providerMeta.provider}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            {workspaceState.routingMode.replace(/_/g, " ")} • {activeSession?.providerMeta.provider}
+          </span>
+          <span className="text-[10px] font-mono rounded border border-border px-1.5 py-0.5 text-muted-foreground">
+            exec: {workspaceState.providerExecutionState}
+          </span>
+        </div>
       </div>
 
       <div className="border-b border-border bg-card px-2 py-2 space-y-2">

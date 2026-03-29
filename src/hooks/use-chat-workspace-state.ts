@@ -11,7 +11,7 @@ import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
-import { openRouterProviderService } from "@/lib/openrouter-provider-service";
+import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
@@ -174,6 +174,7 @@ export function useChatWorkspaceState() {
   const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
   const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
   const [routingProfile, setRoutingProfile] = useState<AppRoutingModeProfile>("balanced");
+  const [providerExecutionState, setProviderExecutionState] = useState<OpenRouterExecutionState>("idle");
   const [lastUsedModelByProvider, setLastUsedModelByProvider] = useState<Record<"openrouter" | "ollama", string>>({
     openrouter: "openai/gpt-4.1",
     ollama: "qwen3-coder:14b",
@@ -410,6 +411,7 @@ export function useChatWorkspaceState() {
     projects,
     activeProjectId,
     repository,
+    providerExecutionState,
   };
 
   useEffect(() => {
@@ -851,9 +853,9 @@ export function useChatWorkspaceState() {
         sessionId,
         role: mockResponse.role,
         authorLabel: mockResponse.authorLabel,
-        content: "Working on it…",
+        content: providerSource === "openrouter" && chatType === "main" ? "Sending request to OpenRouter…" : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
-        status: "streaming" as const,
+        status: "pending" as const,
         linked: mockResponse.linked,
         providerMeta: mockResponse.providerMeta,
       };
@@ -888,39 +890,143 @@ export function useChatWorkspaceState() {
         },
       });
 
-      setTimeout(() => {
-        const latestChat = chatStateRef.current;
-        const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+      const executeProviderRequest = async () => {
+        if (providerSource === "openrouter" && chatType === "main") {
+          setProviderExecutionState("sending");
 
-        dispatch({
-          type: "set_chat",
-          chat: {
-            ...latestChat,
-            messagesBySessionId: {
-              ...latestChat.messagesBySessionId,
-              [sessionId]: sessionMessages.map((message) =>
-                message.id === responseId
+          const recentMessages = (currentChat.messagesBySessionId[sessionId] ?? [])
+            .filter((message) => message.role === "user" || message.role === "orchestrator" || message.role === "agent")
+            .slice(-8)
+            .map((message) => ({
+              role: message.role === "user" ? "user" : "assistant",
+              content: message.content,
+            })) as Array<{ role: "user" | "assistant"; content: string }>;
+
+          setProviderExecutionState("waiting");
+          const openRouterResult = await openRouterProviderService.executeChatCompletion({
+            model: activeModel,
+            userInput: draft,
+            contextMessages: recentMessages,
+            systemPrompt: `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.`,
+          });
+
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+          if (openRouterResult.executionState === "completed") {
+            setProviderExecutionState("streaming_ready");
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: openRouterResult.outputText,
+                          status: "completed" as const,
+                          createdAtIso: openRouterResult.receivedAtIso,
+                          providerMeta: {
+                            provider: "OpenRouter",
+                            model: openRouterResult.model,
+                            backend: "cloud",
+                            routingKey: routingProfile,
+                          },
+                        }
+                      : message,
+                  ),
+                },
+                sessions: latestChat.sessions.map((session) =>
+                  session.id === sessionId
+                    ? {
+                        ...session,
+                        lastMessageAtIso: openRouterResult.receivedAtIso,
+                        unreadCount: 0,
+                        providerMeta: {
+                          provider: "OpenRouter",
+                          model: openRouterResult.model,
+                          backend: "cloud",
+                          routingKey: routingProfile,
+                        },
+                      }
+                    : session,
+                ),
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        content: `OpenRouter request failed: ${openRouterResult.errorMessage}`,
+                        status: "failed" as const,
+                        createdAtIso: openRouterResult.receivedAtIso,
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
                   ? {
-                      ...message,
-                      content: mockResponse.content,
-                      status: "completed" as const,
-                      createdAtIso: new Date(Date.now()).toISOString(),
+                      ...session,
+                      lastMessageAtIso: openRouterResult.receivedAtIso,
+                      unreadCount: 0,
                     }
-                  : message,
+                  : session,
               ),
             },
-            sessions: latestChat.sessions.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    lastMessageAtIso: new Date().toISOString(),
-                    unreadCount: 0,
-                  }
-                : session,
-            ),
-          },
-        });
-      }, 650);
+          });
+          setProviderExecutionState("failed");
+          return;
+        }
+
+        setTimeout(() => {
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        content: mockResponse.content,
+                        status: "completed" as const,
+                        createdAtIso: new Date(Date.now()).toISOString(),
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
+                  ? {
+                      ...session,
+                      lastMessageAtIso: new Date().toISOString(),
+                      unreadCount: 0,
+                    }
+                  : session,
+              ),
+            },
+          });
+        }, 650);
+      };
+
+      void executeProviderRequest();
     },
     runBrowserScenario: async () => {
       const output = await browserAutomationService.executeScenario({

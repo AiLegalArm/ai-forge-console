@@ -2,6 +2,7 @@ import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
 import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
+import type { OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { SyncStatus } from "@/types/contracts";
 import type { EvidenceFlowState } from "@/types/evidence";
@@ -91,6 +92,7 @@ export interface WorkspaceRuntimeState {
   projects: WorkspaceProjectEntry[];
   activeProjectId: string;
   repository: WorkspaceRepositoryState;
+  providerExecutionState: OpenRouterExecutionState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;
