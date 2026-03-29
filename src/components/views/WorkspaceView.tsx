@@ -120,7 +120,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
                 <div className="text-[10px] text-warning font-mono">{approval.category}</div>
                 <div className="text-[10px] text-foreground">{approval.title}</div>
                 <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="mt-1 text-[10px] font-mono text-primary hover:underline">
-                  Approve
+                  {t("chat.approve" as never)}
                 </button>
               </div>
             ))
