@@ -14,18 +14,16 @@ export interface Provider {
 }
 
 export const cloudAndCustomProviders: Provider[] = [
-  { id: "p-1", name: "OpenAI", type: "built-in", status: "connected", models: ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "o3", "o3-mini"], capabilities: ["chat", "code", "vision", "function-calling", "embedding"], costTier: "high", privacyMode: false, fallbackEnabled: true, requestsToday: 1247, avgLatency: 320 },
-  { id: "p-2", name: "Anthropic", type: "built-in", status: "connected", models: ["claude-4-opus", "claude-4-sonnet", "claude-3.5-haiku"], capabilities: ["chat", "code", "vision", "function-calling", "long-context"], costTier: "high", privacyMode: false, fallbackEnabled: true, requestsToday: 2341, avgLatency: 280 },
-  { id: "p-3", name: "Gemini", type: "built-in", status: "connected", models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"], capabilities: ["chat", "code", "vision", "function-calling", "multimodal"], costTier: "medium", privacyMode: false, fallbackEnabled: true, requestsToday: 456, avgLatency: 250 },
-  { id: "p-4", name: "Grok", type: "built-in", status: "connected", models: ["grok-3", "grok-3-mini"], capabilities: ["chat", "code", "function-calling"], costTier: "medium", privacyMode: false, fallbackEnabled: false, requestsToday: 89, avgLatency: 340 },
-  { id: "p-5", name: "DeepSeek", type: "built-in", status: "connected", models: ["deepseek-r1", "deepseek-v3", "deepseek-coder"], capabilities: ["chat", "code", "reasoning", "function-calling"], costTier: "low", privacyMode: false, fallbackEnabled: true, requestsToday: 234, avgLatency: 420 },
+  { id: "p-1", name: "OpenRouter", type: "built-in", status: "connected", models: ["openai/o3", "openai/gpt-4.1", "anthropic/claude-sonnet-4", "google/gemini-2.5-pro"], capabilities: ["chat", "code", "routing", "function-calling", "structured-output"], costTier: "medium", privacyMode: false, fallbackEnabled: true, requestsToday: 3512, avgLatency: 330 },
+  { id: "p-2", name: "OpenAI (direct)", type: "built-in", status: "degraded", models: ["gpt-4o", "o3-mini"], capabilities: ["chat", "code"], costTier: "high", privacyMode: false, fallbackEnabled: true, requestsToday: 187, avgLatency: 310 },
+  { id: "p-3", name: "Anthropic (direct)", type: "built-in", status: "degraded", models: ["claude-4-opus", "claude-4-sonnet"], capabilities: ["chat", "code", "long-context"], costTier: "high", privacyMode: false, fallbackEnabled: true, requestsToday: 96, avgLatency: 290 },
   { id: "p-7", name: "Custom Gateway", type: "custom", status: "disconnected", models: [], capabilities: [], costTier: "enterprise", privacyMode: true, fallbackEnabled: false, requestsToday: 0, avgLatency: 0, compatible: "OpenAI-compatible" },
 ];
 
 export const providers = cloudAndCustomProviders;
 
 export const providerCategories = [
-  { label: "Built-in Providers", count: 5 },
+  { label: "Built-in Providers", count: 3 },
   { label: "Custom Providers", count: 1 },
   { label: "OpenAI-compatible", count: 0 },
   { label: "Anthropic-compatible", count: 0 },
