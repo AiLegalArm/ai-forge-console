@@ -1,5 +1,7 @@
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 
+const now = "2026-03-29T14:32:01.000Z";
+
 export const localShellState: LocalShellWorkspaceState = {
   desktopShellMode: "desktop",
   executionMode: "local_first",
@@ -15,8 +17,8 @@ export const localShellState: LocalShellWorkspaceState = {
   },
   project: {
     workspaceName: "ai-forge-console",
-    workspacePath: "/Users/dev/workspaces/ai-forge-console",
-    activeProjectRoot: "/Users/dev/workspaces/ai-forge-console",
+    workspacePath: "/workspace/ai-forge-console",
+    activeProjectRoot: "/workspace/ai-forge-console",
     projectInstructionsDetected: true,
     instructionSources: ["AGENTS.md", "README.md"],
     gitBranch: "feature/local-first-shell-foundation",
@@ -25,45 +27,41 @@ export const localShellState: LocalShellWorkspaceState = {
   },
   terminal: {
     sessionId: "term_local_001",
-    workingDirectory: "/Users/dev/workspaces/ai-forge-console",
+    selectedSessionId: "term_local_001",
+    workingDirectory: "/workspace/ai-forge-console",
     state: "ready",
-    history: [
+    sessions: [
       {
-        id: "cmd_01",
-        command: "npm run lint",
-        cwd: "/Users/dev/workspaces/ai-forge-console",
-        state: "completed",
-        exitCode: 0,
-        requiresApproval: false,
-        linkedTaskId: "task-desktop-shell",
-        linkedChatSessionId: "chat-main-1",
-      },
-      {
-        id: "cmd_02",
-        command: "git commit -am \"wire runtime\"",
-        cwd: "/Users/dev/workspaces/ai-forge-console",
-        state: "approval_required",
-        requiresApproval: true,
-        linkedTaskId: "task-release-readiness",
-        linkedChatSessionId: "chat-review-1",
-        failureReason: "Command touches repository state and requires approval.",
-      },
-      {
-        id: "cmd_03",
-        command: "npm run dev -- --host",
-        cwd: "/Users/dev/workspaces/ai-forge-console",
-        state: "running",
-        requiresApproval: false,
-        linkedTaskId: "task-preview-runtime",
-        linkedChatSessionId: "chat-agent-1",
+        id: "term_local_001",
+        linkedTaskId: "task-rbac-exec",
+        linkedChatSessionId: "agent-session-1",
+        workingDirectory: "/workspace/ai-forge-console",
+        executionState: "idle",
+        failureState: "none",
+        currentCommandId: undefined,
+        commandHistory: [],
+        outputLog: [
+          {
+            id: "line_01",
+            timestampIso: now,
+            stream: "system",
+            text: "Terminal session initialized for local project.",
+            sessionId: "term_local_001",
+          },
+        ],
+        createdAtIso: now,
+        updatedAtIso: now,
       },
     ],
+    history: [],
     output: [
-      { id: "line_01", timestamp: "14:32:01", stream: "system", text: "Terminal session initialized for local project." },
-      { id: "line_02", timestamp: "14:32:02", stream: "stdout", text: "$ npm run lint" },
-      { id: "line_03", timestamp: "14:32:11", stream: "stdout", text: "✓ lint passed" },
-      { id: "line_04", timestamp: "14:32:15", stream: "stderr", text: "Approval required: git commit -am \"wire runtime\"" },
-      { id: "line_05", timestamp: "14:32:19", stream: "stdout", text: "$ npm run dev -- --host" },
+      {
+        id: "line_01",
+        timestampIso: now,
+        stream: "system",
+        text: "Terminal session initialized for local project.",
+        sessionId: "term_local_001",
+      },
     ],
   },
   providers: [

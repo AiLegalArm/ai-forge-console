@@ -44,11 +44,25 @@ export interface RuntimeReadiness {
   releaseBlockReason?: string;
 }
 
+export type TerminalExecutionClassification = "safe_read_only" | "modifying" | "risky";
+export type TerminalApprovalState = "not_required" | "required" | "pending" | "approved" | "denied";
+export type TerminalExecutionFailureReason =
+  | "none"
+  | "invalid_working_directory"
+  | "command_not_found"
+  | "execution_failure"
+  | "timeout"
+  | "approval_denied"
+  | "interrupted"
+  | "runtime_unavailable";
+
 export interface TerminalOutputLine {
   id: string;
-  timestamp: string;
+  timestampIso: string;
   stream: "stdout" | "stderr" | "system";
   text: string;
+  sessionId: string;
+  commandId?: string;
 }
 
 export interface TerminalCommand {
@@ -60,15 +74,41 @@ export interface TerminalCommand {
   requiresApproval: boolean;
   linkedTaskId?: string;
   linkedChatSessionId?: string;
-  failureReason?: string;
+  failureReason?: TerminalExecutionFailureReason;
+  failureDetail?: string;
+  classification: TerminalExecutionClassification;
+  approvalState: TerminalApprovalState;
+  createdAtIso: string;
+  startedAtIso?: string;
+  completedAtIso?: string;
+  updatedAtIso: string;
+}
+
+export type TerminalCommandHistoryEntry = TerminalCommand;
+export type TerminalSessionExecutionState = "idle" | "queued" | "running" | "waiting_for_approval" | "failed";
+
+export interface TerminalSession {
+  id: string;
+  linkedTaskId?: string;
+  linkedChatSessionId?: string;
+  workingDirectory: string;
+  currentCommandId?: string;
+  executionState: TerminalSessionExecutionState;
+  failureState: TerminalExecutionFailureReason;
+  commandHistory: TerminalCommandHistoryEntry[];
+  outputLog: TerminalOutputLine[];
+  createdAtIso: string;
+  updatedAtIso: string;
 }
 
 export interface TerminalSessionState {
   sessionId: string;
+  selectedSessionId: string;
   workingDirectory: string;
   state: "ready" | "running" | "error";
   history: TerminalCommand[];
   output: TerminalOutputLine[];
+  sessions: TerminalSession[];
 }
 
 export interface LocalProviderState {

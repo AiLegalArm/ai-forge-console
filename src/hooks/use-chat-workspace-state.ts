@@ -8,9 +8,11 @@ import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
+import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
+import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
@@ -21,12 +23,15 @@ type Action =
   | { type: "clear_approval"; sessionId: string }
   | { type: "approve_workflow_approval"; approvalId: string }
   | { type: "set_local_inference"; localInference: LocalInferenceRuntimeState }
+  | { type: "set_local_shell"; localShell: LocalShellWorkspaceState }
+  | { type: "set_chat"; chat: ChatState }
   | { type: "set_workflow"; workflow: WorkflowState };
 
 interface WorkspaceReducerState {
   chat: ChatState;
   workflow: WorkflowState;
   localInference: LocalInferenceRuntimeState;
+  localShell: LocalShellWorkspaceState;
 }
 
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
@@ -87,6 +92,18 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
         localInference: action.localInference,
       };
     }
+    case "set_local_shell": {
+      return {
+        ...state,
+        localShell: action.localShell,
+      };
+    }
+    case "set_chat": {
+      return {
+        ...state,
+        chat: action.chat,
+      };
+    }
     case "set_workflow": {
       return {
         ...state,
@@ -103,14 +120,22 @@ export function useChatWorkspaceState() {
     chat: initialChatState,
     workflow: initialWorkflowState,
     localInference: localInferenceRuntime,
+    localShell: localShellState,
   });
 
   const chatState = state.chat;
   const workflow = state.workflow;
   const localInference = state.localInference;
+  const localShell = state.localShell;
   const localInferenceRef = useRef(localInference);
   localInferenceRef.current = localInference;
+  const localShellRef = useRef(localShell);
+  localShellRef.current = localShell;
   const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
+  const terminalService = useMemo(
+    () => createLocalTerminalExecutionService(localShellState.project.activeProjectRoot),
+    [],
+  );
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -200,10 +225,10 @@ export function useChatWorkspaceState() {
   };
 
   const workspaceState: WorkspaceRuntimeState = {
-    currentProject: localShellState.project.workspaceName,
+    currentProject: localShell.project.workspaceName,
     currentBranch:
       activeWorkflowTask?.github?.branch?.localBranchName ??
-      localShellState.project.gitBranch ??
+      localShell.project.gitBranch ??
       activeWorkflowTask?.branchName ??
       activeRepository?.defaultBranch ??
       "main",
@@ -230,7 +255,61 @@ export function useChatWorkspaceState() {
     evidenceFlow: evidenceFlowState,
     releaseControl: releaseControlState,
     localInference,
-    localShell: localShellState,
+    localShell,
+  };
+
+  useEffect(() => {
+    const existing = terminalService.selectSession(localShellRef.current.terminal.selectedSessionId);
+    if (!existing) {
+      terminalService.createSession({
+        workingDirectory: localShellRef.current.project.activeProjectRoot,
+        linkedChatSessionId: currentChatSessionId,
+        linkedTaskId: activeWorkflowTask?.id,
+      });
+    }
+    dispatch({
+      type: "set_local_shell",
+      localShell: {
+        ...localShellRef.current,
+        terminal: terminalService.getSessionState(),
+      },
+    });
+  }, [activeWorkflowTask?.id, currentChatSessionId, terminalService]);
+
+  const appendTerminalMessage = (command: TerminalCommand) => {
+    const sessionId = command.linkedChatSessionId ?? currentChatSessionId;
+    const currentMessages = chatState.messagesBySessionId[sessionId] ?? [];
+    const nextMessage = {
+      id: `msg-term-${command.id}`,
+      sessionId,
+      role: "system" as const,
+      authorLabel: "Terminal Runtime",
+      content:
+        command.state === "approval_required"
+          ? `Command awaiting approval: ${command.command}`
+          : command.state === "failed"
+            ? `Command failed (${command.failureReason ?? "unknown"}): ${command.command}`
+            : `Command completed (exit ${command.exitCode ?? 0}): ${command.command}`,
+      createdAtIso: new Date().toISOString(),
+      status: command.state === "failed" ? ("failed" as const) : ("completed" as const),
+      linked: command.linkedTaskId
+        ? {
+            taskId: command.linkedTaskId,
+            taskTitle: workflow.tasks.find((task) => task.id === command.linkedTaskId)?.title,
+          }
+        : undefined,
+    };
+
+    dispatch({
+      type: "set_chat",
+      chat: {
+        ...chatState,
+        messagesBySessionId: {
+          ...chatState.messagesBySessionId,
+          [sessionId]: [...currentMessages, nextMessage],
+        },
+      },
+    });
   };
 
   useEffect(() => {
@@ -354,6 +433,12 @@ export function useChatWorkspaceState() {
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
       if (!task?.github) return;
+      const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
+        workingDirectory: localShell.project.activeProjectRoot,
+        linkedTaskId: task.id,
+        linkedChatSessionId: task.linkedChatSessionId,
+      });
+      terminalService.selectSession(activeTerminal.id);
 
       const pendingPushApproval = workflow.approvals.find(
         (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "pending",
@@ -408,6 +493,72 @@ export function useChatWorkspaceState() {
         return;
       }
 
+      const commandText =
+        action === "stage_all"
+          ? "git add -A"
+          : action === "unstage_all"
+            ? "git reset HEAD -- ."
+            : action === "commit"
+              ? `git commit -m ${JSON.stringify(task.github.commitWorkflow.draftMessage || `chore(${task.id}): update task changes`)}`
+              : action === "push"
+                ? `git push ${task.github.branch?.localBranchName ? `-u origin ${task.github.branch.localBranchName}` : ""}`.trim()
+                : "git pull --ff-only";
+
+      const terminalResult = await terminalService.execute(activeTerminal.id, {
+        command: commandText,
+        cwd: task.github.branch?.localBranchName ? localShell.project.activeProjectRoot : undefined,
+        linkedTaskId: task.id,
+        linkedChatSessionId: task.linkedChatSessionId,
+        approved: action === "push" ? pushApproved : false,
+      });
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          terminal: terminalService.getSessionState(),
+        },
+      });
+      appendTerminalMessage(terminalResult.command);
+
+      if (terminalResult.command.state === "approval_required") {
+        const approvalId = `approval-terminal-${terminalResult.command.id}`;
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            approvals: [
+              ...workflow.approvals,
+              {
+                id: approvalId,
+                category: "destructive_file_operations",
+                title: `Approve terminal command for ${task.title}`,
+                reason: `Command requires approval: ${terminalResult.command.command}`,
+                status: "pending",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                requestedBy: "terminal-service",
+                requestedAtIso: new Date().toISOString(),
+              },
+            ],
+            activityEvents: [
+              {
+                id: `activity-${terminalResult.command.id}`,
+                type: "waiting_for_approval",
+                title: "Terminal command awaiting approval",
+                details: terminalResult.command.command,
+                severity: "warning",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        return;
+      }
+
       const result =
         action === "stage_all"
           ? await gitService.stageAll()
@@ -421,6 +572,19 @@ export function useChatWorkspaceState() {
 
       const nextWorkflow: WorkflowState = {
         ...workflow,
+        activityEvents: [
+          {
+            id: `activity-${terminalResult.command.id}`,
+            type: result.ok ? "execution_update" : "failed",
+            title: result.ok ? "Terminal command completed" : "Terminal command failed",
+            details: terminalResult.command.command,
+            severity: result.ok ? "info" : "critical",
+            taskId: task.id,
+            chatId: task.linkedChatSessionId,
+            createdAtIso: new Date().toISOString(),
+          },
+          ...workflow.activityEvents,
+        ],
         tasks: workflow.tasks.map((entry) => {
           if (entry.id !== task.id || !entry.github) return entry;
           return {
