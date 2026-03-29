@@ -300,16 +300,27 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         )}
 
-        {messages.map((msg: ChatMessage) => (
-          <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
+        {messages.map((msg: ChatMessage, idx: number) => (
+          <div
+            key={msg.id}
+            className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]} animate-fade-in`}
+            style={{ animationDelay: `${idx * 40}ms`, animationFillMode: "backwards" }}
+          >
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
               <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
                 {msg.authorLabel || roleLabelMap[msg.role].label}
               </span>
+              {msg.status === "streaming" && (
+                <span className="text-[9px] text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
+              )}
               <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
             </div>
-            <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            {msg.status === "streaming" ? (
+              <StreamingText text={msg.content} />
+            ) : (
+              <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            )}
             {msg.linked?.taskTitle && (
               <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
@@ -318,6 +329,8 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             ) : null}
           </div>
         ))}
+
+        <TypingIndicator agents={messages.filter(m => m.status === "streaming").map(m => m.authorLabel || roleLabelMap[m.role]?.label || "")} />
       </div>
 
       <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
