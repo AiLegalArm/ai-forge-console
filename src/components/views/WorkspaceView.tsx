@@ -215,12 +215,12 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Capability gates</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.capability_gates" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
           {workspaceState.localShell.capabilities.map((gate) => (
             <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
               <span>{gate.capability.replace(/_/g, " ")}</span>
-              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "approval" : "allowed"}</span>
+              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? t("rail.approval" as never) : t("rail.allowed" as never)}</span>
             </div>
           ))}
         </div>
