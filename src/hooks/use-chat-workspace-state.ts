@@ -11,6 +11,7 @@ import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { hasDuplicateLocalPath, selectLocalProjectPath, validateLocalProjectPath } from "@/lib/local-project-service";
+import { validateRepositoryConnection } from "@/lib/local-repository-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
@@ -22,7 +23,7 @@ import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { WorkflowState } from "@/types/workflow";
-import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
+import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 
 type Action =
@@ -162,7 +163,7 @@ export function useChatWorkspaceState() {
   localInferenceRef.current = localInference;
   const localShellRef = useRef(localShell);
   localShellRef.current = localShell;
-  const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
+  const gitService = useMemo(() => createLocalGitService(localShell.project.activeProjectRoot), [localShell.project.activeProjectRoot]);
   const terminalService = useMemo(
     () => createLocalTerminalExecutionService(localShellState.project.activeProjectRoot),
     [],
@@ -202,14 +203,7 @@ export function useChatWorkspaceState() {
     },
   ]);
   const [activeProjectId, setActiveProjectId] = useState("project-local-1");
-  const [repository, setRepository] = useState<{
-    connected: boolean;
-    url?: string;
-    name?: string;
-    branch?: string;
-    syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
-    connectionState?: "connected" | "disconnected";
-  }>({
+  const [repository, setRepository] = useState<WorkspaceRepositoryState>({
     connected: false,
     syncStatus: "idle",
     connectionState: "disconnected",
@@ -493,6 +487,28 @@ export function useChatWorkspaceState() {
     const syncGitSnapshot = async () => {
       const snapshot = await gitService.getSnapshot();
       if (cancelled || snapshot.branch === "unknown") return;
+
+      setRepository((prev) => ({
+        ...prev,
+        branch: snapshot.branch,
+        clean: snapshot.clean,
+        aheadBy: snapshot.aheadBy,
+        behindBy: snapshot.behindBy,
+        syncStatus: snapshot.behindBy > 0 ? "behind" : "up_to_date",
+        lastValidatedAtIso: new Date().toISOString(),
+      }));
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            gitBranch: snapshot.branch,
+            hasLocalChanges: !snapshot.clean,
+          },
+        },
+      });
 
       const updatedWorkflow: WorkflowState = {
         ...workflow,
@@ -829,31 +845,81 @@ export function useChatWorkspaceState() {
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
     },
-    connectRepository: (payload: { name: string; url: string; branch: string }) => {
+    connectRepository: async (payload: { pathOrUrl: string; name?: string; branch?: string }) => {
       const activeProject = projects.find((project) => project.id === activeProjectId);
-      const nextRepository = {
-        connected: true,
-        url: payload.url,
-        name: payload.name,
-        branch: payload.branch || "main",
-        syncStatus: "up_to_date" as const,
-        connectionState: "connected" as const,
-      };
-      setRepository(nextRepository);
-      if (activeProject) {
-        setProjects((prev) =>
-          prev.map((project) =>
-            project.id === activeProject.id
-              ? {
-                  ...project,
-                  source: "git",
-                  branch: payload.branch || project.branch,
-                  repository: nextRepository,
-                }
-              : project,
-          ),
-        );
+      const validation = await validateRepositoryConnection({
+        pathOrUrl: payload.pathOrUrl,
+        activeProject: activeProject
+          ? {
+              id: activeProject.id,
+              name: activeProject.name,
+              projectRoot: activeProject.projectRoot ?? activeProject.localPath,
+              repositoryConnected: Boolean(activeProject.repository?.connected),
+            }
+          : undefined,
+        connectedRepoRoots: projects
+          .map((project) => (project.repository?.connected ? (project.projectRoot ?? project.localPath) : undefined))
+          .filter((entry): entry is string => Boolean(entry)),
+      });
+
+      if (validation.code !== "ok" || !validation.metadata || !activeProject) {
+        return { ok: false, code: validation.code, message: validation.message };
       }
+
+      const nextRepository: WorkspaceRepositoryState = {
+        connected: true,
+        url: validation.metadata.remoteUrl ?? validation.metadata.rootPath,
+        rootPath: validation.metadata.rootPath,
+        name: payload.name || validation.metadata.name,
+        branch: payload.branch || validation.metadata.branch,
+        source: validation.source,
+        syncStatus: "up_to_date",
+        connectionState: "connected",
+        clean: validation.metadata.clean,
+        aheadBy: validation.metadata.aheadBy,
+        behindBy: validation.metadata.behindBy,
+        relationToProject: "bound",
+        readyForGitWorkflow: true,
+        lastValidatedAtIso: new Date().toISOString(),
+      };
+
+      setRepository(nextRepository);
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === activeProject.id
+            ? {
+                ...project,
+                source: "git",
+                projectRoot: validation.metadata?.rootPath ?? project.projectRoot,
+                localPath: validation.metadata?.rootPath ?? project.localPath,
+                branch: nextRepository.branch || project.branch,
+                repository: {
+                  connected: true,
+                  name: nextRepository.name,
+                  url: nextRepository.url,
+                  branch: nextRepository.branch,
+                  syncStatus: nextRepository.syncStatus,
+                },
+              }
+            : project,
+        ),
+      );
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            workspaceName: activeProject.name,
+            activeProjectRoot: validation.metadata.rootPath,
+            gitBranch: nextRepository.branch ?? localShellRef.current.project.gitBranch,
+            hasLocalChanges: !validation.metadata.clean,
+          },
+        },
+      });
+
+      return { ok: true, code: "ok", message: validation.message };
     },
     disconnectRepository: () => {
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
@@ -891,9 +957,13 @@ export function useChatWorkspaceState() {
           connected: true,
           name: selectedProject.repository.name,
           url: selectedProject.repository.url,
+          rootPath: selectedProject.projectRoot ?? selectedProject.localPath,
           branch: selectedProject.repository.branch,
           syncStatus: selectedProject.repository.syncStatus,
           connectionState: "connected",
+          relationToProject: "bound",
+          readyForGitWorkflow: true,
+          source: selectedProject.source === "git" ? "project_bound" : "local_path",
         });
       } else {
         setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
