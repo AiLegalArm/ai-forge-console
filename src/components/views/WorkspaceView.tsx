@@ -474,10 +474,10 @@ function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState
               <span className={`text-[10px] font-mono uppercase ${domain.assignmentState === "blocked" ? "text-destructive" : "text-success"}`}>{domain.assignmentState}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div><span className="text-muted-foreground">verification</span><div className="font-mono text-foreground">{domain.verificationState}</div></div>
-              <div><span className="text-muted-foreground">dns</span><div className={`font-mono ${domain.dnsState === "dns_incomplete" ? "text-warning" : "text-foreground"}`}>{domain.dnsState}</div></div>
-              <div><span className="text-muted-foreground">target</span><div className="font-mono text-foreground">{domain.targetEnvironment}</div></div>
-              <div><span className="text-muted-foreground">deploy</span><div className="font-mono text-foreground">{domain.relatedDeployId ?? "—"}</div></div>
+              <div><span className="text-muted-foreground">{t("domains.verification" as never)}</span><div className="font-mono text-foreground">{domain.verificationState}</div></div>
+              <div><span className="text-muted-foreground">{t("domains.dns" as never)}</span><div className={`font-mono ${domain.dnsState === "dns_incomplete" ? "text-warning" : "text-foreground"}`}>{domain.dnsState}</div></div>
+              <div><span className="text-muted-foreground">{t("domains.target" as never)}</span><div className="font-mono text-foreground">{domain.targetEnvironment}</div></div>
+              <div><span className="text-muted-foreground">{t("deploy")}</span><div className="font-mono text-foreground">{domain.relatedDeployId ?? "—"}</div></div>
             </div>
             {domain.errors[0] ? <div className="text-[10px] text-destructive">{domain.errors[0]}</div> : null}
             {domain.warnings[0] ? <div className="text-[10px] text-warning">{domain.warnings[0]}</div> : null}
