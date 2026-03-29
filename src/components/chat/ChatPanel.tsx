@@ -1,26 +1,20 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock
+  Loader2, CheckCircle, XCircle, Clock, Waypoints,
 } from "lucide-react";
 import type { ChatTab, ChatMessage } from "@/data/mock-chat";
-import { mainChatMessages, agentChatMessages, auditChatMessages, reviewChatMessages } from "@/data/mock-chat";
 import { useI18n } from "@/lib/i18n";
+import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
+import { auditSummary } from "@/data/mock-audits";
 
-const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: React.ReactNode }[] = [
+const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactNode }[] = [
   { id: "main", labelKey: "chat.main", shortKey: "chat.main.short", icon: <MessageSquare className="h-3 w-3" /> },
   { id: "agent", labelKey: "chat.agent", shortKey: "chat.agent.short", icon: <Bot className="h-3 w-3" /> },
   { id: "audit", labelKey: "chat.audit", shortKey: "chat.audit.short", icon: <Shield className="h-3 w-3" /> },
   { id: "review", labelKey: "chat.review", shortKey: "chat.review.short", icon: <GitPullRequest className="h-3 w-3" /> },
 ];
-
-const chatData: Record<ChatTab, ChatMessage[]> = {
-  main: mainChatMessages,
-  agent: agentChatMessages,
-  audit: auditChatMessages,
-  review: reviewChatMessages,
-};
 
 const statusIcon: Record<string, React.ReactNode> = {
   completed: <CheckCircle className="h-3 w-3 text-success shrink-0" />,
@@ -36,13 +30,19 @@ const roleStyles: Record<string, string> = {
   auditor: "bg-warning/5 border-warning/20 mr-4 sm:mr-8",
 };
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  workspaceState: WorkspaceRuntimeState;
+  chatContexts: ChatContextMap;
+  onConversationTypeChange: (conversation: ChatTab) => void;
+}
+
+export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChange }: ChatPanelProps) {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<ChatTab>("main");
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
 
-  const messages = chatData[activeTab];
+  const activeTab = workspaceState.currentConversationType;
+  const messages = chatContexts[activeTab];
 
   const roleLabelMap: Record<string, { textKey: string; color: string }> = {
     user: { textKey: "chat.you", color: "text-primary" },
@@ -53,12 +53,21 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Chat tabs */}
+      <div className="flex items-center justify-between border-b border-border bg-card px-2 py-1">
+        <div className="flex items-center gap-1 text-[10px] font-mono text-primary">
+          <Waypoints className="h-3 w-3" />
+          <span>Orchestrator-first command surface</span>
+        </div>
+        <span className="text-[10px] text-muted-foreground hidden sm:inline">
+          {workspaceState.activeBackend} • {workspaceState.activeProvider}
+        </span>
+      </div>
+
       <div className="flex items-center border-b border-border bg-card shrink-0 overflow-x-auto">
         {tabConfig.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => onConversationTypeChange(tab.id)}
             className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-xs font-mono transition-colors border-b-2 shrink-0 ${
               activeTab === tab.id
                 ? "border-primary text-primary"
@@ -72,9 +81,24 @@ export function ChatPanel() {
         ))}
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
-        {messages.map((msg) => (
+        {activeTab === "main" && (
+          <OrchestratorSummary currentTask={workspaceState.currentTask} />
+        )}
+
+        {activeTab === "audit" && (
+          <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono text-warning">
+            Audit findings: {auditSummary.critical} critical • {auditSummary.high} high • score {auditSummary.score}
+          </div>
+        )}
+
+        {activeTab === "review" && (
+          <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
+            Review sync: audit summary included before merge approvals.
+          </div>
+        )}
+
+        {messages.map((msg: ChatMessage) => (
           <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
@@ -88,7 +112,6 @@ export function ChatPanel() {
         ))}
       </div>
 
-      {/* Composer */}
       <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
         <div className="flex items-center gap-0.5 sm:gap-1 px-1 flex-wrap">
           {[
@@ -113,7 +136,7 @@ export function ChatPanel() {
             <Eye className="h-2.5 w-2.5" /> {t("chat.local")}
           </button>
           <button className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded">
-            <Cpu className="h-2.5 w-2.5" /> <span className="hidden sm:inline">Ollama</span>
+            <Cpu className="h-2.5 w-2.5" /> <span className="hidden sm:inline">{workspaceState.activeBackend}</span>
           </button>
         </div>
 
@@ -165,6 +188,18 @@ export function ChatPanel() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function OrchestratorSummary({ currentTask }: { currentTask: string }) {
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 sm:p-2.5">
+      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">Main workflow</p>
+      <p className="text-xs text-foreground">
+        command → orchestrator plan → approvals → agent execution stream → audit/review summary → code/deploy
+      </p>
+      <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task: {currentTask}</p>
     </div>
   );
 }

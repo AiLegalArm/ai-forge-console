@@ -9,20 +9,30 @@ import { SupabaseImportView } from "@/components/views/SupabaseImportView";
 import { ReleaseCenterView } from "@/components/views/ReleaseCenterView";
 import { WorkspaceView } from "@/components/views/WorkspaceView";
 import { SettingsView } from "@/components/views/SettingsView";
+import type { ChatTab } from "@/data/mock-chat";
+import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 interface CenterPanelProps {
   activeSection: NavSection;
   mode: AppMode;
+  workspaceState: WorkspaceRuntimeState;
+  chatContexts: ChatContextMap;
+  onConversationTypeChange: (conversation: ChatTab) => void;
 }
 
-export function CenterPanel({ activeSection, mode }: CenterPanelProps) {
-  // Workspace sections show chat-first layout
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, onConversationTypeChange }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains"].includes(activeSection);
 
   if (isWorkspace) {
     return (
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        <WorkspaceView section={activeSection} mode={mode} />
+        <WorkspaceView
+          section={activeSection}
+          mode={mode}
+          workspaceState={workspaceState}
+          chatContexts={chatContexts}
+          onConversationTypeChange={onConversationTypeChange}
+        />
       </div>
     );
   }
@@ -42,9 +52,5 @@ export function CenterPanel({ activeSection, mode }: CenterPanelProps) {
     }
   };
 
-  return (
-    <div className="flex-1 overflow-auto min-h-0">
-      {renderContent()}
-    </div>
-  );
+  return <div className="flex-1 overflow-auto min-h-0">{renderContent()}</div>;
 }

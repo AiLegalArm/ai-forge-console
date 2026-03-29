@@ -1,6 +1,8 @@
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ChatContextBar } from "@/components/chat/ChatContextBar";
 import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
+import type { ChatTab } from "@/data/mock-chat";
+import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import { promptChainSteps } from "@/data/mock-prompts";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
@@ -20,9 +22,12 @@ const stepIcons: Record<string, React.ReactNode> = {
 interface WorkspaceViewProps {
   section: NavSection;
   mode: AppMode;
+  workspaceState: WorkspaceRuntimeState;
+  chatContexts: ChatContextMap;
+  onConversationTypeChange: (conversation: ChatTab) => void;
 }
 
-export function WorkspaceView({ section, mode }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, onConversationTypeChange }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView />;
   if (section === "deploy") return <DeployView />;
@@ -31,11 +36,11 @@ export function WorkspaceView({ section, mode }: WorkspaceViewProps) {
   // Chat-first workspace (default)
   return (
     <div className="flex flex-col h-full">
-      <ChatContextBar />
-      <AgentActivityPanel />
+      <ChatContextBar workspaceState={workspaceState} />
+      <AgentActivityPanel activeAgents={workspaceState.activeAgents} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <ChatPanel />
+          <ChatPanel workspaceState={workspaceState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
           <SideRail mode={mode} />
