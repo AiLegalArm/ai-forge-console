@@ -159,7 +159,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
             {msg.linked?.evidenceIds?.length ? (
-              <p className="text-[10px] text-info mt-1 font-mono">Evidence ↔ {msg.linked.evidenceIds.join(", ")}</p>
+              <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
             ) : null}
           </div>
         ))}
