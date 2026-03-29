@@ -41,13 +41,22 @@ interface WorkspaceViewProps {
   chatState: ChatState;
   onConversationTypeChange: (conversation: ChatType) => void;
   onDraftChange: (sessionId: string, value: string) => void;
+  onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
+  onProviderSourceChange: (source: "openrouter" | "ollama") => void;
+  onModelChange: (model: string) => void;
+  onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
+  onAddLocalProject: (name: string, localPath: string) => void;
+  onCreateProject: (name: string) => void;
+  onConnectRepository: (urlOrName: string) => void;
+  onDisconnectRepository: () => void;
+  onActiveProjectChange: (projectId: string) => void;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
   if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
@@ -61,7 +70,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
       <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />
+          <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
           <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />

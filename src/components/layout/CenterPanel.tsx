@@ -20,14 +20,23 @@ interface CenterPanelProps {
   chatState: ChatState;
   onConversationTypeChange: (conversation: ChatType) => void;
   onDraftChange: (sessionId: string, value: string) => void;
+  onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onRefreshLocalInference: () => Promise<void>;
+  onProviderSourceChange: (source: "openrouter" | "ollama") => void;
+  onModelChange: (model: string) => void;
+  onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
+  onAddLocalProject: (name: string, localPath: string) => void;
+  onCreateProject: (name: string) => void;
+  onConnectRepository: (urlOrName: string) => void;
+  onDisconnectRepository: () => void;
+  onActiveProjectChange: (projectId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -41,10 +50,19 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           chatState={chatState}
           onConversationTypeChange={onConversationTypeChange}
           onDraftChange={onDraftChange}
+          onSendMessage={onSendMessage}
           onApprovalResolve={onApprovalResolve}
           onWorkflowApprovalResolve={onWorkflowApprovalResolve}
           onGitAction={onGitAction}
           onRunBrowserScenario={onRunBrowserScenario}
+          onProviderSourceChange={onProviderSourceChange}
+          onModelChange={onModelChange}
+          onDeploymentModeChange={onDeploymentModeChange}
+          onAddLocalProject={onAddLocalProject}
+          onCreateProject={onCreateProject}
+          onConnectRepository={onConnectRepository}
+          onDisconnectRepository={onDisconnectRepository}
+          onActiveProjectChange={onActiveProjectChange}
         />
       </div>
     );

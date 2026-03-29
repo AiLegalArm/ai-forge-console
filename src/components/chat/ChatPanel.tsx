@@ -41,14 +41,26 @@ interface ChatPanelProps {
   chatContexts: ChatContextMap;
   onConversationTypeChange: (conversation: ChatTab) => void;
   onDraftChange: (sessionId: string, value: string) => void;
+  onSendMessage: (conversation: ChatTab) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve?: (approvalId: string) => void;
+  onProviderSourceChange: (source: "openrouter" | "ollama") => void;
+  onModelChange: (model: string) => void;
+  onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
+  onAddLocalProject: (name: string, localPath: string) => void;
+  onCreateProject: (name: string) => void;
+  onConnectRepository: (urlOrName: string) => void;
+  onDisconnectRepository: () => void;
+  onActiveProjectChange: (projectId: string) => void;
 }
 
-export function ChatPanel({ workspaceState, chatState, chatContexts, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: ChatPanelProps) {
+export function ChatPanel({ workspaceState, chatState, chatContexts, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onProviderSourceChange, onModelChange, onDeploymentModeChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: ChatPanelProps) {
   const { t } = useI18n();
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [projectNameInput, setProjectNameInput] = useState("");
+  const [projectPathInput, setProjectPathInput] = useState("");
+  const [repoInput, setRepoInput] = useState("");
 
   const activeTab = workspaceState.currentConversationType;
   const messages = chatContexts[activeTab];
@@ -98,6 +110,66 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
+        <div className="rounded-lg border border-border p-2 space-y-2 bg-card">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Provider</span>
+              <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
+                <option value="openrouter">OpenRouter</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Model</span>
+              <input value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border rounded bg-background px-2 py-1" placeholder={workspaceState.providerSource === "openrouter" ? "openai/gpt-4.1" : "qwen3-coder:14b"} />
+            </label>
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Backend</span>
+              <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
+                <option value="openrouter">OpenRouter</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Mode</span>
+              <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border rounded bg-background px-2 py-1">
+                <option value="local">local</option>
+                <option value="cloud">cloud</option>
+                <option value="hybrid">hybrid</option>
+              </select>
+            </label>
+          </div>
+          <div className="text-[10px] font-mono text-muted-foreground">
+            Active: {workspaceState.currentProject} • {workspaceState.currentTask} • {workspaceState.activeProvider} / {workspaceState.activeModel}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border p-2 bg-card space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground" onClick={() => onAddLocalProject(projectNameInput || "Local Project", projectPathInput || "/path/to/local/project")}>Add Local Project</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onConnectRepository(repoInput || "https://github.com/org/repo.git")}>Connect Git Repository</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onCreateProject(projectNameInput || "New Project")}>Create Project</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onProviderSourceChange("openrouter")}>Connect Provider</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border rounded bg-background px-2 py-1 text-xs" />
+            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1 text-xs" />
+            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="https://github.com/org/repo.git" className="border border-border rounded bg-background px-2 py-1 text-xs md:col-span-2" />
+          </div>
+          <div className="text-[10px] font-mono space-y-1">
+            <p>Projects:</p>
+            <div className="flex flex-wrap gap-1">
+              {workspaceState.projects.map((project) => (
+                <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded border ${workspaceState.activeProjectId === project.id ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>
+                  {project.name} ({project.source})
+                </button>
+              ))}
+            </div>
+            <p className="text-muted-foreground">Repo: {workspaceState.repository.connected ? `${workspaceState.repository.name} • ${workspaceState.repository.branch}` : "disconnected"}</p>
+            {workspaceState.repository.connected ? <button onClick={onDisconnectRepository} className="text-[10px] text-destructive underline">Disconnect repository</button> : null}
+          </div>
+        </div>
+
         {activeTab === "main" && (
           <OrchestratorSummary currentTask={workspaceState.currentTask} />
         )}
@@ -216,11 +288,17 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               rows={1}
               value={activeDraft}
               onChange={(event) => onDraftChange(sessionId, event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  onSendMessage(activeTab);
+                }
+              }}
               placeholder={t("chat.placeholder")}
               className="w-full bg-input border border-border rounded-lg px-2 sm:px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-mono"
             />
           </div>
-          <button className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0">
+          <button onClick={() => onSendMessage(activeTab)} className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0">
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>
