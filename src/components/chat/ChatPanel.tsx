@@ -195,7 +195,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {placeholders.length > 0 && (
           <div className="px-1 text-[10px] font-mono text-muted-foreground">
-            Attachments staged: {placeholders.map((item) => item.name).join(", ")}
+            {t("chat.attachments" as never)} {placeholders.map((item) => item.name).join(", ")}
           </div>
         )}
 
