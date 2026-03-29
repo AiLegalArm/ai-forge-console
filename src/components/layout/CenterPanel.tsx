@@ -86,5 +86,27 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
     }
   };
 
-  return <div className="flex-1 overflow-auto min-h-0">{renderContent()}</div>;
+  return (
+    <div className="flex-1 overflow-auto min-h-0">
+      <div className="px-4 pt-3">
+        <div className="rounded border border-border/70 bg-card px-3 py-2 text-[10px] font-mono flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground">project</span>
+          <span className="text-foreground">{workspaceState.currentProject}</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground">repo</span>
+          <span className={workspaceState.repository.connected ? "text-success" : "text-warning"}>{workspaceState.repository.connected ? "connected" : "missing"}</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground">provider/model</span>
+          <span className="text-foreground">{workspaceState.providerSource} · {workspaceState.activeModel}</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground">task</span>
+          <span className="text-foreground">{workspaceState.currentTask}</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground">mode</span>
+          <span className="text-primary uppercase">{mode}</span>
+        </div>
+      </div>
+      {renderContent()}
+    </div>
+  );
 }

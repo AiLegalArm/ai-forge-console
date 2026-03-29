@@ -1,4 +1,4 @@
-import { GitBranch, Shield, Cloud, Cpu, RefreshCw, Eye, MessageSquareMore } from "lucide-react";
+import { GitBranch, Shield, Cloud, Cpu, RefreshCw, MessageSquareMore, Bot } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { ChatState } from "@/types/chat";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
@@ -91,8 +91,8 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       </span>
 
       <div className="ml-auto hidden lg:flex items-center gap-1.5">
-        <Eye className="h-3 w-3 text-muted-foreground" />
-        <span className="text-muted-foreground">AGENTS.md</span>
+        <Bot className="h-3 w-3 text-muted-foreground" />
+        <span className="text-muted-foreground">agent-linked session</span>
       </div>
     </div>
   );

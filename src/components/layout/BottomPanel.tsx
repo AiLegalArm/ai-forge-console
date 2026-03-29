@@ -3,14 +3,6 @@ import { Terminal, FileText, TestTube, Code, Activity, ChevronUp, ChevronDown } 
 import { useI18n } from "@/lib/i18n";
 import type { TerminalSessionState } from "@/types/local-shell";
 
-const mockAgentTrace = [
-  { time: "14:31:45", agent: "Planner Agent", action: "Decomposing task into 8 subtasks", status: "done" },
-  { time: "14:31:52", agent: "Prompt Generator", action: "Generating prompt for subtask #1", status: "done" },
-  { time: "14:31:58", agent: "Frontend Agent", action: "Creating component: DashboardHeader.tsx", status: "done" },
-  { time: "14:32:04", agent: "Frontend Agent", action: "Creating component: MetricsGrid.tsx", status: "running" },
-  { time: "14:32:10", agent: "Code Auditor", action: "Queued: audit DashboardHeader.tsx", status: "queued" },
-];
-
 interface BottomPanelProps {
   expanded: boolean;
   onToggle: () => void;
@@ -24,12 +16,16 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
     { id: "logs", icon: FileText, label: t("bp.logs") },
     { id: "tests", icon: TestTube, label: t("bp.tests") },
     { id: "python", icon: Code, label: t("bp.python") },
-    { id: "agent-trace", icon: Activity, label: t("bp.trace") },
+    { id: "agent-trace", icon: Activity, label: "Runtime activity" },
   ];
   const [activeTab, setActiveTab] = useState("terminal");
   const height = expanded ? "h-64" : "h-36";
 
   const latestCommand = useMemo(() => terminal.history[0], [terminal.history]);
+  const recentActivity = useMemo(
+    () => [...terminal.output].slice(0, 6),
+    [terminal.output],
+  );
 
   return (
     <div className={`${height} border-t border-border bg-panel shrink-0 flex flex-col transition-all`}>
@@ -71,12 +67,13 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
         )}
         {activeTab === "agent-trace" && (
           <div className="space-y-1">
-            {mockAgentTrace.map((tr, i) => (
-              <div key={i} className="flex gap-2 items-start">
-                <span className="text-muted-foreground shrink-0">{tr.time}</span>
-                <span className={`shrink-0 px-1 rounded text-[10px] ${tr.status === "done" ? "bg-success/20 text-success" : tr.status === "running" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>{tr.status}</span>
-                <span className="text-accent shrink-0">{tr.agent}</span>
-                <span className="text-foreground">{tr.action}</span>
+            {recentActivity.length === 0 ? (
+              <div className="text-muted-foreground">No runtime activity yet. Run a task from chat to stream execution events here.</div>
+            ) : recentActivity.map((line) => (
+              <div key={line.id} className="flex gap-2 items-start">
+                <span className="text-muted-foreground shrink-0">{new Date(line.timestampIso).toLocaleTimeString()}</span>
+                <span className={`shrink-0 px-1 rounded text-[10px] ${line.stream === "stderr" ? "bg-warning/20 text-warning" : line.stream === "system" ? "bg-primary/20 text-primary" : "bg-success/20 text-success"}`}>{line.stream}</span>
+                <span className="text-foreground">{line.text}</span>
               </div>
             ))}
           </div>
