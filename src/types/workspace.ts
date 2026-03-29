@@ -1,7 +1,7 @@
 import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
 import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
-import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
+import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { SyncStatus } from "@/types/contracts";
 import type { EvidenceFlowState } from "@/types/evidence";
@@ -46,9 +46,13 @@ export interface WorkspaceRuntimeState {
   currentTask: string;
   activeProvider: string;
   activeModel: string;
+  lastUsedModel: string;
+  availableModels: Array<{ id: string; displayName: string }>;
   providerSource: "openrouter" | "ollama";
   activeBackend: ProviderBackend;
   deploymentMode: "local" | "cloud" | "hybrid";
+  routingProfile: AppRoutingModeProfile;
+  routingMode: RoutingMode;
   privacyMode: PrivacyMode;
   syncStatus: SyncStatus;
   activeAgents: AgentRuntimeState[];

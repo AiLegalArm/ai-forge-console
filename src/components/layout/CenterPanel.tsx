@@ -11,6 +11,7 @@ import { WorkspaceView } from "@/components/views/WorkspaceView";
 import { SettingsView } from "@/components/views/SettingsView";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
+import type { AppRoutingModeProfile } from "@/types/local-inference";
 
 interface CenterPanelProps {
   activeSection: NavSection;
@@ -29,6 +30,7 @@ interface CenterPanelProps {
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
+  onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
   onAddLocalProject: (name: string, localPath: string) => void;
   onCreateProject: (name: string) => void;
   onConnectRepository: (urlOrName: string) => void;
@@ -36,7 +38,7 @@ interface CenterPanelProps {
   onActiveProjectChange: (projectId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -58,6 +60,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onProviderSourceChange={onProviderSourceChange}
           onModelChange={onModelChange}
           onDeploymentModeChange={onDeploymentModeChange}
+          onRoutingProfileChange={onRoutingProfileChange}
           onAddLocalProject={onAddLocalProject}
           onCreateProject={onCreateProject}
           onConnectRepository={onConnectRepository}

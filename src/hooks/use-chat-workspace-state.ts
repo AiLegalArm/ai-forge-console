@@ -21,6 +21,7 @@ import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
+import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -169,6 +170,11 @@ export function useChatWorkspaceState() {
   const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
   const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
   const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
+  const [routingProfile, setRoutingProfile] = useState<AppRoutingModeProfile>("balanced");
+  const [lastUsedModelByProvider, setLastUsedModelByProvider] = useState<Record<"openrouter" | "ollama", string>>({
+    openrouter: "openai/gpt-4.1",
+    ollama: "qwen3-coder:14b",
+  });
   const [projects, setProjects] = useState([
     {
       id: "project-local-1",
@@ -187,6 +193,44 @@ export function useChatWorkspaceState() {
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
   const currentSession = chatState.sessions.find((session) => session.id === currentChatSessionId);
+  const currentSessionRoutingMode = localInference.routing.conversationOverrides[currentChatSessionId] ?? localInference.routing.activeMode;
+
+  const mapProfileToRoutingMode = (profile: AppRoutingModeProfile): RoutingMode => {
+    switch (profile) {
+      case "cheap_fast":
+        return "cloud_preferred";
+      case "balanced":
+        return "hybrid";
+      case "quality_first":
+        return "cloud_preferred";
+      case "privacy_first":
+        return "sensitive_local_only";
+      case "local_only":
+        return "local_only";
+      default:
+        return "hybrid";
+    }
+  };
+
+  const resolveModelOptions = (provider: "openrouter" | "ollama") => {
+    if (provider === "openrouter") {
+      const cloudModels = localInference.hybridModelRegistry.filter((entry) => entry.provider === "openrouter");
+      const fallbackCloud = [
+        { id: "openai/gpt-4.1", displayName: "GPT-4.1" },
+        { id: "openai/o3", displayName: "OpenAI o3" },
+      ];
+
+      return cloudModels.length > 0
+        ? cloudModels.map((entry) => ({ id: entry.providerModelId, displayName: entry.displayName }))
+        : fallbackCloud;
+    }
+
+    const localModels = localInference.modelRegistry.map((entry) => ({
+      id: entry.name,
+      displayName: entry.displayName,
+    }));
+    return localModels.length > 0 ? localModels : [{ id: "qwen3-coder:14b", displayName: "Qwen3 Coder 14B" }];
+  };
 
   const activeWorkflowTask =
     workflow.tasks.find((task) => task.linkedChatSessionId === currentChatSessionId) ??
@@ -308,9 +352,13 @@ export function useChatWorkspaceState() {
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
     activeProvider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
     activeModel,
+    lastUsedModel: lastUsedModelByProvider[providerSource],
+    availableModels: resolveModelOptions(providerSource),
     providerSource,
     activeBackend: providerSource === "openrouter" ? "cloud" : "ollama",
     deploymentMode,
+    routingProfile,
+    routingMode: currentSessionRoutingMode,
     privacyMode: "private",
     syncStatus: activeRepository?.state ?? "disconnected",
     activeAgents,
@@ -510,15 +558,110 @@ export function useChatWorkspaceState() {
     approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
     setProviderSource: (nextSource: "openrouter" | "ollama") => {
       setProviderSource(nextSource);
-      if (nextSource === "openrouter" && !activeModel.includes("/")) {
-        setActiveModel("openai/gpt-4.1");
-      }
-      if (nextSource === "ollama" && activeModel.includes("/")) {
-        setActiveModel(localInference.ollama.selectedModelId ? localInference.modelRegistry.find((entry) => entry.id === localInference.ollama.selectedModelId)?.name ?? "qwen3-coder:14b" : "qwen3-coder:14b");
-      }
+      const nextModel = lastUsedModelByProvider[nextSource];
+      setActiveModel(nextModel);
+      const providerLabel = nextSource === "ollama" ? "Ollama" : "OpenRouter";
+      const backend = deploymentMode === "hybrid" ? "hybrid" : deploymentMode;
+      dispatch({
+        type: "set_chat",
+        chat: {
+          ...chatState,
+          sessions: chatState.sessions.map((session) =>
+            session.id === currentChatSessionId
+              ? {
+                  ...session,
+                  providerMeta: {
+                    ...session.providerMeta,
+                    provider: providerLabel,
+                    model: nextModel,
+                    backend,
+                    routingKey: routingProfile,
+                  },
+                }
+              : session,
+          ),
+        },
+      });
     },
-    setActiveModel,
-    setDeploymentMode,
+    setActiveModel: (nextModel: string) => {
+      setActiveModel(nextModel);
+      setLastUsedModelByProvider((prev) => ({
+        ...prev,
+        [providerSource]: nextModel,
+      }));
+      dispatch({
+        type: "set_chat",
+        chat: {
+          ...chatState,
+          sessions: chatState.sessions.map((session) =>
+            session.id === currentChatSessionId
+              ? {
+                  ...session,
+                  providerMeta: {
+                    ...session.providerMeta,
+                    model: nextModel,
+                  },
+                }
+              : session,
+          ),
+        },
+      });
+    },
+    setDeploymentMode: (nextMode: "local" | "cloud" | "hybrid") => {
+      setDeploymentMode(nextMode);
+      dispatch({
+        type: "set_chat",
+        chat: {
+          ...chatState,
+          sessions: chatState.sessions.map((session) =>
+            session.id === currentChatSessionId
+              ? {
+                  ...session,
+                  providerMeta: {
+                    ...session.providerMeta,
+                    backend: nextMode === "hybrid" ? "hybrid" : nextMode,
+                  },
+                }
+              : session,
+          ),
+        },
+      });
+    },
+    setRoutingProfile: (nextProfile: AppRoutingModeProfile) => {
+      const mappedRoutingMode = mapProfileToRoutingMode(nextProfile);
+      setRoutingProfile(nextProfile);
+      dispatch({
+        type: "set_local_inference",
+        localInference: {
+          ...localInference,
+          routing: {
+            ...localInference.routing,
+            appModeProfile: nextProfile,
+            conversationOverrides: {
+              ...localInference.routing.conversationOverrides,
+              [currentChatSessionId]: mappedRoutingMode,
+            },
+          },
+        },
+      });
+      dispatch({
+        type: "set_chat",
+        chat: {
+          ...chatState,
+          sessions: chatState.sessions.map((session) =>
+            session.id === currentChatSessionId
+              ? {
+                  ...session,
+                  providerMeta: {
+                    ...session.providerMeta,
+                    routingKey: nextProfile,
+                  },
+                }
+              : session,
+          ),
+        },
+      });
+    },
     addLocalProject: (name: string, localPath: string) => {
       const id = `project-local-${Date.now()}`;
       setProjects((prev) => [{ id, name, source: "local", localPath, branch: "main", status: "active" }, ...prev.map((project) => ({ ...project, status: "idle" as const }))]);
@@ -557,9 +700,15 @@ export function useChatWorkspaceState() {
         sessionId,
         role: responderRole,
         authorLabel: chatType === "main" ? "Orchestrator" : chatType === "agent" ? "Agent Runtime" : chatType === "audit" ? "Audit Agent" : "Review Agent",
-        content: `Received. Working in ${deploymentMode} mode via ${providerSource === "ollama" ? "Ollama" : "OpenRouter"} (${activeModel}). Context: ${workspaceState.currentProject} / ${workspaceState.currentTask}.`,
+        content: `Received. Working in ${deploymentMode} mode via ${providerSource === "ollama" ? "Ollama" : "OpenRouter"} (${activeModel}) with ${routingProfile} routing. Context: ${workspaceState.currentProject} / ${workspaceState.currentTask}.`,
         createdAtIso: new Date(Date.now() + 1000).toISOString(),
         status: "completed" as const,
+        providerMeta: {
+          provider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
+          model: activeModel,
+          backend: deploymentMode === "hybrid" ? "hybrid" : deploymentMode,
+          routingKey: routingProfile,
+        },
       };
 
       dispatch({
