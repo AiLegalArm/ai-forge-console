@@ -119,7 +119,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold text-foreground">{backend.metadata.displayName}</span>
                     <span className={`text-[10px] font-mono uppercase ${backendStatusColor[backend.availability.status]}`}>
-                      {backend.availability.status.replaceAll("_", " ")}
+                      {backend.availability.status.replace(/_/g, " ")}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground">{backend.eventStreamMode}</span>
                     <span className={`text-[10px] font-mono ${backend.availability.installed ? "text-success" : "text-muted-foreground"}`}>
