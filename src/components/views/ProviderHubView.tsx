@@ -120,6 +120,17 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                       {backend.availability.status.replaceAll("_", " ")}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground">{backend.eventStreamMode}</span>
+                    <span className={`text-[10px] font-mono ${backend.availability.installed ? "text-success" : "text-muted-foreground"}`}>
+                      {backend.availability.installed ? "connected" : "not connected"}
+                    </span>
+                    <span className={`text-[10px] font-mono ${backend.availability.status === "available" ? "text-success" : "text-muted-foreground"}`}>
+                      {backend.availability.status === "available" ? "active" : "inactive"}
+                    </span>
+                    <span className={`text-[10px] font-mono ${backend.availability.status === "available" || backend.availability.status === "degraded" ? "text-info" : "text-muted-foreground"}`}>
+                      {backend.availability.status === "available" || backend.availability.status === "degraded"
+                        ? "preference candidate"
+                        : "not a candidate"}
+                    </span>
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground">{backend.availability.health}</span>
                 </div>
