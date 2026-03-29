@@ -254,13 +254,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 }
 
 function OrchestratorSummary({ currentTask }: { currentTask: string }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 sm:p-2.5">
-      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">Main workflow</p>
+      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">{t("chat.main_workflow" as never)}</p>
       <p className="text-xs text-foreground">
         command → orchestrator plan → approvals → agent execution stream → audit/review summary → code/deploy
       </p>
-      <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task: {currentTask}</p>
+      <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {currentTask}</p>
     </div>
   );
 }
