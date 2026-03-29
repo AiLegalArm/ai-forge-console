@@ -44,7 +44,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: null,
-          offlineReason: healthResult.error,
+          offlineReason: (healthResult as { ok: false; error: string }).error,
           failureState: "unreachable",
         },
         modelRegistry: [],
