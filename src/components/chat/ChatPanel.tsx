@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import { auditSummary } from "@/data/mock-audits";
+import type { AppRoutingModeProfile } from "@/types/local-inference";
 
 const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactNode }[] = [
   { id: "main", labelKey: "chat.main", shortKey: "chat.main.short", icon: <MessageSquare className="h-3 w-3" /> },
@@ -47,6 +48,7 @@ interface ChatPanelProps {
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
+  onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
   onAddLocalProject: (name: string, localPath: string) => void;
   onCreateProject: (name: string) => void;
   onConnectRepository: (urlOrName: string) => void;
@@ -54,7 +56,7 @@ interface ChatPanelProps {
   onActiveProjectChange: (projectId: string) => void;
 }
 
-export function ChatPanel({ workspaceState, chatState, chatContexts, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onProviderSourceChange, onModelChange, onDeploymentModeChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: ChatPanelProps) {
+export function ChatPanel({ workspaceState, chatState, chatContexts, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: ChatPanelProps) {
   const { t } = useI18n();
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -87,8 +89,77 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
         <span className="text-[10px] text-muted-foreground hidden sm:inline">
-          {activeSession?.providerMeta.backend} • {activeSession?.providerMeta.provider}
+          {workspaceState.routingMode.replace(/_/g, " ")} • {activeSession?.providerMeta.provider}
         </span>
+      </div>
+
+      <div className="border-b border-border bg-card px-2 py-2 space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
+          <label className="space-y-1">
+            <span className="text-muted-foreground">Provider</span>
+            <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama</option>
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-muted-foreground">Model</span>
+            <select value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border rounded bg-background px-2 py-1">
+              {workspaceState.availableModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-muted-foreground">Routing</span>
+            <select value={workspaceState.routingProfile} onChange={(e) => onRoutingProfileChange(e.target.value as AppRoutingModeProfile)} className="w-full border border-border rounded bg-background px-2 py-1">
+              <option value="cheap_fast">cheap_fast</option>
+              <option value="balanced">balanced</option>
+              <option value="quality_first">quality_first</option>
+              <option value="privacy_first">privacy_first</option>
+              <option value="local_only">local_only</option>
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-muted-foreground">Mode</span>
+            <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border rounded bg-background px-2 py-1">
+              <option value="cloud">cloud</option>
+              <option value="local">local</option>
+              <option value="hybrid">hybrid</option>
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+          <span className="rounded-full border border-primary/30 bg-primary/10 text-primary px-2 py-0.5">
+            Active {workspaceState.activeProvider} / {workspaceState.activeModel}
+          </span>
+          <span className="rounded-full border border-border px-2 py-0.5">
+            Last used {workspaceState.lastUsedModel}
+          </span>
+          <span className="rounded-full border border-border px-2 py-0.5">
+            Project {workspaceState.currentProject}
+          </span>
+          {workspaceState.currentTask ? (
+            <span className="rounded-full border border-border px-2 py-0.5">
+              Task {workspaceState.currentTask}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(["cheap_fast", "balanced", "quality_first", "privacy_first", "local_only"] as AppRoutingModeProfile[]).map((profile) => (
+            <button
+              key={profile}
+              onClick={() => onRoutingProfileChange(profile)}
+              className={`px-2 py-1 rounded text-[10px] font-mono border ${
+                workspaceState.routingProfile === profile ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+              }`}
+            >
+              {profile}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex items-center border-b border-border bg-card shrink-0 overflow-x-auto">
@@ -110,40 +181,6 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
-        <div className="rounded-lg border border-border p-2 space-y-2 bg-card">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
-            <label className="space-y-1">
-              <span className="text-muted-foreground">Provider</span>
-              <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
-                <option value="openrouter">OpenRouter</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-muted-foreground">Model</span>
-              <input value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border rounded bg-background px-2 py-1" placeholder={workspaceState.providerSource === "openrouter" ? "openai/gpt-4.1" : "qwen3-coder:14b"} />
-            </label>
-            <label className="space-y-1">
-              <span className="text-muted-foreground">Backend</span>
-              <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
-                <option value="openrouter">OpenRouter</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-muted-foreground">Mode</span>
-              <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border rounded bg-background px-2 py-1">
-                <option value="local">local</option>
-                <option value="cloud">cloud</option>
-                <option value="hybrid">hybrid</option>
-              </select>
-            </label>
-          </div>
-          <div className="text-[10px] font-mono text-muted-foreground">
-            Active: {workspaceState.currentProject} • {workspaceState.currentTask} • {workspaceState.activeProvider} / {workspaceState.activeModel}
-          </div>
-        </div>
-
         <div className="rounded-lg border border-border p-2 bg-card space-y-2">
           <div className="flex flex-wrap gap-1.5">
             <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground" onClick={() => onAddLocalProject(projectNameInput || "Local Project", projectPathInput || "/path/to/local/project")}>Add Local Project</button>

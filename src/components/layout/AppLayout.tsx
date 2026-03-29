@@ -40,6 +40,7 @@ export default function AppLayout() {
     setProviderSource,
     setActiveModel,
     setDeploymentMode,
+    setRoutingProfile,
     addLocalProject,
     createProject,
     connectRepository,
@@ -94,6 +95,7 @@ export default function AppLayout() {
               onProviderSourceChange={setProviderSource}
               onModelChange={setActiveModel}
               onDeploymentModeChange={setDeploymentMode}
+              onRoutingProfileChange={setRoutingProfile}
               onAddLocalProject={addLocalProject}
               onCreateProject={createProject}
               onConnectRepository={connectRepository}
