@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
+import type { AgentActivityEventType, ActivitySeverity } from "@/types/workflow";
 import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";

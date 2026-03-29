@@ -86,7 +86,7 @@ export class OpenRouterProviderService {
           status: modelsResult.ok ? "connected" : "degraded",
           baseUrl: this.baseUrl,
           lastHealthCheckIso: nowIso,
-          failureState: !modelsResult.ok ? modelsResult.error : undefined,
+          failureState: modelsResult.ok ? undefined : modelsResult.error,
       },
       models: modelsResult.ok ? modelsResult.data : [],
     };

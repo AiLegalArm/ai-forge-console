@@ -1,4 +1,5 @@
 import type { ReleaseControlState, DeploymentRecord, DomainRecord, ReleaseCandidate } from "@/types/release";
+import type { WorkflowApproval } from "@/types/workflow";
 import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import { workflowState } from "@/data/mock-workflow";
 import { auditGateDecisions, auditors } from "@/data/mock-audits";

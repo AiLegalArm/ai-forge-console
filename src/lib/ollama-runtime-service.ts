@@ -186,7 +186,7 @@ export class OllamaRuntimeService {
           localAvailability: "available" as const,
           purposeTags: ["general", "privacy"] as ModelPurposeTag[],
           capabilityTags: ["privacy_sensitive_local_use", "tool_reasoning"] as ModelCapabilityTag[],
-          recommendedAgentRoles: ["worker", "planner"],
+          recommendedAgentRoles: ["worker", "planner"] as AgentRole[],
           memoryCostGb: estimatedSizeGb > 0 ? Math.ceil(estimatedSizeGb * 1.35) : undefined,
           metadataCompleteness: "placeholder" as const,
           lastSeenIso: nowIso,
