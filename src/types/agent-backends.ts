@@ -1,11 +1,12 @@
 export type AgentBackendId = "opencode" | "codex" | "claude_code" | "cline";
 
 export type AgentBackendStatus =
-  | "not_configured"
+  | "not_installed"
+  | "installed"
   | "configured"
-  | "available"
+  | "ready"
+  | "busy"
   | "unavailable"
-  | "degraded"
   | "error";
 
 export type AgentBackendHealthState = "unknown" | "healthy" | "degraded" | "unhealthy" | "error";
@@ -39,6 +40,9 @@ export interface AgentBackendAvailability {
   health: AgentBackendHealthState;
   statusDetail?: string;
   lastCheckedAt?: string;
+  localRuntimeAvailable?: boolean;
+  active?: boolean;
+  preferenceCandidateFor?: string[];
 }
 
 export interface LinkedExecutionRef {
