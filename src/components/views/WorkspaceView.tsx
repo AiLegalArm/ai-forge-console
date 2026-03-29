@@ -49,8 +49,8 @@ interface WorkspaceViewProps {
 export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} />;
-  if (section === "deploy") return <DeployView />;
-  if (section === "domains") return <DomainsView />;
+  if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
+  if (section === "domains") return <DomainsView workspaceState={workspaceState} />;
   if (section === "design") return <DesignView workspaceState={workspaceState} />;
   if (section === "browser") return <BrowserView workspaceState={workspaceState} />;
 
@@ -157,6 +157,16 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
           <div className="flex justify-between"><span className="text-muted-foreground">Design state</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Browser run</span><span className="text-foreground font-mono">{workspaceState.browserSession.runState}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Mode</span><span className="text-primary font-mono uppercase">{mode}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Go / No-Go summary</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Decision</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Blockers</span><span className="font-mono text-destructive">{workspaceState.releaseControl.finalDecision.blockers.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Warnings</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.warnings.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Pending approvals</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.approvalsPending.length}</span></div>
         </div>
       </div>
 
@@ -372,44 +382,83 @@ function GitView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) 
   );
 }
 
-function DeployView() {
+function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const { deployments, releaseCandidates, finalDecision } = workspaceState.releaseControl;
+  const activeReleaseCandidate = releaseCandidates.find((candidate) => candidate.id === workspaceState.releaseControl.activeCandidateId);
+
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Rocket className="h-4 w-4 text-primary" /> {t("deploy")}</h1>
-      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs font-semibold text-foreground">{t("deploy.production")}</span>
-          <span className="text-[10px] text-muted-foreground font-mono">v1.4.2</span>
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-muted-foreground">Final go/no-go</span>
+          <span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{finalDecision.status}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-primary" />
-          <span className="text-xs font-semibold text-foreground">{t("deploy.staging")}</span>
-          <span className="text-[10px] text-muted-foreground font-mono">v1.5.0-rc1</span>
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("deploy.staging_btn")}</button>
-          <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("deploy.promote")}</button>
-        </div>
+        <div className="text-muted-foreground">{finalDecision.summary}</div>
       </div>
+
+      <div className="space-y-2">
+        {deployments.map((deployment) => (
+          <div key={deployment.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${deployment.status === "blocked" || deployment.status === "failed" ? "bg-destructive" : deployment.status === "preview_ready" || deployment.status === "production_ready" ? "bg-primary" : "bg-success"}`} />
+                <span className="font-semibold text-foreground">{deployment.environment}</span>
+                <span className="text-[10px] text-muted-foreground font-mono">{deployment.id}</span>
+              </div>
+              <span className={`font-mono uppercase ${deployment.status === "blocked" ? "text-destructive" : "text-primary"}`}>{deployment.status}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div><span className="text-muted-foreground">Source</span><div className="font-mono text-foreground">{deployment.source}</div></div>
+              <div><span className="text-muted-foreground">Rollback</span><div className={`font-mono ${deployment.rollbackAvailable ? "text-success" : "text-muted-foreground"}`}>{deployment.rollbackAvailable ? "available" : "unavailable"}</div></div>
+              <div><span className="text-muted-foreground">Preview target</span><div className="font-mono text-foreground truncate">{deployment.previewTarget ?? "—"}</div></div>
+              <div><span className="text-muted-foreground">Production target</span><div className="font-mono text-foreground truncate">{deployment.productionTarget ?? "—"}</div></div>
+            </div>
+            {deployment.blockedReason ? <div className="text-warning text-[10px]">{deployment.blockedReason}</div> : null}
+          </div>
+        ))}
+      </div>
+
+      {activeReleaseCandidate ? (
+        <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
+          <div className="font-mono text-primary">Release candidate linkage</div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Candidate</span><span className="font-mono text-foreground">{activeReleaseCandidate.id}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Branch</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedBranch}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Review</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedReviewId ?? "—"}</span></div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function DomainsView() {
+function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const { domains, finalDecision } = workspaceState.releaseControl;
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Globe className="h-4 w-4 text-primary" /> {t("domains")}</h1>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs">
+        <div className="flex justify-between"><span className="text-muted-foreground">Domain readiness</span><span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-warning"}`}>{finalDecision.status}</span></div>
+      </div>
       <div className="space-y-2">
-        {["app.example.com", "staging.example.com", "api.example.com"].map((d) => (
-          <div key={d} className="bg-card border border-border rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-success" />
-              <span className="text-xs font-mono text-foreground">{d}</span>
+        {domains.map((domain) => (
+          <div key={domain.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${domain.assignmentState === "blocked" || domain.verificationState === "error" ? "bg-destructive" : domain.verificationState === "pending_verification" ? "bg-warning" : "bg-success"}`} />
+                <span className="text-xs font-mono text-foreground">{domain.name}</span>
+              </div>
+              <span className={`text-[10px] font-mono uppercase ${domain.assignmentState === "blocked" ? "text-destructive" : "text-success"}`}>{domain.assignmentState}</span>
             </div>
-            <span className="text-[10px] text-success">SSL ✓</span>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div><span className="text-muted-foreground">verification</span><div className="font-mono text-foreground">{domain.verificationState}</div></div>
+              <div><span className="text-muted-foreground">dns</span><div className={`font-mono ${domain.dnsState === "dns_incomplete" ? "text-warning" : "text-foreground"}`}>{domain.dnsState}</div></div>
+              <div><span className="text-muted-foreground">target</span><div className="font-mono text-foreground">{domain.targetEnvironment}</div></div>
+              <div><span className="text-muted-foreground">deploy</span><div className="font-mono text-foreground">{domain.relatedDeployId ?? "—"}</div></div>
+            </div>
+            {domain.errors[0] ? <div className="text-[10px] text-destructive">{domain.errors[0]}</div> : null}
+            {domain.warnings[0] ? <div className="text-[10px] text-warning">{domain.warnings[0]}</div> : null}
           </div>
         ))}
       </div>

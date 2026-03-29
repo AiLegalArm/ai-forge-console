@@ -5,6 +5,7 @@ import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMod
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { EvidenceFlowState } from "@/types/evidence";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
+import type { ReleaseControlState } from "@/types/release";
 
 export type PrivacyMode = "private" | "team";
 export type SyncStatus = "disconnected" | "connected" | "syncing" | "dirty" | "up_to_date" | "conflict" | "blocked" | "error";
@@ -40,6 +41,7 @@ export interface WorkspaceRuntimeState {
   designSession: DesignSession;
   browserSession: BrowserSession;
   evidenceFlow: EvidenceFlowState;
+  releaseControl: ReleaseControlState;
   localInference: LocalInferenceRuntimeState;
   localShell: LocalShellWorkspaceState;
 }
