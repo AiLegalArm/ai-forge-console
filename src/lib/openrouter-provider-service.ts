@@ -77,18 +77,33 @@ export class OpenRouterProviderService {
 
     const modelsResult = await this.fetchModels(apiKey);
 
+    if (!modelsResult.ok) {
+      return {
+        config: {
+          provider: "openrouter",
+          enabled: true,
+          active: true,
+          apiKeyConfigured: true,
+          status: "degraded",
+          baseUrl: this.baseUrl,
+          lastHealthCheckIso: nowIso,
+          failureState: modelsResult.error,
+        },
+        models: [],
+      };
+    }
+
     return {
       config: {
         provider: "openrouter",
         enabled: true,
         active: true,
         apiKeyConfigured: true,
-          status: modelsResult.ok ? "connected" : "degraded",
-          baseUrl: this.baseUrl,
-          lastHealthCheckIso: nowIso,
-          failureState: modelsResult.ok ? undefined : modelsResult.error,
+        status: "connected",
+        baseUrl: this.baseUrl,
+        lastHealthCheckIso: nowIso,
       },
-      models: modelsResult.ok ? modelsResult.data : [],
+      models: modelsResult.data,
     };
   }
 
