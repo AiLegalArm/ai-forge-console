@@ -102,7 +102,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
               </div>
               <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
               {task.designBrowserBlockers ? (
-                <div className="text-[9px] text-warning font-mono pl-4">design/browser blockers: {task.designBrowserBlockers}</div>
+                <div className="text-[9px] text-warning font-mono pl-4">{t("rail.design_blockers" as never)} {task.designBrowserBlockers}</div>
               ) : null}
             </div>
           ))}
