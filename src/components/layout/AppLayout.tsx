@@ -25,7 +25,27 @@ export default function AppLayout() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
 
-  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval, approveWorkflowApproval, runGitAction, runBrowserScenario, refreshLocalInference } = useChatWorkspaceState();
+  const {
+    chatState,
+    workspaceState,
+    chatContexts,
+    setConversationType,
+    setDraft,
+    clearApproval,
+    approveWorkflowApproval,
+    runGitAction,
+    runBrowserScenario,
+    refreshLocalInference,
+    sendMessage,
+    setProviderSource,
+    setActiveModel,
+    setDeploymentMode,
+    addLocalProject,
+    createProject,
+    connectRepository,
+    disconnectRepository,
+    setActiveProject,
+  } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
     setActiveSection(s);
@@ -65,11 +85,20 @@ export default function AppLayout() {
               chatState={chatState}
               onConversationTypeChange={(conversation) => setConversationType(conversation as ChatTab)}
               onDraftChange={setDraft}
+              onSendMessage={sendMessage}
               onApprovalResolve={clearApproval}
               onWorkflowApprovalResolve={approveWorkflowApproval}
               onGitAction={runGitAction}
               onRunBrowserScenario={runBrowserScenario}
               onRefreshLocalInference={refreshLocalInference}
+              onProviderSourceChange={setProviderSource}
+              onModelChange={setActiveModel}
+              onDeploymentModeChange={setDeploymentMode}
+              onAddLocalProject={addLocalProject}
+              onCreateProject={createProject}
+              onConnectRepository={connectRepository}
+              onDisconnectRepository={disconnectRepository}
+              onActiveProjectChange={setActiveProject}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />

@@ -22,12 +22,33 @@ export interface AgentRuntimeState {
   routingMode?: RoutingMode;
 }
 
+export interface WorkspaceProjectEntry {
+  id: string;
+  name: string;
+  source: "local" | "git" | "manual";
+  localPath?: string;
+  repositoryUrl?: string;
+  repositoryName?: string;
+  branch: string;
+  status: "active" | "idle" | "disconnected";
+}
+
+export interface WorkspaceRepositoryState {
+  connected: boolean;
+  url?: string;
+  name?: string;
+  branch?: string;
+}
+
 export interface WorkspaceRuntimeState {
   currentProject: string;
   currentBranch: string;
   currentTask: string;
   activeProvider: string;
+  activeModel: string;
+  providerSource: "openrouter" | "ollama";
   activeBackend: ProviderBackend;
+  deploymentMode: "local" | "cloud" | "hybrid";
   privacyMode: PrivacyMode;
   syncStatus: SyncStatus;
   activeAgents: AgentRuntimeState[];
@@ -49,6 +70,9 @@ export interface WorkspaceRuntimeState {
   releaseControl: ReleaseControlState;
   localInference: LocalInferenceRuntimeState;
   localShell: LocalShellWorkspaceState;
+  projects: WorkspaceProjectEntry[];
+  activeProjectId: string;
+  repository: WorkspaceRepositoryState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;

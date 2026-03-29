@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { AgentActivityEventType, ActivitySeverity } from "@/types/workflow";
 import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
@@ -166,6 +166,23 @@ export function useChatWorkspaceState() {
     () => new BrowserAutomationService(new RuntimeBridgeBrowserAdapter()),
     [],
   );
+  const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
+  const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
+  const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
+  const [projects, setProjects] = useState([
+    {
+      id: "project-local-1",
+      name: localShell.project.workspaceName,
+      source: "local" as const,
+      localPath: localShell.project.activeProjectRoot,
+      branch: localShell.project.gitBranch || "main",
+      status: "active" as const,
+    },
+  ]);
+  const [activeProjectId, setActiveProjectId] = useState("project-local-1");
+  const [repository, setRepository] = useState<{ connected: boolean; url?: string; name?: string; branch?: string }>({
+    connected: false,
+  });
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -281,7 +298,7 @@ export function useChatWorkspaceState() {
   };
 
   const workspaceState: WorkspaceRuntimeState = {
-    currentProject: localShell.project.workspaceName,
+    currentProject: projects.find((project) => project.id === activeProjectId)?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeWorkflowTask?.github?.branch?.localBranchName ??
       localShell.project.gitBranch ??
@@ -289,8 +306,11 @@ export function useChatWorkspaceState() {
       activeRepository?.defaultBranch ??
       "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
-    activeProvider: currentSession?.providerMeta.provider ?? "OpenRouter",
-    activeBackend: currentSession?.providerMeta.backend ?? "hybrid",
+    activeProvider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
+    activeModel,
+    providerSource,
+    activeBackend: providerSource === "openrouter" ? "cloud" : "ollama",
+    deploymentMode,
     privacyMode: "private",
     syncStatus: activeRepository?.state ?? "disconnected",
     activeAgents,
@@ -312,6 +332,9 @@ export function useChatWorkspaceState() {
     releaseControl: releaseControlState,
     localInference,
     localShell,
+    projects,
+    activeProjectId,
+    repository,
   };
 
   useEffect(() => {
@@ -485,6 +508,75 @@ export function useChatWorkspaceState() {
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
     approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    setProviderSource: (nextSource: "openrouter" | "ollama") => {
+      setProviderSource(nextSource);
+      if (nextSource === "openrouter" && !activeModel.includes("/")) {
+        setActiveModel("openai/gpt-4.1");
+      }
+      if (nextSource === "ollama" && activeModel.includes("/")) {
+        setActiveModel(localInference.ollama.selectedModelId ? localInference.modelRegistry.find((entry) => entry.id === localInference.ollama.selectedModelId)?.name ?? "qwen3-coder:14b" : "qwen3-coder:14b");
+      }
+    },
+    setActiveModel,
+    setDeploymentMode,
+    addLocalProject: (name: string, localPath: string) => {
+      const id = `project-local-${Date.now()}`;
+      setProjects((prev) => [{ id, name, source: "local", localPath, branch: "main", status: "active" }, ...prev.map((project) => ({ ...project, status: "idle" as const }))]);
+      setActiveProjectId(id);
+    },
+    createProject: (name: string) => {
+      const id = `project-manual-${Date.now()}`;
+      setProjects((prev) => [{ id, name, source: "manual", branch: "main", status: "active" }, ...prev.map((project) => ({ ...project, status: "idle" as const }))]);
+      setActiveProjectId(id);
+    },
+    connectRepository: (urlOrName: string) => {
+      const name = urlOrName.split("/").pop()?.replace(".git", "") || urlOrName;
+      setRepository({ connected: true, url: urlOrName, name, branch: "main" });
+    },
+    disconnectRepository: () => setRepository({ connected: false }),
+    setActiveProject: (projectId: string) => {
+      setActiveProjectId(projectId);
+      setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
+    },
+    sendMessage: (chatType: ChatType) => {
+      const sessionId = chatState.selectedSessionIdByType[chatType];
+      const draft = (chatState.draftInputBySessionId[sessionId] ?? "").trim();
+      if (!draft) return;
+      const nowIso = new Date().toISOString();
+      const userMessage = {
+        id: `user-${Date.now()}`,
+        sessionId,
+        role: "user" as const,
+        content: draft,
+        createdAtIso: nowIso,
+        status: "completed" as const,
+      };
+      const responderRole = chatType === "main" ? "orchestrator" : chatType === "agent" ? "agent" : chatType === "audit" ? "auditor" : "reviewer";
+      const responseMessage = {
+        id: `resp-${Date.now()}`,
+        sessionId,
+        role: responderRole,
+        authorLabel: chatType === "main" ? "Orchestrator" : chatType === "agent" ? "Agent Runtime" : chatType === "audit" ? "Audit Agent" : "Review Agent",
+        content: `Received. Working in ${deploymentMode} mode via ${providerSource === "ollama" ? "Ollama" : "OpenRouter"} (${activeModel}). Context: ${workspaceState.currentProject} / ${workspaceState.currentTask}.`,
+        createdAtIso: new Date(Date.now() + 1000).toISOString(),
+        status: "completed" as const,
+      };
+
+      dispatch({
+        type: "set_chat",
+        chat: {
+          ...chatState,
+          messagesBySessionId: {
+            ...chatState.messagesBySessionId,
+            [sessionId]: [...(chatState.messagesBySessionId[sessionId] ?? []), userMessage, responseMessage],
+          },
+          draftInputBySessionId: {
+            ...chatState.draftInputBySessionId,
+            [sessionId]: "",
+          },
+        },
+      });
+    },
     runBrowserScenario: async () => {
       const output = await browserAutomationService.executeScenario({
         scenario: activeBrowserSession.scenario,
