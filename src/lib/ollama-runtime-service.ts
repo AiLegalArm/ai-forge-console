@@ -62,7 +62,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: previousSelection ?? null,
-          offlineReason: modelsResult.error,
+          offlineReason: (modelsResult as { ok: false; error: string }).error,
           failureState: "model_registry_unavailable",
         },
         modelRegistry: [],
