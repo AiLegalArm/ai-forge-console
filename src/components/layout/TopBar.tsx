@@ -22,9 +22,10 @@ interface TopBarProps {
   onToggleSidebar?: () => void;
   onToggleRight?: () => void;
   onToggleBottom?: () => void;
+  currentProject: string;
 }
 
-export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom }: TopBarProps) {
+export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom, currentProject }: TopBarProps) {
   const { t, lang, setLang } = useI18n();
 
   return (
@@ -38,7 +39,7 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           <span className="font-mono font-semibold text-sm text-gradient-primary">NEXUS</span>
         </div>
         <span className="text-muted-foreground text-xs hidden sm:inline">|</span>
-        <span className="text-xs text-muted-foreground font-mono hidden sm:inline truncate">SaaS Dashboard</span>
+        <span className="text-xs text-muted-foreground font-mono hidden sm:inline truncate">{currentProject}</span>
       </div>
 
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">

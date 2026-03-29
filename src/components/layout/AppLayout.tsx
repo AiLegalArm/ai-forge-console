@@ -4,6 +4,9 @@ import { CenterPanel } from "@/components/layout/CenterPanel";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { BottomPanel } from "@/components/layout/BottomPanel";
 import { TopBar } from "@/components/layout/TopBar";
+import { mainChatMessages, agentChatMessages, auditChatMessages, reviewChatMessages, activeAgents } from "@/data/mock-chat";
+import type { ChatTab } from "@/data/mock-chat";
+import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 export type NavSection =
   | "workspace" | "projects" | "files" | "git" | "prompt-studio" | "prompt-library"
@@ -22,6 +25,29 @@ export default function AppLayout() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
 
+  const [chatContexts] = useState<ChatContextMap>({
+    main: mainChatMessages,
+    agent: agentChatMessages,
+    audit: auditChatMessages,
+    review: reviewChatMessages,
+  });
+
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceRuntimeState>({
+    currentProject: "SaaS Dashboard",
+    currentBranch: "feat/user-management",
+    currentTask: "Build user management module",
+    activeProvider: "Anthropic",
+    activeBackend: "Ollama",
+    privacyMode: "private",
+    syncStatus: "synced",
+    activeAgents,
+    currentConversationType: "main",
+  });
+
+  const setConversationType = (conversation: ChatTab) => {
+    setWorkspaceState((prev) => ({ ...prev, currentConversationType: conversation }));
+  };
+
   const handleSectionChange = (s: NavSection) => {
     setActiveSection(s);
     setMobileSidebarOpen(false);
@@ -35,6 +61,7 @@ export default function AppLayout() {
         onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
         onToggleRight={() => setMobileRightOpen(!mobileRightOpen)}
         onToggleBottom={() => setMobileBottomOpen(!mobileBottomOpen)}
+        currentProject={workspaceState.currentProject}
       />
       <div className="flex flex-1 overflow-hidden relative">
         {mobileSidebarOpen && (
@@ -50,7 +77,13 @@ export default function AppLayout() {
         </div>
         <div className="flex flex-1 overflow-hidden min-w-0">
           <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-            <CenterPanel activeSection={activeSection} mode={mode} />
+            <CenterPanel
+              activeSection={activeSection}
+              mode={mode}
+              workspaceState={workspaceState}
+              chatContexts={chatContexts}
+              onConversationTypeChange={setConversationType}
+            />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />
             </div>

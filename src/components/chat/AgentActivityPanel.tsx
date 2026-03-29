@@ -1,8 +1,12 @@
-import { activeAgents } from "@/data/mock-chat";
 import { Bot, Loader2, Pause } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { AgentRuntimeState } from "@/types/workspace";
 
-export function AgentActivityPanel() {
+interface AgentActivityPanelProps {
+  activeAgents: AgentRuntimeState[];
+}
+
+export function AgentActivityPanel({ activeAgents }: AgentActivityPanelProps) {
   const { t } = useI18n();
 
   return (
