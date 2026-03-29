@@ -1,3 +1,5 @@
+import { auditGateDecisions, auditFindings } from "@/data/mock-audits";
+
 export interface ReleaseGate {
   id: string;
   name: string;
@@ -5,22 +7,32 @@ export interface ReleaseGate {
   details: string;
 }
 
-export const releaseGates: ReleaseGate[] = [
-  { id: "rg-1", name: "Build Status", status: "passed", details: "All builds passing, 0 errors" },
-  { id: "rg-2", name: "Code Audit", status: "passed", details: "No critical findings" },
-  { id: "rg-3", name: "Security Audit", status: "failed", details: "2 critical vulnerabilities found" },
-  { id: "rg-4", name: "Test Coverage", status: "failed", details: "37% coverage (min 80%)" },
-  { id: "rg-5", name: "Performance Audit", status: "passed", details: "LCP < 2.5s, CLS < 0.1" },
-  { id: "rg-6", name: "Dependency Scan", status: "passed", details: "No known CVEs" },
-  { id: "rg-7", name: "Rollback Ready", status: "passed", details: "Previous version snapshot available" },
-  { id: "rg-8", name: "Signoff", status: "pending", details: "Awaiting approval" },
-];
+const gateToReleaseGate: Record<string, ReleaseGate["name"]> = {
+  push_readiness: "Push Readiness",
+  review_readiness: "Review Readiness",
+  merge_readiness: "Merge Readiness",
+  release_readiness: "Release Readiness",
+  deploy_readiness: "Deploy Readiness",
+};
+
+export const releaseGates: ReleaseGate[] = auditGateDecisions.map((gate) => {
+  const blockers = gate.blockingFindingIds.length;
+  return {
+    id: `rg-${gate.stage}`,
+    name: gateToReleaseGate[gate.stage],
+    status: gate.verdict === "go" ? "passed" : gate.verdict === "not_ready" ? "pending" : "failed",
+    details: blockers > 0 ? `${blockers} blocking findings` : "No blocking findings",
+  };
+});
+
+const highAndCritical = auditFindings.filter((finding) => finding.severity === "high" || finding.severity === "critical").length;
+const noGoCount = auditGateDecisions.filter((gate) => gate.verdict === "no_go").length;
 
 export const releaseVerdict = {
-  status: "blocked" as const,
-  blockers: 2,
-  highIssues: 3,
-  passedGates: 5,
-  totalGates: 8,
+  status: noGoCount > 0 ? ("blocked" as const) : ("passed" as const),
+  blockers: auditFindings.filter((finding) => finding.blocking && finding.status !== "resolved").length,
+  highIssues: highAndCritical,
+  passedGates: releaseGates.filter((gate) => gate.status === "passed").length,
+  totalGates: releaseGates.length,
   rollbackReady: true,
 };

@@ -5,6 +5,7 @@ import type {
   AgentActivityEvent,
   GitHubRepositoryConnection,
 } from "@/types/workflow";
+import { auditGateDecisions } from "@/data/mock-audits";
 
 const repositories: GitHubRepositoryConnection[] = [
   {
@@ -27,8 +28,11 @@ const tasks: WorkflowTask[] = [
     ownerAgentId: "agent-planner",
     dependencyTaskIds: [],
     linkedChatSessionId: "main-session-1",
+    linkedAuditorTypes: ["ai", "prompt"],
     phase: "planning",
     progressSummary: "Plan generated with schema, API, UI, audit and release checkpoints.",
+    auditVerdict: "warning",
+    auditFindingCount: 2,
     updatedAtIso: "2026-03-29T10:43:00.000Z",
     github: {
       repositoryId: "repo-saas-dashboard",
@@ -62,9 +66,12 @@ const tasks: WorkflowTask[] = [
     ownerAgentId: "agent-frontend",
     dependencyTaskIds: ["task-rbac-plan"],
     linkedChatSessionId: "agent-session-1",
+    linkedAuditorTypes: ["code", "tool", "git", "security"],
     branchName: "feat/rbac-task-rbac-exec",
     phase: "implementation",
     progressSummary: "Schema and list UI done; invite flow and activity stream wiring in progress.",
+    auditVerdict: "warning",
+    auditFindingCount: 4,
     updatedAtIso: "2026-03-29T10:45:00.000Z",
     github: {
       repositoryId: "repo-saas-dashboard",
@@ -135,6 +142,7 @@ const tasks: WorkflowTask[] = [
         ],
         mergeReadiness: "blocked",
         releaseGateReadiness: "blocked",
+        auditGate: auditGateDecisions.find((gate) => gate.stage === "merge_readiness"),
       },
     },
   },
@@ -146,8 +154,11 @@ const tasks: WorkflowTask[] = [
     dependencyTaskIds: ["task-rbac-exec"],
     linkedChatSessionId: "audit-session-1",
     linkedAuditId: "SEC-014",
+    linkedAuditorTypes: ["security", "test"],
     phase: "audit",
     progressSummary: "Rate limiting finding raised; waiting for fix verification.",
+    auditVerdict: "fail",
+    auditFindingCount: 2,
     updatedAtIso: "2026-03-29T10:46:00.000Z",
     github: {
       repositoryId: "repo-saas-dashboard",
@@ -205,8 +216,12 @@ const tasks: WorkflowTask[] = [
     dependencyTaskIds: ["task-rbac-audit"],
     linkedChatSessionId: "review-session-1",
     linkedReviewId: "PR-42",
+    linkedReleaseCandidateId: "rc-2026-03-29-rbac",
+    linkedAuditorTypes: ["release", "test", "security", "git"],
     phase: "release",
     progressSummary: "Reviewer marked ready pending release approval and deploy authorization.",
+    auditVerdict: "no_go",
+    auditFindingCount: 3,
     updatedAtIso: "2026-03-29T10:47:00.000Z",
     github: {
       repositoryId: "repo-saas-dashboard",
@@ -272,6 +287,7 @@ const tasks: WorkflowTask[] = [
         ],
         mergeReadiness: "ready",
         releaseGateReadiness: "blocked",
+        auditGate: auditGateDecisions.find((gate) => gate.stage === "release_readiness"),
       },
     },
   },
@@ -301,6 +317,17 @@ const approvals: WorkflowApproval[] = [
     chatId: "review-session-1",
     requestedBy: "release-reviewer",
     requestedAtIso: "2026-03-29T10:47:00.000Z",
+  },
+  {
+    id: "approval-release-gate-1",
+    category: "release_go_no_go",
+    title: "Release go/no-go decision required",
+    reason: "Release Auditor returned no-go due to unresolved critical security and test findings.",
+    status: "pending",
+    taskId: "task-rbac-release",
+    chatId: "review-session-1",
+    requestedBy: "release-auditor",
+    requestedAtIso: "2026-03-29T10:48:10.000Z",
   },
   {
     id: "approval-sensitive-provider-1",

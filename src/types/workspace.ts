@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
+import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 
@@ -32,6 +33,7 @@ export interface WorkspaceRuntimeState {
   currentTaskStatus: WorkflowTask["status"];
   pendingApprovals: WorkflowApproval[];
   workflow: WorkflowState;
+  auditors: AuditorControlState;
   localInference: LocalInferenceRuntimeState;
 }
 
