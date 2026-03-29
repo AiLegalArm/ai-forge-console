@@ -99,6 +99,15 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
         </div>
       </div>
 
+
+      <div className="bg-card border border-border rounded-lg p-3 grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
+        <div><span className="text-muted-foreground block">active provider</span><span className="text-foreground">{workspaceState.providerSource}</span></div>
+        <div><span className="text-muted-foreground block">active model</span><span className="text-primary">{workspaceState.activeModel}</span></div>
+        <div><span className="text-muted-foreground block">routing mode</span><span className="text-foreground uppercase">{workspaceState.routingMode.replace(/_/g, " ")}</span></div>
+        <div><span className="text-muted-foreground block">profile</span><span className="text-foreground uppercase">{workspaceState.routingProfile}</span></div>
+        <div><span className="text-muted-foreground block">fallback</span><span className={localInferenceRuntime.resources.autoFallbackReady ? "text-success" : "text-warning"}>{localInferenceRuntime.resources.autoFallbackReady ? "ready" : "not-ready"}</span></div>
+        <div><span className="text-muted-foreground block">task context</span><span className="text-foreground">{workspaceState.currentTask}</span></div>
+      </div>
       <div className="flex gap-2 flex-wrap">
         {providerCategories.map((c) => (
           <span key={c.label} className="px-2 py-0.5 text-[10px] font-mono bg-secondary text-secondary-foreground rounded">{c.label} ({c.count})</span>

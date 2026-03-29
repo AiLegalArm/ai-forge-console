@@ -69,12 +69,12 @@ export default function AppLayout() {
           <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileSidebarOpen(false)}>
             <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
             <div className="relative h-full w-56" onClick={(e) => e.stopPropagation()}>
-              <AppSidebar activeSection={activeSection} onSectionChange={handleSectionChange} collapsed={false} onToggle={() => setMobileSidebarOpen(false)} isMobile />
+              <AppSidebar activeSection={activeSection} onSectionChange={handleSectionChange} collapsed={false} onToggle={() => setMobileSidebarOpen(false)} workspaceState={workspaceState} isMobile />
             </div>
           </div>
         )}
         <div className="hidden md:flex">
-          <AppSidebar activeSection={activeSection} onSectionChange={setActiveSection} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+          <AppSidebar activeSection={activeSection} onSectionChange={setActiveSection} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} workspaceState={workspaceState} />
         </div>
         <div className="flex flex-1 overflow-hidden min-w-0">
           <div className="flex flex-col flex-1 overflow-hidden min-w-0">

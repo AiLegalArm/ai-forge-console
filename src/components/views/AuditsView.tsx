@@ -10,6 +10,7 @@ import {
 import { ShieldCheck, AlertTriangle, AlertCircle, Info, CheckCircle2, Filter, FileText } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { FindingSeverity } from "@/types/audits";
+import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 const severityStyles: Record<FindingSeverity, { bg: string; text: string; icon: React.ReactNode }> = {
   critical: { bg: "bg-destructive/10 border-destructive/20", text: "text-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
@@ -26,7 +27,7 @@ const statusBadge: Record<string, string> = {
   dismissed: "bg-muted text-muted-foreground",
 };
 
-export function AuditsView() {
+export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
   const [activeSeverity, setActiveSeverity] = useState<FindingSeverity | "all">("all");
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(auditFindings[0]?.id ?? null);
@@ -38,6 +39,12 @@ export function AuditsView() {
 
   const selectedFinding = auditFindings.find((finding) => finding.id === selectedFindingId) ?? null;
   const blockingGateCount = auditGateDecisions.filter((gate) => gate.verdict !== "go").length;
+  const currentVerdict = workspaceState.auditGateVerdict ?? auditSummary.overall;
+  const recentRuns = workspaceState.auditors.runs.slice(0, 6);
+  const severitySummary = workspaceState.auditors.findings.reduce((acc, finding) => {
+    acc[finding.severity] += 1;
+    return acc;
+  }, { info: 0, low: 0, medium: 0, high: 0, critical: 0 });
 
   return (
     <div className="p-4 space-y-4">
@@ -58,15 +65,15 @@ export function AuditsView() {
           <div className="text-[10px] text-muted-foreground">{t("au.health")}</div>
         </div>
         <div className="bg-card border border-destructive/20 rounded-lg p-3 text-center">
-          <div className="text-2xl font-mono font-bold text-destructive">{auditSummary.critical}</div>
+          <div className="text-2xl font-mono font-bold text-destructive">{severitySummary.critical}</div>
           <div className="text-[10px] text-muted-foreground">{t("au.critical")}</div>
         </div>
         <div className="bg-card border border-warning/20 rounded-lg p-3 text-center">
-          <div className="text-2xl font-mono font-bold text-warning">{auditSummary.high}</div>
+          <div className="text-2xl font-mono font-bold text-warning">{severitySummary.high}</div>
           <div className="text-[10px] text-muted-foreground">{t("au.high")}</div>
         </div>
         <div className="bg-card border border-info/20 rounded-lg p-3 text-center">
-          <div className="text-2xl font-mono font-bold text-info">{auditSummary.medium}</div>
+          <div className="text-2xl font-mono font-bold text-info">{severitySummary.medium}</div>
           <div className="text-[10px] text-muted-foreground">{t("au.medium")}</div>
         </div>
         <div className="bg-card border border-success/20 rounded-lg p-3 text-center">
@@ -82,12 +89,19 @@ export function AuditsView() {
       <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 flex items-center gap-3">
         <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
         <div>
-          <div className="text-xs font-semibold text-warning uppercase">Go / No-Go: {auditSummary.overall === "no_go" ? "NO-GO" : "GO"}</div>
-          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {auditSummary.critical} {t("au.before_release")}</div>
+          <div className="text-xs font-semibold text-warning uppercase">Go / No-Go: {currentVerdict === "no_go" || currentVerdict === "fail" ? "NO-GO" : "GO"}</div>
+          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {severitySummary.critical} {t("au.before_release")}</div>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-1 mb-3 text-[10px]">
+          <div className="text-muted-foreground">critical <span className="text-destructive font-mono">{severitySummary.critical}</span></div>
+          <div className="text-muted-foreground">high <span className="text-warning font-mono">{severitySummary.high}</span></div>
+          <div className="text-muted-foreground">medium <span className="text-info font-mono">{severitySummary.medium}</span></div>
+          <div className="text-muted-foreground">low <span className="text-foreground font-mono">{severitySummary.low}</span></div>
+          <div className="text-muted-foreground">active task <span className="text-foreground font-mono">{workspaceState.currentTask}</span></div>
+        </div>
         <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground"><Filter className="h-3 w-3" /> Severity filters</div>
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => setActiveSeverity("all")} className={`px-2 py-1 text-[10px] rounded border ${activeSeverity === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border text-muted-foreground"}`}>all</button>
@@ -154,7 +168,7 @@ export function AuditsView() {
           <div className="bg-card border border-border rounded-lg p-3">
             <h2 className="text-xs font-semibold text-foreground mb-2">Run history</h2>
             <div className="space-y-1.5">
-              {auditRuns.slice(0, 6).map((run) => (
+              {(recentRuns.length > 0 ? recentRuns : auditRuns.slice(0, 6)).map((run) => (
                 <div key={run.id} className="flex items-center justify-between text-[10px] border border-border rounded px-2 py-1.5">
                   <span className="text-foreground capitalize">{run.auditorType} • {run.runState}</span>
                   <span className="text-muted-foreground">{run.verdict} ({run.findingCount})</span>
