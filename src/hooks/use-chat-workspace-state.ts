@@ -1,43 +1,71 @@
 import { useMemo, useReducer } from "react";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
+import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import type { ChatState, ChatType } from "@/types/chat";
+import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
   | { type: "select_session"; chatType: ChatType; sessionId: string }
   | { type: "update_draft"; sessionId: string; value: string }
-  | { type: "clear_approval"; sessionId: string };
+  | { type: "clear_approval"; sessionId: string }
+  | { type: "approve_workflow_approval"; approvalId: string };
 
-function reducer(state: ChatState, action: Action): ChatState {
+interface WorkspaceReducerState {
+  chat: ChatState;
+  workflow: WorkflowState;
+}
+
+function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
   switch (action.type) {
     case "set_active_chat_type": {
-      return { ...state, activeChatType: action.chatType };
+      return { ...state, chat: { ...state.chat, activeChatType: action.chatType } };
     }
     case "select_session": {
       return {
         ...state,
-        selectedSessionIdByType: {
-          ...state.selectedSessionIdByType,
-          [action.chatType]: action.sessionId,
+        chat: {
+          ...state.chat,
+          selectedSessionIdByType: {
+            ...state.chat.selectedSessionIdByType,
+            [action.chatType]: action.sessionId,
+          },
         },
       };
     }
     case "update_draft": {
       return {
         ...state,
-        draftInputBySessionId: {
-          ...state.draftInputBySessionId,
-          [action.sessionId]: action.value,
+        chat: {
+          ...state.chat,
+          draftInputBySessionId: {
+            ...state.chat.draftInputBySessionId,
+            [action.sessionId]: action.value,
+          },
         },
       };
     }
     case "clear_approval": {
       return {
         ...state,
-        approvalRequestBySessionId: {
-          ...state.approvalRequestBySessionId,
-          [action.sessionId]: null,
+        chat: {
+          ...state.chat,
+          approvalRequestBySessionId: {
+            ...state.chat.approvalRequestBySessionId,
+            [action.sessionId]: null,
+          },
+        },
+      };
+    }
+    case "approve_workflow_approval": {
+      return {
+        ...state,
+        workflow: {
+          ...state.workflow,
+          approvals: state.workflow.approvals.map((approval) =>
+            approval.id === action.approvalId ? { ...approval, status: "approved" } : approval,
+          ),
         },
       };
     }
@@ -47,11 +75,28 @@ function reducer(state: ChatState, action: Action): ChatState {
 }
 
 export function useChatWorkspaceState() {
-  const [chatState, dispatch] = useReducer(reducer, initialChatState);
+  const [state, dispatch] = useReducer(reducer, {
+    chat: initialChatState,
+    workflow: initialWorkflowState,
+  });
+
+  const chatState = state.chat;
+  const workflow = state.workflow;
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
   const currentSession = chatState.sessions.find((session) => session.id === currentChatSessionId);
+
+  const activeWorkflowTask =
+    workflow.tasks.find((task) => task.linkedChatSessionId === currentChatSessionId) ??
+    workflow.tasks.find((task) => task.id === currentSession?.linked.taskId) ??
+    workflow.tasks[0];
+
+  const pendingApprovals = workflow.approvals.filter((approval) => {
+    const inSession = approval.chatId === currentChatSessionId;
+    const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
+    return approval.status === "pending" && (inSession || inTask);
+  });
 
   const chatContexts = useMemo<ChatContextMap>(() => {
     const contextMap = {
@@ -71,8 +116,8 @@ export function useChatWorkspaceState() {
 
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: "SaaS Dashboard",
-    currentBranch: "feat/user-management",
-    currentTask: currentSession?.linked.taskTitle ?? "Build user management module",
+    currentBranch: activeWorkflowTask?.branchName ?? "feat/user-management",
+    currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
     activeProvider: currentSession?.providerMeta.provider ?? "Anthropic",
     activeBackend: currentSession?.providerMeta.backend ?? "ollama",
     privacyMode: "private",
@@ -80,6 +125,10 @@ export function useChatWorkspaceState() {
     activeAgents,
     currentConversationType: currentChatType,
     currentChatSessionId,
+    currentPhase: activeWorkflowTask?.phase ?? "planning",
+    currentTaskStatus: activeWorkflowTask?.status ?? "queued",
+    pendingApprovals,
+    workflow,
   };
 
   return {
@@ -89,5 +138,6 @@ export function useChatWorkspaceState() {
     setConversationType: (chatType: ChatType) => dispatch({ type: "set_active_chat_type", chatType }),
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
+    approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
   };
 }

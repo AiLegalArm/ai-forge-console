@@ -24,7 +24,7 @@ export default function AppLayout() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
 
-  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval } = useChatWorkspaceState();
+  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval, approveWorkflowApproval } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
     setActiveSection(s);
@@ -64,6 +64,7 @@ export default function AppLayout() {
               onConversationTypeChange={(conversation) => setConversationType(conversation as ChatTab)}
               onDraftChange={setDraft}
               onApprovalResolve={clearApproval}
+              onWorkflowApprovalResolve={approveWorkflowApproval}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />

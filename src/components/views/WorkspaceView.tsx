@@ -4,7 +4,7 @@ import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
 import type { ChatTab } from "@/data/mock-chat";
 import type { ChatState } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
-import { promptChainSteps } from "@/data/mock-prompts";
+import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -12,12 +12,13 @@ import {
   CheckCircle, Play, Clock, XCircle,
 } from "lucide-react";
 
-const stepIcons: Record<string, React.ReactNode> = {
+const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
   completed: <CheckCircle className="h-3 w-3 text-success" />,
-  running: <Play className="h-3 w-3 text-primary animate-pulse" />,
-  pending: <Clock className="h-3 w-3 text-muted-foreground" />,
+  in_progress: <Play className="h-3 w-3 text-primary animate-pulse" />,
+  queued: <Clock className="h-3 w-3 text-muted-foreground" />,
+  blocked: <XCircle className="h-3 w-3 text-destructive" />,
+  awaiting_approval: <Clock className="h-3 w-3 text-warning" />,
   failed: <XCircle className="h-3 w-3 text-destructive" />,
-  skipped: <Clock className="h-3 w-3 text-muted-foreground" />,
 };
 
 interface WorkspaceViewProps {
@@ -29,35 +30,36 @@ interface WorkspaceViewProps {
   onConversationTypeChange: (conversation: ChatTab) => void;
   onDraftChange: (sessionId: string, value: string) => void;
   onApprovalResolve: (sessionId: string) => void;
+  onWorkflowApprovalResolve: (approvalId: string) => void;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView />;
   if (section === "deploy") return <DeployView />;
   if (section === "domains") return <DomainsView />;
 
-  // Chat-first workspace (default)
   return (
     <div className="flex flex-col h-full">
       <ChatContextBar workspaceState={workspaceState} chatState={chatState} />
-      <AgentActivityPanel activeAgents={workspaceState.activeAgents} />
+      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onApprovalResolve={onApprovalResolve} />
+          <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
-          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} />
+          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />
         </div>
       </div>
     </div>
   );
 }
 
-function SideRail({ mode, workspaceState, chatState }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState }) {
+function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void }) {
   const { t } = useI18n();
-  const completed = promptChainSteps.filter((s) => s.status === "completed").length;
-  const progress = (completed / promptChainSteps.length) * 100;
+  const tasks = workspaceState.workflow.tasks;
+  const completed = tasks.filter((s) => s.status === "completed").length;
+  const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
 
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
@@ -66,29 +68,50 @@ function SideRail({ mode, workspaceState, chatState }: { mode: AppMode; workspac
     <div className="p-2.5 space-y-3 text-xs">
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("pipeline")}</span>
+          <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Task graph</span>
           <span className="text-[10px] font-mono text-primary">{Math.round(progress)}%</span>
         </div>
         <div className="h-1 bg-muted rounded-full overflow-hidden mb-2">
           <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
-          {promptChainSteps.map((s) => (
-            <div key={s.id} className="flex items-center gap-1.5 py-1 border-b border-border/30 last:border-0">
-              {stepIcons[s.status]}
-              <span className="text-[10px] text-foreground truncate">{s.name}</span>
+          {tasks.map((task) => (
+            <div key={task.id} className="py-1 border-b border-border/30 last:border-0">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[task.status]}
+                <span className="text-[10px] text-foreground truncate">{task.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.id}</div>
             </div>
           ))}
         </div>
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("checkpoints")}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Approvals</span>
         <div className="mt-1.5 space-y-1">
-          <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Architecture</span><span className="text-success text-[10px] font-mono">✓</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Prompt Chain</span><span className="text-success text-[10px] font-mono">✓</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Implementation</span><span className="text-primary text-[10px] font-mono">…</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Security</span><span className="text-muted-foreground text-[10px] font-mono">—</span></div>
+          {workspaceState.pendingApprovals.length === 0 ? (
+            <div className="text-[10px] text-muted-foreground font-mono">No pending approvals.</div>
+          ) : (
+            workspaceState.pendingApprovals.map((approval: WorkflowApproval) => (
+              <div key={approval.id} className="rounded border border-warning/30 bg-warning/5 p-1.5">
+                <div className="text-[10px] text-warning font-mono">{approval.category}</div>
+                <div className="text-[10px] text-foreground">{approval.title}</div>
+                <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="mt-1 text-[10px] font-mono text-primary hover:underline">
+                  Approve
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Audit / Review</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Audit linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Review linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Mode</span><span className="text-primary font-mono uppercase">{mode}</span></div>
         </div>
       </div>
 
