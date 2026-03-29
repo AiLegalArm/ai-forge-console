@@ -12,7 +12,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
   const { t } = useI18n();
   const runningCount = workspaceState.activeAgents.filter((a) => a.status === "running").length;
   const isPrivate = workspaceState.privacyMode === "private";
-  const isSynced = workspaceState.syncStatus === "synced";
+  const isSynced = workspaceState.syncStatus === "up_to_date" || workspaceState.syncStatus === "connected";
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
 
   return (
@@ -49,7 +49,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="text-border hidden md:inline">|</span>
       <RefreshCw className={`h-3 w-3 shrink-0 hidden md:block ${isSynced ? "text-success" : "text-warning animate-spin"}`} />
       <span className={`hidden md:inline ${isSynced ? "text-success" : "text-warning"}`}>
-        {isSynced ? t("ctx.synced") : "syncing"}
+        {isSynced ? t("ctx.synced") : workspaceState.syncStatus.replace("_", " ")}
       </span>
 
       <span className="text-border">|</span>

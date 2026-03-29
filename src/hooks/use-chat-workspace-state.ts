@@ -92,6 +92,8 @@ export function useChatWorkspaceState() {
     workflow.tasks.find((task) => task.id === currentSession?.linked.taskId) ??
     workflow.tasks[0];
 
+  const activeRepository = workflow.github.repositories.find((repo) => repo.id === workflow.github.activeRepositoryId);
+
   const pendingApprovals = workflow.approvals.filter((approval) => {
     const inSession = approval.chatId === currentChatSessionId;
     const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
@@ -116,12 +118,16 @@ export function useChatWorkspaceState() {
 
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: "SaaS Dashboard",
-    currentBranch: activeWorkflowTask?.branchName ?? "feat/user-management",
+    currentBranch:
+      activeWorkflowTask?.github?.branch?.localBranchName ??
+      activeWorkflowTask?.branchName ??
+      activeRepository?.defaultBranch ??
+      "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
     activeProvider: currentSession?.providerMeta.provider ?? "Anthropic",
     activeBackend: currentSession?.providerMeta.backend ?? "ollama",
     privacyMode: "private",
-    syncStatus: "synced",
+    syncStatus: activeRepository?.state ?? "disconnected",
     activeAgents,
     currentConversationType: currentChatType,
     currentChatSessionId,
