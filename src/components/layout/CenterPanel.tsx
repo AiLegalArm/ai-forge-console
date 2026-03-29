@@ -16,6 +16,17 @@ interface CenterPanelProps {
 }
 
 export function CenterPanel({ activeSection, mode }: CenterPanelProps) {
+  // Workspace view manages its own layout/scroll
+  const isWorkspace = !["projects","prompt-studio","prompt-library","agents","providers","audits","supabase-import","release","settings"].includes(activeSection);
+
+  if (isWorkspace) {
+    return (
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        <WorkspaceView section={activeSection} mode={mode} />
+      </div>
+    );
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case "projects": return <ProjectsView />;
@@ -27,12 +38,12 @@ export function CenterPanel({ activeSection, mode }: CenterPanelProps) {
       case "supabase-import": return <SupabaseImportView />;
       case "release": return <ReleaseCenterView />;
       case "settings": return <SettingsView />;
-      default: return <WorkspaceView section={activeSection} mode={mode} />;
+      default: return null;
     }
   };
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
+    <div className="flex-1 overflow-auto min-h-0">
       {renderContent()}
     </div>
   );

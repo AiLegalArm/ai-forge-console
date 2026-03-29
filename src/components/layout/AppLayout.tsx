@@ -18,25 +18,85 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [bottomExpanded, setBottomExpanded] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState("preview");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
+
+  const handleSectionChange = (s: NavSection) => {
+    setActiveSection(s);
+    setMobileSidebarOpen(false);
+  };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
-      <TopBar mode={mode} onModeChange={setMode} />
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar
-          activeSection={activeSection}
-          onSectionChange={setActiveSection}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <CenterPanel activeSection={activeSection} mode={mode} />
-            <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
+      <TopBar
+        mode={mode}
+        onModeChange={setMode}
+        onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+        onToggleRight={() => setMobileRightOpen(!mobileRightOpen)}
+        onToggleBottom={() => setMobileBottomOpen(!mobileBottomOpen)}
+      />
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile sidebar overlay */}
+        {mobileSidebarOpen && (
+          <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileSidebarOpen(false)}>
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <div className="relative h-full w-56" onClick={(e) => e.stopPropagation()}>
+              <AppSidebar
+                activeSection={activeSection}
+                onSectionChange={handleSectionChange}
+                collapsed={false}
+                onToggle={() => setMobileSidebarOpen(false)}
+                isMobile
+              />
+            </div>
           </div>
-          <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} />
+        )}
+
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex">
+          <AppSidebar
+            activeSection={activeSection}
+            onSectionChange={setActiveSection}
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          />
+        </div>
+
+        <div className="flex flex-1 overflow-hidden min-w-0">
+          <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+            <CenterPanel activeSection={activeSection} mode={mode} />
+            {/* Desktop bottom panel */}
+            <div className="hidden md:flex flex-col">
+              <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />
+            </div>
+          </div>
+
+          {/* Desktop right panel */}
+          <div className="hidden lg:flex">
+            <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} />
+          </div>
+
+          {/* Mobile right panel overlay */}
+          {mobileRightOpen && (
+            <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileRightOpen(false)}>
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+              <div className="absolute right-0 top-0 bottom-0 w-72" onClick={(e) => e.stopPropagation()}>
+                <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} isMobile onClose={() => setMobileRightOpen(false)} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Mobile bottom panel overlay */}
+      {mobileBottomOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 md:hidden">
+          <div className="bg-panel border-t border-border h-64">
+            <BottomPanel expanded onToggle={() => setMobileBottomOpen(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
