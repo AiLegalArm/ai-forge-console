@@ -193,12 +193,12 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Local runtime resources</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.local_resources" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Concurrent jobs</span><span className="text-foreground font-mono">{workspaceState.localInference.resources.activeJobs}/{workspaceState.localInference.resources.maxConcurrentJobs}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Queue</span><span className="text-warning font-mono">{workspaceState.localInference.resources.queuedJobs}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Pressure</span><span className="text-foreground font-mono uppercase">{workspaceState.localInference.resources.resourcePressure}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Degraded</span><span className={`font-mono ${workspaceState.localInference.resources.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.resources.degradedMode ? "yes" : "no"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.concurrent" as never)}</span><span className="text-foreground font-mono">{workspaceState.localInference.resources.activeJobs}/{workspaceState.localInference.resources.maxConcurrentJobs}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.queue" as never)}</span><span className="text-warning font-mono">{workspaceState.localInference.resources.queuedJobs}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pressure" as never)}</span><span className="text-foreground font-mono uppercase">{workspaceState.localInference.resources.resourcePressure}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.degraded" as never)}</span><span className={`font-mono ${workspaceState.localInference.resources.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.resources.degradedMode ? t("rail.yes" as never) : t("rail.no" as never)}</span></div>
         </div>
       </div>
 
