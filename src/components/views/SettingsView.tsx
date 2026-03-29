@@ -1,19 +1,21 @@
 import { Settings as SettingsIcon, Key, Users, Bell, Shield, Database, Globe } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function SettingsView() {
+  const { t } = useI18n();
   const sections = [
-    { icon: Key, label: "API Keys & Secrets", desc: "Manage provider keys and tokens" },
-    { icon: Users, label: "Team & Permissions", desc: "User roles and access control" },
-    { icon: Bell, label: "Notifications", desc: "Alert preferences and webhooks" },
-    { icon: Shield, label: "Security", desc: "2FA, sessions, and audit log" },
-    { icon: Database, label: "Storage & Limits", desc: "Usage quotas and data retention" },
-    { icon: Globe, label: "Integrations", desc: "GitHub, Supabase, Ollama VPS" },
+    { icon: Key, label: t("st.api"), desc: t("st.api_desc") },
+    { icon: Users, label: t("st.team"), desc: t("st.team_desc") },
+    { icon: Bell, label: t("st.notifications"), desc: t("st.notifications_desc") },
+    { icon: Shield, label: t("st.security"), desc: t("st.security_desc") },
+    { icon: Database, label: t("st.storage"), desc: t("st.storage_desc") },
+    { icon: Globe, label: t("st.integrations"), desc: t("st.integrations_desc") },
   ];
 
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <SettingsIcon className="h-4 w-4 text-primary" /> Settings
+        <SettingsIcon className="h-4 w-4 text-primary" /> {t("st.title")}
       </h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {sections.map((s) => (

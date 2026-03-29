@@ -1,5 +1,6 @@
 import { projects } from "@/data/mock-projects";
 import { FolderKanban, Clock, Bot, FileCode, Link2 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 const modeColors: Record<string, string> = {
   plan: "bg-info/20 text-info",
@@ -9,14 +10,16 @@ const modeColors: Record<string, string> = {
 };
 
 export function ProjectsView() {
+  const { t } = useI18n();
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <FolderKanban className="h-4 w-4 text-primary" /> Project Hub
+          <FolderKanban className="h-4 w-4 text-primary" /> {t("projects.hub")}
         </h1>
         <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded hover:opacity-90 transition">
-          + New Project
+          {t("projects.new")}
         </button>
       </div>
 
@@ -29,13 +32,13 @@ export function ProjectsView() {
                 <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>
               </div>
               <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded uppercase ${modeColors[p.mode]}`}>
-                {p.mode}
+                {t(p.mode as any)}
               </span>
             </div>
 
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                <span>Progress</span>
+                <span>{t("projects.progress")}</span>
                 <span className="font-mono">{p.progress}%</span>
               </div>
               <div className="h-1 bg-muted rounded-full overflow-hidden">
@@ -43,11 +46,11 @@ export function ProjectsView() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{p.lastActivity}</span>
-              <span className="flex items-center gap-1"><Bot className="h-3 w-3" />{p.agents} agents</span>
-              <span className="flex items-center gap-1"><FileCode className="h-3 w-3" />{p.files} files</span>
-              <span className="flex items-center gap-1"><Link2 className="h-3 w-3" />{p.promptChains} chains</span>
+              <span className="flex items-center gap-1"><Bot className="h-3 w-3" />{p.agents} {t("projects.agents")}</span>
+              <span className="flex items-center gap-1"><FileCode className="h-3 w-3" />{p.files} {t("projects.files")}</span>
+              <span className="flex items-center gap-1"><Link2 className="h-3 w-3" />{p.promptChains} {t("projects.chains")}</span>
             </div>
           </div>
         ))}

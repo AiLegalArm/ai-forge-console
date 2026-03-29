@@ -6,12 +6,13 @@ import {
 } from "lucide-react";
 import type { ChatTab, ChatMessage } from "@/data/mock-chat";
 import { mainChatMessages, agentChatMessages, auditChatMessages, reviewChatMessages } from "@/data/mock-chat";
+import { useI18n } from "@/lib/i18n";
 
-const tabs: { id: ChatTab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
-  { id: "main", label: "Main Chat", shortLabel: "Main", icon: <MessageSquare className="h-3 w-3" /> },
-  { id: "agent", label: "Agent Chat", shortLabel: "Agent", icon: <Bot className="h-3 w-3" /> },
-  { id: "audit", label: "Audit Chat", shortLabel: "Audit", icon: <Shield className="h-3 w-3" /> },
-  { id: "review", label: "Review Chat", shortLabel: "Review", icon: <GitPullRequest className="h-3 w-3" /> },
+const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: React.ReactNode }[] = [
+  { id: "main", labelKey: "chat.main", shortKey: "chat.main.short", icon: <MessageSquare className="h-3 w-3" /> },
+  { id: "agent", labelKey: "chat.agent", shortKey: "chat.agent.short", icon: <Bot className="h-3 w-3" /> },
+  { id: "audit", labelKey: "chat.audit", shortKey: "chat.audit.short", icon: <Shield className="h-3 w-3" /> },
+  { id: "review", labelKey: "chat.review", shortKey: "chat.review.short", icon: <GitPullRequest className="h-3 w-3" /> },
 ];
 
 const chatData: Record<ChatTab, ChatMessage[]> = {
@@ -35,25 +36,26 @@ const roleStyles: Record<string, string> = {
   auditor: "bg-warning/5 border-warning/20 mr-4 sm:mr-8",
 };
 
-const roleLabel: Record<string, { text: string; color: string }> = {
-  user: { text: "YOU", color: "text-primary" },
-  agent: { text: "AGENT", color: "text-accent" },
-  system: { text: "SYSTEM", color: "text-muted-foreground" },
-  auditor: { text: "AUDITOR", color: "text-warning" },
-};
-
 export function ChatPanel() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ChatTab>("main");
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
 
   const messages = chatData[activeTab];
 
+  const roleLabelMap: Record<string, { textKey: string; color: string }> = {
+    user: { textKey: "chat.you", color: "text-primary" },
+    agent: { textKey: "chat.agent_label", color: "text-accent" },
+    system: { textKey: "chat.system", color: "text-muted-foreground" },
+    auditor: { textKey: "chat.auditor_label", color: "text-warning" },
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Chat tabs */}
       <div className="flex items-center border-b border-border bg-card shrink-0 overflow-x-auto">
-        {tabs.map((tab) => (
+        {tabConfig.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -64,8 +66,8 @@ export function ChatPanel() {
             }`}
           >
             {tab.icon}
-            <span className="hidden sm:inline">{tab.label}</span>
-            <span className="sm:hidden">{tab.shortLabel}</span>
+            <span className="hidden sm:inline">{t(tab.labelKey as any)}</span>
+            <span className="sm:hidden">{t(tab.shortKey as any)}</span>
           </button>
         ))}
       </div>
@@ -76,8 +78,8 @@ export function ChatPanel() {
           <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
-              <span className={`text-[10px] font-mono font-semibold ${roleLabel[msg.role].color}`}>
-                {msg.agentName || roleLabel[msg.role].text}
+              <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
+                {msg.agentName || t(roleLabelMap[msg.role].textKey as any)}
               </span>
               <span className="text-[9px] text-muted-foreground ml-auto">{msg.timestamp}</span>
             </div>
@@ -88,51 +90,49 @@ export function ChatPanel() {
 
       {/* Composer */}
       <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
-        {/* Mode toggles */}
         <div className="flex items-center gap-0.5 sm:gap-1 px-1 flex-wrap">
-          {["plan", "execute", "audit"].map((m) => (
+          {[
+            { key: "plan", label: t("plan") },
+            { key: "execute", label: t("chat.execute") },
+            { key: "audit", label: t("audit") },
+          ].map((m) => (
             <button
-              key={m}
-              onClick={() => setComposerMode(m)}
+              key={m.key}
+              onClick={() => setComposerMode(m.key)}
               className={`px-1.5 sm:px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
-                composerMode === m
+                composerMode === m.key
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
               }`}
             >
-              {m}
+              {m.label}
             </button>
           ))}
           <div className="flex-1" />
           <button className="hidden sm:flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded">
-            <Eye className="h-2.5 w-2.5" /> local only
+            <Eye className="h-2.5 w-2.5" /> {t("chat.local")}
           </button>
           <button className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded">
             <Cpu className="h-2.5 w-2.5" /> <span className="hidden sm:inline">Ollama</span>
           </button>
         </div>
 
-        {/* Input row */}
         <div className="flex items-end gap-1">
           <div className="flex gap-0.5 shrink-0">
-            <button
-              onClick={() => setShowSlashMenu(!showSlashMenu)}
-              className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors"
-              title="Slash commands"
-            >
+            <button onClick={() => setShowSlashMenu(!showSlashMenu)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors" title="Slash commands">
               <Slash className="h-3.5 w-3.5" />
             </button>
-            <button className="p-1.5 text-muted-foreground hover:text-accent hover:bg-surface-hover rounded transition-colors hidden sm:block" title="Mention agent">
+            <button className="p-1.5 text-muted-foreground hover:text-accent hover:bg-surface-hover rounded transition-colors hidden sm:block" title="@agent">
               <AtSign className="h-3.5 w-3.5" />
             </button>
-            <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors" title="Attach file">
+            <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
               <Paperclip className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="flex-1 min-w-0">
             <textarea
               rows={1}
-              placeholder="Describe what to build..."
+              placeholder={t("chat.placeholder")}
               className="w-full bg-input border border-border rounded-lg px-2 sm:px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-mono"
             />
           </div>
@@ -141,18 +141,17 @@ export function ChatPanel() {
           </button>
         </div>
 
-        {/* Slash command menu */}
         {showSlashMenu && (
           <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border rounded-lg shadow-lg p-1 min-w-[180px] sm:min-w-[200px] z-50">
             {[
-              { cmd: "/build", desc: "Start build pipeline" },
-              { cmd: "/plan", desc: "Enter planning mode" },
-              { cmd: "/audit", desc: "Run full audit" },
-              { cmd: "/deploy", desc: "Deploy to staging" },
-              { cmd: "/test", desc: "Run test suite" },
-              { cmd: "/rollback", desc: "Rollback last deploy" },
-              { cmd: "/agent", desc: "Summon specific agent" },
-              { cmd: "/snapshot", desc: "Save memory snapshot" },
+              { cmd: "/build", descKey: "slash.build" },
+              { cmd: "/plan", descKey: "slash.plan" },
+              { cmd: "/audit", descKey: "slash.audit" },
+              { cmd: "/deploy", descKey: "slash.deploy" },
+              { cmd: "/test", descKey: "slash.test" },
+              { cmd: "/rollback", descKey: "slash.rollback" },
+              { cmd: "/agent", descKey: "slash.agent" },
+              { cmd: "/snapshot", descKey: "slash.snapshot" },
             ].map((item) => (
               <button
                 key={item.cmd}
@@ -160,7 +159,7 @@ export function ChatPanel() {
                 className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-surface-hover rounded transition-colors"
               >
                 <span className="font-mono text-primary">{item.cmd}</span>
-                <span className="text-muted-foreground text-[10px] sm:text-xs">{item.desc}</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs">{t(item.descKey as any)}</span>
               </button>
             ))}
           </div>

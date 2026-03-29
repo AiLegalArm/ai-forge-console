@@ -16,8 +16,8 @@ interface CenterPanelProps {
 }
 
 export function CenterPanel({ activeSection, mode }: CenterPanelProps) {
-  // Workspace view manages its own layout/scroll
-  const isWorkspace = !["projects","prompt-studio","prompt-library","agents","providers","audits","supabase-import","release","settings"].includes(activeSection);
+  // Workspace sections show chat-first layout
+  const isWorkspace = ["workspace", "files", "git", "deploy", "domains"].includes(activeSection);
 
   if (isWorkspace) {
     return (

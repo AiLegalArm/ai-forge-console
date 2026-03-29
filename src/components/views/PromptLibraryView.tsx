@@ -1,24 +1,26 @@
 import { useState } from "react";
 import { promptLibrary, promptLibraryTabs } from "@/data/mock-prompts";
 import { Library, Star, StarOff } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function PromptLibraryView() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(promptLibraryTabs[0]);
 
   return (
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Library className="h-4 w-4 text-primary" /> Prompt Library
+          <Library className="h-4 w-4 text-primary" /> {t("pl.title")}
         </h1>
-        <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">+ New Prompt</button>
+        <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("pl.new")}</button>
       </div>
 
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-0">
-        {promptLibraryTabs.map((t) => (
-          <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-2.5 py-1.5 text-xs whitespace-nowrap border-b-2 transition ${activeTab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-          >{t}</button>
+        {promptLibraryTabs.map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-2.5 py-1.5 text-xs whitespace-nowrap border-b-2 transition ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >{tab}</button>
         ))}
       </div>
 

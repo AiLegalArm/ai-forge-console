@@ -1,19 +1,19 @@
 import { activeAgents } from "@/data/mock-chat";
 import { Bot, Loader2, Pause } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function AgentActivityPanel() {
+  const { t } = useI18n();
+
   return (
     <div className="border-b border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 shrink-0">
       <div className="flex items-center gap-2 mb-1">
         <Bot className="h-3 w-3 text-primary shrink-0" />
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Agent Activity</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("agent.activity")}</span>
       </div>
       <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-0.5">
         {activeAgents.map((agent) => (
-          <div
-            key={agent.name}
-            className="flex items-center gap-1.5 bg-surface rounded px-1.5 sm:px-2 py-1 shrink-0 border border-border"
-          >
+          <div key={agent.name} className="flex items-center gap-1.5 bg-surface rounded px-1.5 sm:px-2 py-1 shrink-0 border border-border">
             {agent.status === "running" ? (
               <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />
             ) : (
