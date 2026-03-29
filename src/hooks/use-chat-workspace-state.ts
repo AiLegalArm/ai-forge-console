@@ -641,7 +641,7 @@ export function useChatWorkspaceState() {
               ...workflow.approvals,
               {
                 id: approvalId,
-                category: "push_approval",
+                category: "push_approval" as const,
                 title: `Approve push for ${task.title}`,
                 reason: `Push to ${task.github.branch?.localBranchName ?? task.branchName ?? "task branch"} requires explicit approval.`,
                 status: "pending" as const,

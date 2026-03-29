@@ -111,7 +111,7 @@ export class OpenRouterProviderService {
   private async fetchModels(apiKey: string): Promise<SafeResult<HybridModelRegistryEntry[]>> {
     const response = await this.fetchWithTimeout("/models", apiKey);
     if (!response.ok) {
-      return response;
+      return response as { ok: false; error: string };
     }
 
     const payload = response.data as OpenRouterModelsResponse;
