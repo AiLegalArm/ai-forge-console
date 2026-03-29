@@ -116,13 +116,13 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {activeApproval && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono">
-            <p className="text-warning">Approval requested: {activeApproval.title}</p>
+            <p className="text-warning">{t("chat.approval_requested" as never)} {activeApproval.title}</p>
             <p className="text-muted-foreground mt-1">{activeApproval.description}</p>
             <button
               onClick={() => onApprovalResolve(sessionId)}
               className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground"
             >
-              <Check className="h-3 w-3" /> Mark approved
+              <Check className="h-3 w-3" /> {t("chat.mark_approved" as never)}
             </button>
           </div>
         )}
