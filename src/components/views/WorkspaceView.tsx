@@ -146,6 +146,39 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
         </div>
       </div>
 
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Backend routing</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Conversation mode</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Privacy mode</span><span className="text-success font-mono uppercase">{workspaceState.localInference.routing.rules.find((rule) => rule.scope === "task" && rule.scopeRefId === activeTask?.id)?.privacyMode ?? "standard"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Active local model</span><span className="text-foreground font-mono">{workspaceState.localInference.modelRegistry.find((model) => model.id === workspaceState.localInference.ollama.selectedModelId)?.displayName ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Fallback ready</span><span className={`font-mono ${workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"}`}>{workspaceState.localInference.resources.autoFallbackReady ? "yes" : "no"}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Local runtime resources</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Concurrent jobs</span><span className="text-foreground font-mono">{workspaceState.localInference.resources.activeJobs}/{workspaceState.localInference.resources.maxConcurrentJobs}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Queue</span><span className="text-warning font-mono">{workspaceState.localInference.resources.queuedJobs}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Pressure</span><span className="text-foreground font-mono uppercase">{workspaceState.localInference.resources.resourcePressure}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Degraded</span><span className={`font-mono ${workspaceState.localInference.resources.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.resources.degradedMode ? "yes" : "no"}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Per-agent backends</span>
+        <div className="mt-1.5 space-y-0.5 text-[10px]">
+          {workspaceState.localInference.routing.agentAssignments.slice(0, 6).map((assignment) => (
+            <div key={assignment.agentId} className="flex justify-between text-muted-foreground gap-1">
+              <span className="truncate">{assignment.agentRole}</span>
+              <span className="text-foreground font-mono truncate">{assignment.preferredBackend}→{assignment.fallbackBackend}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("memory")}</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">

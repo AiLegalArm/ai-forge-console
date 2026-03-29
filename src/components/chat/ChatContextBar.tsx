@@ -14,6 +14,12 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
   const isPrivate = workspaceState.privacyMode === "private";
   const isSynced = workspaceState.syncStatus === "up_to_date" || workspaceState.syncStatus === "connected";
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
+  const conversationRoutingMode =
+    workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ??
+    workspaceState.localInference.routing.activeMode;
+  const activeLocalModel = workspaceState.localInference.modelRegistry.find(
+    (model) => model.id === workspaceState.localInference.ollama.selectedModelId,
+  );
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
@@ -39,7 +45,14 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <Cloud className="h-3 w-3 text-primary shrink-0 hidden sm:block" />
       <span className="text-foreground hidden sm:inline">{activeSession?.providerMeta.provider ?? workspaceState.activeProvider}</span>
       <span className="text-muted-foreground hidden sm:inline">{activeSession?.providerMeta.model}</span>
+      <span className="text-primary hidden md:inline uppercase">{workspaceState.activeBackend}</span>
       <span className="text-border hidden sm:inline">|</span>
+
+      <span className="hidden md:inline text-muted-foreground">route</span>
+      <span className="hidden md:inline text-primary uppercase">{conversationRoutingMode.replaceAll("_", " ")}</span>
+      <span className="hidden md:inline text-muted-foreground">•</span>
+      <span className="hidden md:inline text-foreground">{activeLocalModel?.displayName ?? "no local model"}</span>
+      <span className="text-border hidden md:inline">|</span>
 
       <Shield className={`h-3 w-3 shrink-0 ${isPrivate ? "text-success" : "text-warning"}`} />
       <span className={`hidden sm:inline ${isPrivate ? "text-success" : "text-warning"}`}>
