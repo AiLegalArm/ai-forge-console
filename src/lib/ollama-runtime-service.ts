@@ -1,4 +1,4 @@
-import type { LocalModelRegistryEntry, OllamaConnectionState } from "@/types/local-inference";
+import type { AgentRole, LocalModelRegistryEntry, ModelCapabilityTag, ModelPurposeTag, OllamaConnectionState } from "@/types/local-inference";
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 const DEFAULT_TIMEOUT_MS = 2500;
@@ -44,7 +44,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: null,
-          offlineReason: healthResult.error,
+          offlineReason: (healthResult as { ok: false; error: string }).error,
           failureState: "unreachable",
         },
         modelRegistry: [],
@@ -62,7 +62,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: previousSelection ?? null,
-          offlineReason: modelsResult.error,
+          offlineReason: (modelsResult as { ok: false; error: string }).error,
           failureState: "model_registry_unavailable",
         },
         modelRegistry: [],
@@ -80,7 +80,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: previousSelection ?? null,
-          offlineReason: parsed.error,
+          offlineReason: (parsed as { ok: false; error: string }).error,
           failureState: "malformed_response",
         },
         modelRegistry: [],
@@ -184,9 +184,9 @@ export class OllamaRuntimeService {
           weightClass: this.estimateWeightClass(estimatedSizeGb),
           estimatedSizeGb,
           localAvailability: "available" as const,
-          purposeTags: ["general", "privacy"],
-          capabilityTags: ["privacy_sensitive_local_use", "tool_reasoning"],
-          recommendedAgentRoles: ["worker", "planner"],
+          purposeTags: ["general", "privacy"] as ModelPurposeTag[],
+          capabilityTags: ["privacy_sensitive_local_use", "tool_reasoning"] as ModelCapabilityTag[],
+          recommendedAgentRoles: ["worker", "planner"] as AgentRole[],
           memoryCostGb: estimatedSizeGb > 0 ? Math.ceil(estimatedSizeGb * 1.35) : undefined,
           metadataCompleteness: "placeholder" as const,
           lastSeenIso: nowIso,

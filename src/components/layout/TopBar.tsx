@@ -69,7 +69,7 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
         </button>
         <div className="hidden md:flex items-center gap-2">
           <ShieldCheck className={`h-3.5 w-3.5 ${localShell.security.safeDefaultsEnabled ? "text-success" : "text-warning"}`} />
-          <span className="text-xs font-mono">{localShell.executionMode.replaceAll("_", " ")}</span>
+          <span className="text-xs font-mono">{localShell.executionMode.replace(/_/g, " ")}</span>
           <span className="text-xs">|</span>
           <Cloud className={`h-3.5 w-3.5 ${localShell.executionMode === "cloud_assisted" ? "text-primary" : ""}`} />
           <span className="text-xs font-mono">{localShell.security.privacyMode}</span>

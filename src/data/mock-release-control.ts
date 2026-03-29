@@ -1,4 +1,5 @@
 import type { ReleaseControlState, DeploymentRecord, DomainRecord, ReleaseCandidate } from "@/types/release";
+import type { WorkflowApproval } from "@/types/workflow";
 import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import { workflowState } from "@/data/mock-workflow";
 import { auditGateDecisions, auditors } from "@/data/mock-audits";
@@ -141,20 +142,20 @@ const releaseCandidates: ReleaseCandidate[] = [
   },
 ];
 
-const approvalOverrides = [
+const approvalOverrides: WorkflowApproval[] = [
   ...workflowState.approvals,
   {
     id: "approval-domain-1",
-    category: "domain_assignment",
+    category: "domain_assignment" as const,
     title: "Approve production domain assignment",
     reason: "Assign api.acme.dev to production release candidate",
-    status: "pending",
+    status: "pending" as const,
     taskId: "task-rbac-release",
     chatId: "review-session-1",
     requestedBy: "domain-controller",
     requestedAtIso: "2026-03-29T10:48:20.000Z",
   },
-] as const;
+];
 
 const activeAuditVerdicts = auditors
   .filter((auditor) => releaseCandidates[0].linkedAuditorTypes.includes(auditor.type))

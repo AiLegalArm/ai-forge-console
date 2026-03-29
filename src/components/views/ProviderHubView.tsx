@@ -119,7 +119,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold text-foreground">{backend.metadata.displayName}</span>
                     <span className={`text-[10px] font-mono uppercase ${backendStatusColor[backend.availability.status]}`}>
-                      {backend.availability.status.replaceAll("_", " ")}
+                      {backend.availability.status.replace(/_/g, " ")}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground">{backend.eventStreamMode}</span>
                     <span className={`text-[10px] font-mono ${backend.availability.installed ? "text-success" : "text-muted-foreground"}`}>
@@ -209,7 +209,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
           <div className="flex justify-between"><span className="text-muted-foreground">Last check</span><span className="text-foreground">{localInferenceRuntime.ollama.lastHealthCheckIso ?? "not checked"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Last refresh</span><span className="text-foreground">{localInferenceRuntime.ollama.lastModelRefreshIso ?? "not refreshed"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Active model</span><span className="text-primary">{activeLocalModel?.displayName ?? "none"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Routing mode</span><span className="text-foreground uppercase">{localInferenceRuntime.routing.activeMode.replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Routing mode</span><span className="text-foreground uppercase">{localInferenceRuntime.routing.activeMode.replace(/_/g, " ")}</span></div>
         </div>
 
         <div className="pt-1 border-t border-border/50">

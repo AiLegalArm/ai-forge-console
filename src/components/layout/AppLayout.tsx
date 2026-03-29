@@ -5,7 +5,8 @@ import { CenterPanel } from "@/components/layout/CenterPanel";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { BottomPanel } from "@/components/layout/BottomPanel";
 import { TopBar } from "@/components/layout/TopBar";
-import type { ChatTab } from "@/data/mock-chat";
+import type { ChatType } from "@/types/chat";
+type ChatTab = ChatType;
 
 export type NavSection =
   | "workspace" | "projects" | "files" | "git" | "prompt-studio" | "prompt-library"

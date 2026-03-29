@@ -69,7 +69,7 @@ export class OpenRouterProviderService {
           status: "error",
           baseUrl: this.baseUrl,
           lastHealthCheckIso: nowIso,
-          failureState: health.error,
+          failureState: (health as { ok: false; error: string }).error,
         },
         models: [],
       };
@@ -77,18 +77,33 @@ export class OpenRouterProviderService {
 
     const modelsResult = await this.fetchModels(apiKey);
 
+    if (!modelsResult.ok) {
+      return {
+        config: {
+          provider: "openrouter",
+          enabled: true,
+          active: true,
+          apiKeyConfigured: true,
+          status: "degraded",
+          baseUrl: this.baseUrl,
+          lastHealthCheckIso: nowIso,
+          failureState: (modelsResult as { ok: false; error: string }).error,
+        },
+        models: [],
+      };
+    }
+
     return {
       config: {
         provider: "openrouter",
         enabled: true,
         active: true,
         apiKeyConfigured: true,
-        status: modelsResult.ok ? "connected" : "degraded",
+        status: "connected",
         baseUrl: this.baseUrl,
         lastHealthCheckIso: nowIso,
-        failureState: modelsResult.ok ? undefined : modelsResult.error,
       },
-      models: modelsResult.ok ? modelsResult.data : [],
+      models: modelsResult.data,
     };
   }
 
@@ -103,7 +118,7 @@ export class OpenRouterProviderService {
   private async healthCheck(apiKey: string): Promise<SafeResult<true>> {
     const response = await this.fetchWithTimeout("/models", apiKey);
     if (!response.ok) {
-      return response;
+      return response as { ok: false; error: string };
     }
     return { ok: true, data: true };
   }
@@ -111,7 +126,7 @@ export class OpenRouterProviderService {
   private async fetchModels(apiKey: string): Promise<SafeResult<HybridModelRegistryEntry[]>> {
     const response = await this.fetchWithTimeout("/models", apiKey);
     if (!response.ok) {
-      return response;
+      return response as { ok: false; error: string };
     }
 
     const payload = response.data as OpenRouterModelsResponse;

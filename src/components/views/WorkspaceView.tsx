@@ -185,7 +185,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Backend routing</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Conversation mode</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Conversation mode</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replace(/_/g, " ")}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Privacy mode</span><span className="text-success font-mono uppercase">{workspaceState.localInference.routing.rules.find((rule) => rule.scope === "task" && rule.scopeRefId === activeTask?.id)?.privacyMode ?? "standard"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Active local model</span><span className="text-foreground font-mono">{workspaceState.localInference.modelRegistry.find((model) => model.id === workspaceState.localInference.ollama.selectedModelId)?.displayName ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Fallback ready</span><span className={`font-mono ${workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"}`}>{workspaceState.localInference.resources.autoFallbackReady ? "yes" : "no"}</span></div>
@@ -206,7 +206,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Local shell</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Execution mode</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Execution mode</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replace(/_/g, " ")}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Workspace</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.localShell.project.workspaceName}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Instructions</span><span className={`font-mono ${workspaceState.localShell.project.projectInstructionsDetected ? "text-success" : "text-warning"}`}>{workspaceState.localShell.project.projectInstructionsDetected ? "detected" : "missing"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Git changes</span><span className={`font-mono ${workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"}`}>{workspaceState.localShell.project.hasLocalChanges ? "dirty" : "clean"}</span></div>
@@ -219,7 +219,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
         <div className="mt-1.5 space-y-1 text-[10px]">
           {workspaceState.localShell.capabilities.map((gate) => (
             <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
-              <span>{gate.capability.replaceAll("_", " ")}</span>
+              <span>{gate.capability.replace(/_/g, " ")}</span>
               <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "approval" : "allowed"}</span>
             </div>
           ))}
