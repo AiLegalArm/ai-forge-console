@@ -51,8 +51,16 @@ export interface WorkspaceRepositoryState {
   url?: string;
   name?: string;
   branch?: string;
+  rootPath?: string;
+  source?: "local_path" | "project_bound" | "github_ready";
   syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
   connectionState?: "connected" | "disconnected";
+  clean?: boolean;
+  aheadBy?: number;
+  behindBy?: number;
+  relationToProject?: "bound" | "mismatch" | "unbound";
+  readyForGitWorkflow?: boolean;
+  lastValidatedAtIso?: string;
 }
 
 export interface WorkspaceRuntimeState {

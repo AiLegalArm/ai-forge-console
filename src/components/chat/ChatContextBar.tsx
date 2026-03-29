@@ -43,7 +43,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <GitBranch className="h-3 w-3 text-muted-foreground shrink-0" />
       <span className="text-primary">{workspaceState.currentBranch}</span>
       <span className={workspaceState.repository.connected ? "text-success" : "text-muted-foreground"}>
-        {workspaceState.repository.connected ? "repo:connected" : "repo:disconnected"}
+        {workspaceState.repository.connected ? `repo:${workspaceState.repository.name ?? "connected"}` : "repo:disconnected"}
       </span>
       <span className="text-muted-foreground hidden md:inline">{workspaceState.repository.syncStatus ?? "idle"}</span>
       <span className="text-border hidden sm:inline">|</span>

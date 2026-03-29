@@ -69,7 +69,7 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
                   <div className="text-right text-[10px] font-mono space-y-0.5 shrink-0">
                     {isActive && <div className="text-primary">active</div>}
                     <div className={project.source === "local" ? "text-success" : "text-muted-foreground"}>{project.source}</div>
-                    <div className={project.repository?.connected ? "text-info" : "text-warning"}>{project.repository?.connected ? "repo linked" : "repo missing"}</div>
+                    <div className={project.repository?.connected ? "text-info" : "text-warning"}>{project.repository?.connected ? `repo ${project.repository.branch ?? "unknown"}` : "repo missing"}</div>
                   </div>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">

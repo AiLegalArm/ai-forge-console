@@ -63,6 +63,8 @@ export default function AppLayout() {
         onToggleBottom={() => setMobileBottomOpen(!mobileBottomOpen)}
         currentProject={workspaceState.currentProject}
         localShell={workspaceState.localShell}
+        repository={workspaceState.repository}
+        currentBranch={workspaceState.currentBranch}
       />
       <div className="flex flex-1 overflow-hidden relative">
         {mobileSidebarOpen && (

@@ -1,7 +1,8 @@
 import { type AppMode } from "./AppLayout";
-import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck } from "lucide-react";
+import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
+import type { WorkspaceRepositoryState } from "@/types/workspace";
 
 const modeKeys = {
   plan: "plan" as const,
@@ -25,9 +26,11 @@ interface TopBarProps {
   onToggleBottom?: () => void;
   currentProject: string;
   localShell: LocalShellWorkspaceState;
+  repository: WorkspaceRepositoryState;
+  currentBranch: string;
 }
 
-export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom, currentProject, localShell }: TopBarProps) {
+export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom, currentProject, localShell, repository, currentBranch }: TopBarProps) {
   const { t, lang, setLang } = useI18n();
 
   return (
@@ -41,7 +44,12 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           <span className="font-mono font-semibold text-sm text-gradient-primary">NEXUS</span>
         </div>
         <span className="text-muted-foreground text-xs hidden sm:inline">|</span>
-        <span className="text-xs text-muted-foreground font-mono hidden sm:inline truncate">{currentProject}</span>
+        <span className="text-xs text-muted-foreground font-mono hidden md:inline truncate max-w-[280px]">{currentProject}</span>
+        <span className="hidden lg:inline-flex items-center gap-1 text-[10px] font-mono border border-border rounded px-1.5 py-0.5">
+          <GitBranch className="h-3 w-3" />
+          <span className="text-primary">{currentBranch}</span>
+          <span className={repository.connected ? "text-success" : "text-warning"}>{repository.connected ? repository.name ?? "repo connected" : "repo disconnected"}</span>
+        </span>
       </div>
 
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">

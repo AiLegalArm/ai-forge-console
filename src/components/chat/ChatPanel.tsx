@@ -51,7 +51,7 @@ interface ChatPanelProps {
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
   onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string; path?: string }>;
   onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
-  onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
+  onConnectRepository: (payload: { pathOrUrl: string; name?: string; branch?: string }) => Promise<{ ok: boolean; code: string; message: string }>;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
 }
@@ -256,10 +256,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               })();
             }}><HardDriveDownload className="h-3 w-3" />Add Local Project</button>
             <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
-              const resolvedUrl = repoInput || "https://github.com/org/repo.git";
-              const resolvedName = repoNameInput || resolvedUrl.split("/").pop()?.replace(".git", "") || "repo";
-              onConnectRepository({ name: resolvedName, url: resolvedUrl, branch: repoBranchInput || "main" });
-              setLastOnboardingMessage(`Connected repository "${resolvedName}" on ${repoBranchInput || "main"}.`);
+              void (async () => {
+                const result = await onConnectRepository({
+                  pathOrUrl: repoInput,
+                  name: repoNameInput || undefined,
+                  branch: repoBranchInput || undefined,
+                });
+                setLastOnboardingMessage(result.message);
+              })();
             }}><GitBranchPlus className="h-3 w-3" />Connect Git Repository</button>
             <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
               onProviderSourceChange(providerSelection);
@@ -303,7 +307,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             {workspaceState.repository.connected ? (
               <div className="rounded border border-primary/20 bg-primary/5 p-2 space-y-1">
                 <div className="text-primary">Sync status card</div>
-                <div className="text-muted-foreground">{workspaceState.repository.name} • {workspaceState.repository.url}</div>
+                <div className="text-muted-foreground">{workspaceState.repository.name} • {workspaceState.repository.url} • {workspaceState.repository.clean ? "clean" : "dirty"}</div>
                 <button onClick={onDisconnectRepository} className="text-destructive underline">Disconnect repository</button>
               </div>
             ) : null}

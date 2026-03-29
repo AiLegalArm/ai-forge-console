@@ -53,7 +53,7 @@ interface WorkspaceViewProps {
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
   onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string; path?: string }>;
   onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
-  onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
+  onConnectRepository: (payload: { pathOrUrl: string; name?: string; branch?: string }) => Promise<{ ok: boolean; code: string; message: string }>;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
 }
@@ -364,6 +364,7 @@ function GitView({
   const reviewState = activeTask?.github?.pullRequest;
   const openFindings = reviewState?.findings.filter((finding) => finding.status === "open") ?? [];
   const repoConnected = workspaceState.repository.connected || Boolean(activeRepo);
+  const repoName = workspaceState.repository.name ?? (activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : undefined);
   const dirty = workspaceState.localShell.project.hasLocalChanges || Boolean(commitState?.stagedChanges.hasUncommittedChanges);
   const lastGitEvent = [...workspaceState.workflow.activityEvents].reverse().find((event) =>
     ["review_triggered", "execution_update", "completed", "blocked"].includes(event.type) &&
@@ -379,15 +380,17 @@ function GitView({
         <div><span className="text-muted-foreground block">status</span><span className={dirty ? "text-warning" : "text-success"}>{dirty ? "dirty" : "clean"}</span></div>
         <div><span className="text-muted-foreground block">sync mode</span><span className="text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
         <div><span className="text-muted-foreground block">task branch</span><span className="text-primary truncate">{branchState?.localBranchName ?? activeTask?.branchName ?? "none"}</span></div>
-        <div><span className="text-muted-foreground block">project/repo</span><span className="text-foreground truncate">{workspaceState.currentProject} / {activeRepo?.name ?? "none"}</span></div>
+        <div><span className="text-muted-foreground block">project/repo</span><span className="text-foreground truncate">{workspaceState.currentProject} / {repoName ?? "none"}</span></div>
       </div>
       {lastGitEvent ? <div className="text-[10px] text-muted-foreground border border-border rounded px-2 py-1">last action: <span className="text-foreground">{lastGitEvent.title}</span> • {lastGitEvent.createdAtIso}</div> : null}
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.repository" as never)}</span><span className="font-mono text-foreground">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : t("git.not_connected" as never)}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.remote")}</span><span className="font-mono text-foreground">{activeRepo?.remoteUrl ?? "—"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.connection" as never)}</span><span className="font-mono text-primary uppercase">{workspaceState.syncStatus}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.repository" as never)}</span><span className="font-mono text-foreground">{repoName ?? t("git.not_connected" as never)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.remote")}</span><span className="font-mono text-foreground">{workspaceState.repository.url ?? activeRepo?.remoteUrl ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.connection" as never)}</span><span className="font-mono text-primary uppercase">{workspaceState.repository.readyForGitWorkflow ? "ready" : workspaceState.syncStatus}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.task_branch" as never)}</span><span className="font-mono text-primary">{branchState?.localBranchName ?? activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.branch_lifecycle" as never)}</span><span className="font-mono text-foreground">{activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">repo state</span><span className={`font-mono ${workspaceState.repository.clean ? "text-success" : "text-warning"}`}>{workspaceState.repository.clean ? "clean" : "dirty"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">project relation</span><span className="font-mono text-foreground">{workspaceState.repository.relationToProject ?? "unbound"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.sync_mode" as never)}</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.review_mode" as never)}</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.reviewMode ?? "chat_review"}</span></div>
       </div>
