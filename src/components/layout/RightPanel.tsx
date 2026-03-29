@@ -2,15 +2,17 @@ import { useState } from "react";
 import { Eye, Globe, Palette, ShieldCheck, Rocket, Link, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { auditGateDecisions, auditSummary } from "@/data/mock-audits";
+import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 interface RightPanelProps {
   activeTab: string;
   onTabChange: (t: string) => void;
+  workspaceState: WorkspaceRuntimeState;
   isMobile?: boolean;
   onClose?: () => void;
 }
 
-export function RightPanel({ activeTab, onTabChange, isMobile, onClose }: RightPanelProps) {
+export function RightPanel({ activeTab, onTabChange, workspaceState, isMobile, onClose }: RightPanelProps) {
   const { t } = useI18n();
   const tabs = [
     { id: "preview", icon: Eye, label: t("rp.preview") },
@@ -50,13 +52,13 @@ export function RightPanel({ activeTab, onTabChange, isMobile, onClose }: RightP
         </button>
       </div>
       <div className="flex-1 overflow-auto p-3">
-        <RightPanelContent tab={activeTab} />
+        <RightPanelContent tab={activeTab} workspaceState={workspaceState} />
       </div>
     </div>
   );
 }
 
-function RightPanelContent({ tab }: { tab: string }) {
+function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
   switch (tab) {
     case "preview":
@@ -65,15 +67,23 @@ function RightPanelContent({ tab }: { tab: string }) {
           <div className="aspect-video rounded bg-surface border border-border flex items-center justify-center">
             <span className="text-xs text-muted-foreground font-mono">Live Preview</span>
           </div>
-          <div className="flex gap-1.5">
-            <span className="px-2 py-0.5 bg-success/20 text-success text-xs rounded font-mono">{t("rp.running")}</span>
+          <div className="flex gap-1.5 items-center flex-wrap">
+            <span className={`px-2 py-0.5 text-xs rounded font-mono ${workspaceState.localShell.runtime.previewRuntime === "healthy" ? "bg-success/20 text-success" : "bg-warning/20 text-warning"}`}>
+              {workspaceState.localShell.runtime.previewRuntime === "healthy" ? t("rp.running") : "degraded"}
+            </span>
             <span className="text-xs text-muted-foreground font-mono">localhost:5173</span>
+            <span className="text-xs text-muted-foreground font-mono">mode: {workspaceState.localShell.executionMode}</span>
           </div>
           <div className="text-xs text-muted-foreground space-y-1">
-            <div className="flex justify-between"><span>{t("rp.build_time")}</span><span className="font-mono text-foreground">1.2s</span></div>
-            <div className="flex justify-between"><span>{t("rp.bundle")}</span><span className="font-mono text-foreground">247kb</span></div>
-            <div className="flex justify-between"><span>{t("rp.errors")}</span><span className="font-mono text-success">0</span></div>
+            <div className="flex justify-between"><span>Runtime</span><span className="font-mono text-foreground uppercase">{workspaceState.localShell.runtime.localRuntime}</span></div>
+            <div className="flex justify-between"><span>Providers</span><span className="font-mono text-foreground uppercase">{workspaceState.localShell.runtime.providers}</span></div>
+            <div className="flex justify-between"><span>Release gate</span><span className={`font-mono ${workspaceState.localShell.runtime.releaseReadiness === "blocked" ? "text-warning" : "text-success"}`}>{workspaceState.localShell.runtime.releaseReadiness}</span></div>
           </div>
+          {workspaceState.localShell.runtime.releaseReadiness === "blocked" ? (
+            <div className="text-[11px] border border-warning/30 bg-warning/5 rounded p-2 text-warning">
+              Release blocked: {workspaceState.localShell.runtime.releaseBlockReason}
+            </div>
+          ) : null}
         </div>
       );
     case "audit-results": {

@@ -5,6 +5,7 @@ import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
 import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
+import { localShellState } from "@/data/mock-local-shell";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
@@ -121,9 +122,10 @@ export function useChatWorkspaceState() {
   }, [chatState.messagesBySessionId, chatState.selectedSessionIdByType]);
 
   const workspaceState: WorkspaceRuntimeState = {
-    currentProject: "SaaS Dashboard",
+    currentProject: localShellState.project.workspaceName,
     currentBranch:
       activeWorkflowTask?.github?.branch?.localBranchName ??
+      localShellState.project.gitBranch ??
       activeWorkflowTask?.branchName ??
       activeRepository?.defaultBranch ??
       "main",
@@ -144,6 +146,7 @@ export function useChatWorkspaceState() {
     browserSession,
     evidenceFlow: evidenceFlowState,
     localInference: localInferenceRuntime,
+    localShell: localShellState,
   };
 
   return {
