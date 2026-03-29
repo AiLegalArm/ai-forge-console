@@ -52,12 +52,12 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
       {!collapsed || isMobile ? (
         <div className="px-3 py-2 border-b border-border/80 space-y-1.5 text-[10px]">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground uppercase font-mono tracking-wider">project</span>
+            <span className="text-muted-foreground uppercase font-mono tracking-wider">active project</span>
             <span className="text-foreground font-semibold truncate">{workspaceState.currentProject}</span>
           </div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-muted-foreground">
-            <span className="flex items-center gap-1"><Link2 className={`h-3 w-3 ${connectedRepo ? "text-success" : "text-warning"}`} />repo {connectedRepo ? "on" : "off"}</span>
-            <span className="flex items-center gap-1"><Plug className={`h-3 w-3 ${openRouterConnected || ollamaHealthy ? "text-success" : "text-warning"}`} />provider {openRouterConnected || ollamaHealthy ? "on" : "off"}</span>
+            <span className="flex items-center gap-1"><Link2 className={`h-3 w-3 ${connectedRepo ? "text-success" : "text-warning"}`} />repo {connectedRepo ? "connected" : "missing"}</span>
+            <span className="flex items-center gap-1"><Plug className={`h-3 w-3 ${openRouterConnected || ollamaHealthy ? "text-success" : "text-warning"}`} />provider {(openRouterConnected || ollamaHealthy) ? "ready" : "missing"}</span>
             <span className="flex items-center gap-1"><ShieldCheck className={`h-3 w-3 ${blockingAudits > 0 ? "text-warning" : "text-success"}`} />audits {blockingAudits > 0 ? `${blockingAudits} blockers` : "clear"}</span>
             <span className="flex items-center gap-1"><Workflow className="h-3 w-3 text-info" />{workspaceState.currentTaskStatus.replace(/_/g, " ")}</span>
           </div>
@@ -94,10 +94,10 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
       {!collapsed || isMobile ? (
         <div className="px-2.5 py-2 border-t border-border/80 space-y-1">
           <button onClick={() => onSectionChange("projects")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent flex items-center gap-1.5"><Folder className="h-3 w-3" /> switch project</button>
-          {!connectedRepo && <button onClick={() => onSectionChange("git")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">connect repo</button>}
+          {!connectedRepo && <button onClick={() => onSectionChange("git")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">connect repository</button>}
           {!(openRouterConnected || ollamaHealthy) && <button onClick={() => onSectionChange("providers")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">connect provider</button>}
-          <button onClick={() => onSectionChange("agents")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">open agents</button>
-          <button onClick={() => onSectionChange("audits")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">open audits</button>
+          <button onClick={() => onSectionChange("agents")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">view agent activity</button>
+          <button onClick={() => onSectionChange("audits")} className="w-full text-left px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-sidebar-accent">review audit gates</button>
         </div>
       ) : null}
       <button

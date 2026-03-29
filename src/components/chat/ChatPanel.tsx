@@ -78,6 +78,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const activeDraft = chatState.draftInputBySessionId[sessionId] ?? "";
   const activeApproval = chatState.approvalRequestBySessionId[sessionId];
   const placeholders = chatState.attachmentPlaceholdersBySessionId[sessionId] ?? [];
+  const hasConnectedRepo = workspaceState.repository.connected;
+  const hasProviderConnection = workspaceState.providerSource === "openrouter"
+    ? workspaceState.localInference.cloud.status === "connected"
+    : workspaceState.localInference.ollama.connectionHealthy;
+  const hasMessages = messages.length > 0;
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
@@ -101,6 +106,27 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       <div className="border-b border-border bg-card px-2 py-2 space-y-2">
+        <div className="rounded border border-border/70 bg-background/60 p-2">
+          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1">Getting started</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-1.5 text-[10px]">
+            <div className="rounded border border-border px-2 py-1.5">
+              <div className="text-muted-foreground">1. Active project</div>
+              <div className="text-foreground font-semibold truncate">{workspaceState.currentProject}</div>
+            </div>
+            <div className={`rounded border px-2 py-1.5 ${hasConnectedRepo ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
+              <div className="text-muted-foreground">2. Repository</div>
+              <div className={hasConnectedRepo ? "text-success font-semibold" : "text-warning font-semibold"}>{hasConnectedRepo ? "Connected" : "Connect to continue"}</div>
+            </div>
+            <div className={`rounded border px-2 py-1.5 ${hasProviderConnection ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
+              <div className="text-muted-foreground">3. Model provider</div>
+              <div className={hasProviderConnection ? "text-success font-semibold" : "text-warning font-semibold"}>{hasProviderConnection ? "Ready" : "Needs connection"}</div>
+            </div>
+            <div className="rounded border border-primary/40 bg-primary/5 px-2 py-1.5">
+              <div className="text-muted-foreground">4. Start workflow</div>
+              <div className="text-primary font-semibold">Ask for a plan or task execution</div>
+            </div>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
           <label className="space-y-1">
             <span className="text-muted-foreground">Provider</span>
@@ -215,7 +241,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Short description" className="border border-border rounded bg-background px-2 py-1" />
             <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Project type / label (optional)" className="border border-border rounded bg-background px-2 py-1" />
             <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root (placeholder)" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root (optional)" className="border border-border rounded bg-background px-2 py-1" />
             <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border rounded bg-background px-2 py-1">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
@@ -300,24 +326,32 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         )}
 
-        {messages.map((msg: ChatMessage) => (
-          <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              {msg.status && statusIcon[msg.status]}
-              <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
-                {msg.authorLabel || roleLabelMap[msg.role].label}
-              </span>
-              <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
-            </div>
-            <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-            {msg.linked?.taskTitle && (
-              <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
-            )}
-            {msg.linked?.evidenceIds?.length ? (
-              <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
-            ) : null}
+        {!hasMessages ? (
+          <div className="rounded-lg border border-dashed border-border bg-background/50 p-3 space-y-1.5">
+            <p className="text-xs font-semibold text-foreground">No conversation yet</p>
+            <p className="text-[11px] text-muted-foreground">Use the composer to describe what you want to build, then track task, agent, audit, and release state across the workspace.</p>
+            <p className="text-[10px] font-mono text-muted-foreground">Tip: start with “Plan the next task for {workspaceState.currentProject}”.</p>
           </div>
-        ))}
+        ) : (
+          messages.map((msg: ChatMessage) => (
+            <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                {msg.status && statusIcon[msg.status]}
+                <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
+                  {msg.authorLabel || roleLabelMap[msg.role].label}
+                </span>
+                <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
+              </div>
+              <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              {msg.linked?.taskTitle && (
+                <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
+              )}
+              {msg.linked?.evidenceIds?.length ? (
+                <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
+              ) : null}
+            </div>
+          ))
+        )}
       </div>
 
       <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
