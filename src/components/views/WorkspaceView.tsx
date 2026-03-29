@@ -414,7 +414,7 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Rocket className="h-4 w-4 text-primary" /> {t("deploy")}</h1>
       <div className="bg-card border border-border rounded-lg p-4 space-y-3 text-xs">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-muted-foreground">Final go/no-go</span>
+          <span className="font-mono text-muted-foreground">{t("deploy.go_nogo" as never)}</span>
           <span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{finalDecision.status}</span>
         </div>
         <div className="text-muted-foreground">{finalDecision.summary}</div>
