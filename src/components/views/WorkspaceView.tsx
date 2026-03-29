@@ -87,7 +87,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
     <div className="p-2.5 space-y-3 text-xs">
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Task graph</span>
+          <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.task_graph" as never)}</span>
           <span className="text-[10px] font-mono text-primary">{Math.round(progress)}%</span>
         </div>
         <div className="h-1 bg-muted rounded-full overflow-hidden mb-2">
