@@ -1,4 +1,5 @@
 import type { AuditGateDecision, AuditorType, AuditorVerdict } from "@/types/audits";
+import type { RuntimeProviderBackend, SyncStatus } from "@/types/contracts";
 
 export type ActivitySeverity = "info" | "warning" | "critical";
 
@@ -34,7 +35,7 @@ export interface AgentActivityEvent {
   agentId?: string;
   agentRole?: string;
   provider?: string;
-  backend?: "local" | "cloud" | "ollama" | "hybrid";
+  backend?: RuntimeProviderBackend;
   severity?: ActivitySeverity;
   importance?: 1 | 2 | 3 | 4 | 5;
   createdAtIso: string;
@@ -69,15 +70,7 @@ export interface WorkflowApproval {
   expiresAtIso?: string;
 }
 
-export type GitHubConnectionState =
-  | "disconnected"
-  | "connected"
-  | "syncing"
-  | "dirty"
-  | "up_to_date"
-  | "conflict"
-  | "blocked"
-  | "error";
+export type GitHubConnectionState = SyncStatus;
 
 export type TaskBranchLifecycle =
   | "no_branch"

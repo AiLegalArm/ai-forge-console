@@ -3,13 +3,13 @@ import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { BrowserSession, DesignSession } from "@/types/agents";
+import type { SyncStatus } from "@/types/contracts";
 import type { EvidenceFlowState } from "@/types/evidence";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
-import type { ReleaseControlState } from "@/types/release";
+import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
+import type { AuditorVerdict } from "@/types/audits";
 
 export type PrivacyMode = "private" | "team";
-export type SyncStatus = "disconnected" | "connected" | "syncing" | "dirty" | "up_to_date" | "conflict" | "blocked" | "error";
-
 export interface AgentRuntimeState {
   id: string;
   name: string;
@@ -35,6 +35,11 @@ export interface WorkspaceRuntimeState {
   currentChatSessionId: string;
   currentPhase: WorkflowTask["phase"];
   currentTaskStatus: WorkflowTask["status"];
+  activeAgentId?: string;
+  currentReviewId?: string;
+  currentReleaseCandidateId?: string;
+  auditGateVerdict?: AuditorVerdict;
+  releaseReadinessStatus: GoNoGoStatus;
   pendingApprovals: WorkflowApproval[];
   workflow: WorkflowState;
   auditors: AuditorControlState;

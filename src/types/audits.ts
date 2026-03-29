@@ -1,3 +1,5 @@
+import type { EntityLinkRef } from "@/types/contracts";
+
 export type AuditorType =
   | "code"
   | "security"
@@ -52,12 +54,7 @@ export interface AuditEvidenceReference {
   createdAtIso: string;
 }
 
-export interface AuditEntityLinks {
-  taskId?: string;
-  chatSessionId?: string;
-  branchName?: string;
-  reviewId?: string;
-  releaseCandidateId?: string;
+export interface AuditEntityLinks extends EntityLinkRef {
   commitSha?: string;
 }
 

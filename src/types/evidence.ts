@@ -1,3 +1,5 @@
+import type { EntityLinkRef } from "@/types/contracts";
+
 import type { FindingSeverity } from "@/types/audits";
 
 export type EvidenceSource = "designer_agent" | "browser_agent" | "auditor" | "review_workflow";
@@ -12,14 +14,7 @@ export type EvidenceKind =
   | "scenario_trace"
   | "chat_reference";
 
-export interface EvidenceLinkRef {
-  chatSessionId?: string;
-  taskId?: string;
-  branchName?: string;
-  reviewId?: string;
-  releaseCandidateId?: string;
-  findingId?: string;
-}
+export type EvidenceLinkRef = EntityLinkRef;
 
 export interface EvidenceAsset {
   id: string;
