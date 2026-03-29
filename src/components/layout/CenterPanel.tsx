@@ -31,9 +31,9 @@ interface CenterPanelProps {
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
-  onAddLocalProject: (name: string, localPath: string) => void;
-  onCreateProject: (name: string) => void;
-  onConnectRepository: (urlOrName: string) => void;
+  onAddLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => void;
+  onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
+  onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
 }

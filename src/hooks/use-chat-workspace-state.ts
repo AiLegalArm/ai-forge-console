@@ -179,15 +179,35 @@ export function useChatWorkspaceState() {
     {
       id: "project-local-1",
       name: localShell.project.workspaceName,
+      description: "Default local workspace",
+      projectType: "web-app",
       source: "local" as const,
       localPath: localShell.project.activeProjectRoot,
+      projectRoot: localShell.project.activeProjectRoot,
       branch: localShell.project.gitBranch || "main",
       status: "active" as const,
+      repository: {
+        connected: false,
+        syncStatus: "idle" as const,
+      },
+      provider: {
+        connected: true,
+        source: "ollama" as const,
+      },
     },
   ]);
   const [activeProjectId, setActiveProjectId] = useState("project-local-1");
-  const [repository, setRepository] = useState<{ connected: boolean; url?: string; name?: string; branch?: string }>({
+  const [repository, setRepository] = useState<{
+    connected: boolean;
+    url?: string;
+    name?: string;
+    branch?: string;
+    syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
+    connectionState?: "connected" | "disconnected";
+  }>({
     connected: false,
+    syncStatus: "idle",
+    connectionState: "disconnected",
   });
 
   const currentChatType = chatState.activeChatType;
@@ -341,9 +361,13 @@ export function useChatWorkspaceState() {
     });
   };
 
+  const activeProject = projects.find((project) => project.id === activeProjectId);
+
   const workspaceState: WorkspaceRuntimeState = {
-    currentProject: projects.find((project) => project.id === activeProjectId)?.name ?? localShell.project.workspaceName,
+    currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
+      activeProject?.repository?.branch ??
+      repository.branch ??
       activeWorkflowTask?.github?.branch?.localBranchName ??
       localShell.project.gitBranch ??
       activeWorkflowTask?.branchName ??
@@ -360,7 +384,7 @@ export function useChatWorkspaceState() {
     routingProfile,
     routingMode: currentSessionRoutingMode,
     privacyMode: "private",
-    syncStatus: activeRepository?.state ?? "disconnected",
+    syncStatus: repository.connected ? "connected" : (activeRepository?.state ?? "disconnected"),
     activeAgents,
     currentConversationType: currentChatType,
     currentChatSessionId,
@@ -560,6 +584,19 @@ export function useChatWorkspaceState() {
       setProviderSource(nextSource);
       const nextModel = lastUsedModelByProvider[nextSource];
       setActiveModel(nextModel);
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === activeProjectId
+            ? {
+                ...project,
+                provider: {
+                  connected: true,
+                  source: nextSource,
+                },
+              }
+            : project,
+        ),
+      );
       const providerLabel = nextSource === "ollama" ? "Ollama" : "OpenRouter";
       const backend = deploymentMode === "hybrid" ? "hybrid" : deploymentMode;
       dispatch({
@@ -662,24 +699,113 @@ export function useChatWorkspaceState() {
         },
       });
     },
-    addLocalProject: (name: string, localPath: string) => {
+    addLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => {
       const id = `project-local-${Date.now()}`;
-      setProjects((prev) => [{ id, name, source: "local", localPath, branch: "main", status: "active" }, ...prev.map((project) => ({ ...project, status: "idle" as const }))]);
+      setProjects((prev) => [
+        {
+          id,
+          name: payload.name,
+          description: "Local project connected from this machine",
+          projectType: "local",
+          source: "local",
+          localPath: payload.localPath,
+          projectRoot: payload.projectRoot || payload.localPath,
+          branch: "main",
+          status: "active",
+          repository: {
+            connected: false,
+            syncStatus: "idle",
+          },
+          provider: {
+            connected: true,
+            source: providerSource,
+          },
+        },
+        ...prev.map((project) => ({ ...project, status: "idle" as const })),
+      ]);
       setActiveProjectId(id);
+      setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
     },
-    createProject: (name: string) => {
+    createProject: (payload: { name: string; description?: string; projectType?: string }) => {
       const id = `project-manual-${Date.now()}`;
-      setProjects((prev) => [{ id, name, source: "manual", branch: "main", status: "active" }, ...prev.map((project) => ({ ...project, status: "idle" as const }))]);
+      setProjects((prev) => [
+        {
+          id,
+          name: payload.name,
+          description: payload.description || "New project",
+          projectType: payload.projectType || "general",
+          source: "manual",
+          branch: "main",
+          status: "active",
+          repository: {
+            connected: false,
+            syncStatus: "idle",
+          },
+          provider: {
+            connected: true,
+            source: providerSource,
+          },
+        },
+        ...prev.map((project) => ({ ...project, status: "idle" as const })),
+      ]);
       setActiveProjectId(id);
+      setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
     },
-    connectRepository: (urlOrName: string) => {
-      const name = urlOrName.split("/").pop()?.replace(".git", "") || urlOrName;
-      setRepository({ connected: true, url: urlOrName, name, branch: "main" });
+    connectRepository: (payload: { name: string; url: string; branch: string }) => {
+      const activeProject = projects.find((project) => project.id === activeProjectId);
+      const nextRepository = {
+        connected: true,
+        url: payload.url,
+        name: payload.name,
+        branch: payload.branch || "main",
+        syncStatus: "up_to_date" as const,
+        connectionState: "connected" as const,
+      };
+      setRepository(nextRepository);
+      if (activeProject) {
+        setProjects((prev) =>
+          prev.map((project) =>
+            project.id === activeProject.id
+              ? {
+                  ...project,
+                  source: "git",
+                  branch: payload.branch || project.branch,
+                  repository: nextRepository,
+                }
+              : project,
+          ),
+        );
+      }
     },
-    disconnectRepository: () => setRepository({ connected: false }),
+    disconnectRepository: () => {
+      setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === activeProjectId
+            ? {
+                ...project,
+                repository: { connected: false, syncStatus: "idle" },
+              }
+            : project,
+        ),
+      );
+    },
     setActiveProject: (projectId: string) => {
       setActiveProjectId(projectId);
       setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
+      const selectedProject = projects.find((project) => project.id === projectId);
+      if (selectedProject?.repository?.connected) {
+        setRepository({
+          connected: true,
+          name: selectedProject.repository.name,
+          url: selectedProject.repository.url,
+          branch: selectedProject.repository.branch,
+          syncStatus: selectedProject.repository.syncStatus,
+          connectionState: "connected",
+        });
+      } else {
+        setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      }
     },
     sendMessage: (chatType: ChatType) => {
       const sessionId = chatState.selectedSessionIdByType[chatType];
