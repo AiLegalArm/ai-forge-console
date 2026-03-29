@@ -26,7 +26,7 @@ export interface BrowserAutomationAdapter {
   runScenario: (scenario: BrowserScenario) => Promise<BrowserScenarioRunResult>;
 }
 
-export interface BrowserAutomationRuntimeBridge extends BrowserAutomationAdapter {}
+export type BrowserAutomationRuntimeBridge = BrowserAutomationAdapter;
 
 const now = () => new Date().toISOString();
 
