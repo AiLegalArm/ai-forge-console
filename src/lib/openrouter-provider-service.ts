@@ -69,7 +69,7 @@ export class OpenRouterProviderService {
           status: "error",
           baseUrl: this.baseUrl,
           lastHealthCheckIso: nowIso,
-          failureState: health.ok ? undefined : health.error,
+          failureState: health.error,
         },
         models: [],
       };
