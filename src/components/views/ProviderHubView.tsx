@@ -2,6 +2,9 @@ import { cloudAndCustomProviders, providerCategories } from "@/data/mock-provide
 import { Plug, Wifi, WifiOff, AlertTriangle, CheckCircle2, ServerCrash, Cpu, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { listAgentBackendSummaries } from "@/lib/agent-backends/provider-hub";
+import type { AgentBackendStatus, AgentBackendSummary } from "@/types/agent-backends";
+import { useEffect, useMemo, useState } from "react";
 
 interface ProviderHubViewProps {
   workspaceState: WorkspaceRuntimeState;
@@ -23,8 +26,36 @@ const ollamaStatusColor: Record<string, string> = {
   error: "text-destructive",
 };
 
+const backendStatusColor: Record<AgentBackendStatus, string> = {
+  not_configured: "text-muted-foreground",
+  configured: "text-info",
+  available: "text-success",
+  unavailable: "text-destructive",
+  degraded: "text-warning",
+  error: "text-destructive",
+};
+
 export function ProviderHubView({ workspaceState, onRefreshLocalInference }: ProviderHubViewProps) {
   const { t } = useI18n();
+  const [agentBackends, setAgentBackends] = useState<AgentBackendSummary[]>([]);
+
+  useEffect(() => {
+    void listAgentBackendSummaries().then((summaries) => setAgentBackends(summaries));
+  }, []);
+
+  const backendCapabilityLabel = useMemo(
+    () =>
+      ({
+        localCliExecution: "local-cli",
+        multiFileEditing: "multi-file-edit",
+        taskExecution: "task-exec",
+        terminalToolUse: "terminal-tools",
+        streamingProgress: "streaming",
+        approvalIntegration: "approval-aware",
+        promptSystemConfig: "prompt-config",
+      }) as const,
+    [],
+  );
   const localInferenceRuntime = workspaceState.localInference;
   const activeLocalModel = localInferenceRuntime.modelRegistry.find((model) => model.id === localInferenceRuntime.ollama.selectedModelId);
   const providers = [
@@ -70,6 +101,48 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
         {providerCategories.map((c) => (
           <span key={c.label} className="px-2 py-0.5 text-[10px] font-mono bg-secondary text-secondary-foreground rounded">{c.label} ({c.count})</span>
         ))}
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4 space-y-2">
+        <h2 className="text-xs font-semibold text-foreground">Agent backends</h2>
+        <div className="space-y-2">
+          {agentBackends.map((backend) => {
+            const capabilityFlags = Object.entries(backend.capabilities)
+              .filter(([key, value]) => key !== "operationModes" && value === true)
+              .map(([key]) => backendCapabilityLabel[key as keyof typeof backendCapabilityLabel]);
+
+            return (
+              <div key={backend.id} className="rounded border border-border/60 p-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-foreground">{backend.metadata.displayName}</span>
+                    <span className={`text-[10px] font-mono uppercase ${backendStatusColor[backend.availability.status]}`}>
+                      {backend.availability.status.replaceAll("_", " ")}
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{backend.eventStreamMode}</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground">{backend.availability.health}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">{backend.metadata.description}</div>
+                <div className="flex flex-wrap gap-1">
+                  {capabilityFlags.map((capability) => (
+                    <span key={`${backend.id}-${capability}`} className="px-1.5 py-0.5 text-[9px] bg-muted text-muted-foreground rounded">
+                      {capability}
+                    </span>
+                  ))}
+                  {backend.capabilities.operationModes.map((mode) => (
+                    <span key={`${backend.id}-mode-${mode}`} className="px-1.5 py-0.5 text-[9px] bg-secondary text-secondary-foreground rounded">
+                      {mode}
+                    </span>
+                  ))}
+                </div>
+                {backend.availability.statusDetail && (
+                  <div className="text-[10px] font-mono text-muted-foreground">{backend.availability.statusDetail}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-4 space-y-3">
