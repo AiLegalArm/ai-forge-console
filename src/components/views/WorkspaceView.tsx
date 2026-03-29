@@ -51,7 +51,7 @@ interface WorkspaceViewProps {
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
-  onAddLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => void;
+  onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string; path?: string }>;
   onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
   onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
   onDisconnectRepository: () => void;
