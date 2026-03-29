@@ -1,9 +1,10 @@
-import type { ChatMessage, ChatTab } from "@/data/mock-chat";
+import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
 
 export type PrivacyMode = "private" | "team";
 export type SyncStatus = "synced" | "syncing" | "offline";
 
 export interface AgentRuntimeState {
+  id: string;
   name: string;
   status: "running" | "idle";
   task: string;
@@ -20,7 +21,14 @@ export interface WorkspaceRuntimeState {
   privacyMode: PrivacyMode;
   syncStatus: SyncStatus;
   activeAgents: AgentRuntimeState[];
-  currentConversationType: ChatTab;
+  currentConversationType: ChatType;
+  currentChatSessionId: string;
 }
 
-export type ChatContextMap = Record<ChatTab, ChatMessage[]>;
+export type ChatContextMap = Record<ChatType, ChatMessage[]>;
+
+export interface WorkspaceChatViewModel {
+  chatState: ChatState;
+  workspaceState: WorkspaceRuntimeState;
+  chatContexts: ChatContextMap;
+}

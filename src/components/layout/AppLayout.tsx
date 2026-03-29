@@ -1,12 +1,11 @@
 import { useState } from "react";
+import { useChatWorkspaceState } from "@/hooks/use-chat-workspace-state";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { CenterPanel } from "@/components/layout/CenterPanel";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { BottomPanel } from "@/components/layout/BottomPanel";
 import { TopBar } from "@/components/layout/TopBar";
-import { mainChatMessages, agentChatMessages, auditChatMessages, reviewChatMessages, activeAgents } from "@/data/mock-chat";
 import type { ChatTab } from "@/data/mock-chat";
-import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 export type NavSection =
   | "workspace" | "projects" | "files" | "git" | "prompt-studio" | "prompt-library"
@@ -25,28 +24,7 @@ export default function AppLayout() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
 
-  const [chatContexts] = useState<ChatContextMap>({
-    main: mainChatMessages,
-    agent: agentChatMessages,
-    audit: auditChatMessages,
-    review: reviewChatMessages,
-  });
-
-  const [workspaceState, setWorkspaceState] = useState<WorkspaceRuntimeState>({
-    currentProject: "SaaS Dashboard",
-    currentBranch: "feat/user-management",
-    currentTask: "Build user management module",
-    activeProvider: "Anthropic",
-    activeBackend: "Ollama",
-    privacyMode: "private",
-    syncStatus: "synced",
-    activeAgents,
-    currentConversationType: "main",
-  });
-
-  const setConversationType = (conversation: ChatTab) => {
-    setWorkspaceState((prev) => ({ ...prev, currentConversationType: conversation }));
-  };
+  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
     setActiveSection(s);
@@ -82,7 +60,10 @@ export default function AppLayout() {
               mode={mode}
               workspaceState={workspaceState}
               chatContexts={chatContexts}
-              onConversationTypeChange={setConversationType}
+              chatState={chatState}
+              onConversationTypeChange={(conversation) => setConversationType(conversation as ChatTab)}
+              onDraftChange={setDraft}
+              onApprovalResolve={clearApproval}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />

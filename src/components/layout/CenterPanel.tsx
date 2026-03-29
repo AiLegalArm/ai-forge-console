@@ -10,6 +10,7 @@ import { ReleaseCenterView } from "@/components/views/ReleaseCenterView";
 import { WorkspaceView } from "@/components/views/WorkspaceView";
 import { SettingsView } from "@/components/views/SettingsView";
 import type { ChatTab } from "@/data/mock-chat";
+import type { ChatState } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 interface CenterPanelProps {
@@ -17,10 +18,13 @@ interface CenterPanelProps {
   mode: AppMode;
   workspaceState: WorkspaceRuntimeState;
   chatContexts: ChatContextMap;
+  chatState: ChatState;
   onConversationTypeChange: (conversation: ChatTab) => void;
+  onDraftChange: (sessionId: string, value: string) => void;
+  onApprovalResolve: (sessionId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, onConversationTypeChange }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains"].includes(activeSection);
 
   if (isWorkspace) {
@@ -31,7 +35,10 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           mode={mode}
           workspaceState={workspaceState}
           chatContexts={chatContexts}
+          chatState={chatState}
           onConversationTypeChange={onConversationTypeChange}
+          onDraftChange={onDraftChange}
+          onApprovalResolve={onApprovalResolve}
         />
       </div>
     );

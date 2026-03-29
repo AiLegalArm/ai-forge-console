@@ -2,6 +2,7 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ChatContextBar } from "@/components/chat/ChatContextBar";
 import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
 import type { ChatTab } from "@/data/mock-chat";
+import type { ChatState } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import { promptChainSteps } from "@/data/mock-prompts";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
@@ -24,10 +25,13 @@ interface WorkspaceViewProps {
   mode: AppMode;
   workspaceState: WorkspaceRuntimeState;
   chatContexts: ChatContextMap;
+  chatState: ChatState;
   onConversationTypeChange: (conversation: ChatTab) => void;
+  onDraftChange: (sessionId: string, value: string) => void;
+  onApprovalResolve: (sessionId: string) => void;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, onConversationTypeChange }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView />;
   if (section === "deploy") return <DeployView />;
@@ -36,24 +40,27 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, onC
   // Chat-first workspace (default)
   return (
     <div className="flex flex-col h-full">
-      <ChatContextBar workspaceState={workspaceState} />
+      <ChatContextBar workspaceState={workspaceState} chatState={chatState} />
       <AgentActivityPanel activeAgents={workspaceState.activeAgents} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <ChatPanel workspaceState={workspaceState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} />
+          <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onApprovalResolve={onApprovalResolve} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
-          <SideRail mode={mode} />
+          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} />
         </div>
       </div>
     </div>
   );
 }
 
-function SideRail({ mode }: { mode: AppMode }) {
+function SideRail({ mode, workspaceState, chatState }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState }) {
   const { t } = useI18n();
   const completed = promptChainSteps.filter((s) => s.status === "completed").length;
   const progress = (completed / promptChainSteps.length) * 100;
+
+  const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
+  const linkedContext = activeSession?.linked;
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
@@ -82,6 +89,16 @@ function SideRail({ mode }: { mode: AppMode }) {
           <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Prompt Chain</span><span className="text-success text-[10px] font-mono">✓</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Implementation</span><span className="text-primary text-[10px] font-mono">…</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground text-[10px]">Security</span><span className="text-muted-foreground text-[10px] font-mono">—</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Chat link</span>
+        <div className="mt-1.5 space-y-0.5 text-[10px]">
+          <div className="flex justify-between text-muted-foreground"><span>Session</span><span className="text-foreground font-mono truncate max-w-[120px]">{activeSession?.title}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Task graph</span><span className="text-foreground font-mono">{linkedContext?.taskId ?? "—"}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Agent link</span><span className="text-foreground font-mono">{linkedContext?.agentName ?? "—"}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Audit link</span><span className="text-foreground font-mono">{linkedContext?.auditFindingId ?? "—"}</span></div>
         </div>
       </div>
 
