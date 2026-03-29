@@ -32,6 +32,8 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
 
       <span className="text-muted-foreground hidden md:inline">{t("ctx.task")}</span>
       <span className="text-foreground truncate max-w-[160px] hidden md:inline">{workspaceState.currentTask}</span>
+      <span className="text-muted-foreground hidden lg:inline uppercase">{workspaceState.currentPhase}</span>
+      <span className="text-primary hidden lg:inline">{workspaceState.currentTaskStatus}</span>
       <span className="text-border hidden md:inline">|</span>
 
       <Cloud className="h-3 w-3 text-primary shrink-0 hidden sm:block" />
@@ -53,6 +55,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="text-border">|</span>
       <Cpu className="h-3 w-3 text-primary animate-pulse shrink-0" />
       <span className="text-primary">{runningCount} {t("ctx.active")}</span>
+      <span className="text-warning hidden md:inline">{workspaceState.pendingApprovals.length} approvals</span>
 
       <div className="ml-auto hidden lg:flex items-center gap-1.5">
         <Eye className="h-3 w-3 text-muted-foreground" />

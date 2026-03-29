@@ -1,16 +1,25 @@
-import { Bot, Loader2, Pause } from "lucide-react";
+import { Bot, Loader2, Pause, AlertTriangle, CircleCheck, CircleDashed } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { AgentRuntimeState } from "@/types/workspace";
+import type { AgentActivityEvent } from "@/types/workflow";
 
 interface AgentActivityPanelProps {
   activeAgents: AgentRuntimeState[];
+  events: AgentActivityEvent[];
 }
 
-export function AgentActivityPanel({ activeAgents }: AgentActivityPanelProps) {
+const eventStyles: Record<string, string> = {
+  critical: "text-destructive",
+  warning: "text-warning",
+  info: "text-primary",
+};
+
+export function AgentActivityPanel({ activeAgents, events }: AgentActivityPanelProps) {
   const { t } = useI18n();
+  const latestEvents = [...events].sort((a, b) => b.createdAtIso.localeCompare(a.createdAtIso)).slice(0, 4);
 
   return (
-    <div className="border-b border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 shrink-0">
+    <div className="border-b border-border bg-card px-2 sm:px-3 py-1.5 sm:py-2 shrink-0 space-y-1.5">
       <div className="flex items-center gap-2 mb-1">
         <Bot className="h-3 w-3 text-primary shrink-0" />
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("agent.activity")}</span>
@@ -31,6 +40,28 @@ export function AgentActivityPanel({ activeAgents }: AgentActivityPanelProps) {
           </div>
         ))}
       </div>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+        {latestEvents.map((event) => (
+          <div key={event.id} className="flex items-start gap-1.5 border border-border rounded bg-background px-2 py-1.5 min-w-[210px] max-w-[260px]">
+            {event.severity === "critical" ? (
+              <AlertTriangle className="h-3 w-3 mt-0.5 text-destructive shrink-0" />
+            ) : event.type === "completed" ? (
+              <CircleCheck className="h-3 w-3 mt-0.5 text-success shrink-0" />
+            ) : (
+              <CircleDashed className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className={`text-[10px] font-mono truncate ${eventStyles[event.severity ?? "info"] ?? "text-primary"}`}>{event.title}</p>
+              <p className="text-[9px] text-muted-foreground truncate">{event.taskId ?? "No task"} • {formatTime(event.createdAtIso)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
+}
+
+function formatTime(isoDate: string) {
+  return new Date(isoDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

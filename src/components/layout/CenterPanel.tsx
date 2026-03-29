@@ -22,9 +22,10 @@ interface CenterPanelProps {
   onConversationTypeChange: (conversation: ChatTab) => void;
   onDraftChange: (sessionId: string, value: string) => void;
   onApprovalResolve: (sessionId: string) => void;
+  onWorkflowApprovalResolve: (approvalId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains"].includes(activeSection);
 
   if (isWorkspace) {
@@ -39,6 +40,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onConversationTypeChange={onConversationTypeChange}
           onDraftChange={onDraftChange}
           onApprovalResolve={onApprovalResolve}
+          onWorkflowApprovalResolve={onWorkflowApprovalResolve}
         />
       </div>
     );
