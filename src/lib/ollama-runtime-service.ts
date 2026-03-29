@@ -80,7 +80,7 @@ export class OllamaRuntimeService {
           lastHealthCheckIso: healthCheckIso,
           lastModelRefreshIso: null,
           selectedModelId: previousSelection ?? null,
-          offlineReason: parsed.error,
+          offlineReason: (parsed as { ok: false; error: string }).error,
           failureState: "malformed_response",
         },
         modelRegistry: [],
