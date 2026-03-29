@@ -27,6 +27,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
     (finding) => finding.linked.taskId === activeTask?.id,
   );
   const noGoGates = workspaceState.auditors.gateDecisions.filter((gate) => gate.verdict === "no_go").length;
+  const ollamaState = workspaceState.localInference.ollama.serviceState;
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
@@ -59,6 +60,9 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="hidden md:inline text-primary uppercase">{conversationRoutingMode.replaceAll("_", " ")}</span>
       <span className="hidden md:inline text-muted-foreground">•</span>
       <span className="hidden md:inline text-foreground">{activeLocalModel?.displayName ?? "no local model"}</span>
+      <span className={`hidden md:inline ${ollamaState === "available" ? "text-success" : "text-warning"}`}>
+        {ollamaState}
+      </span>
       <span className="text-border hidden md:inline">|</span>
 
       <Shield className={`h-3 w-3 shrink-0 ${isPrivate ? "text-success" : "text-warning"}`} />

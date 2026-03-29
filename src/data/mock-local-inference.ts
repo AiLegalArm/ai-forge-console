@@ -6,6 +6,7 @@ export const localInferenceRuntime: LocalInferenceRuntimeState = {
     runtimeAvailable: true,
     connectionHealthy: true,
     lastHealthCheckIso: "2026-03-29T10:46:30.000Z",
+    lastModelRefreshIso: "2026-03-29T10:46:30.000Z",
     selectedModelId: "qwen3-coder-14b",
     offlineReason: undefined,
     failureState: undefined,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
@@ -8,7 +8,9 @@ import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
+import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import type { ChatState, ChatType } from "@/types/chat";
+import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
@@ -18,11 +20,13 @@ type Action =
   | { type: "update_draft"; sessionId: string; value: string }
   | { type: "clear_approval"; sessionId: string }
   | { type: "approve_workflow_approval"; approvalId: string }
+  | { type: "set_local_inference"; localInference: LocalInferenceRuntimeState }
   | { type: "set_workflow"; workflow: WorkflowState };
 
 interface WorkspaceReducerState {
   chat: ChatState;
   workflow: WorkflowState;
+  localInference: LocalInferenceRuntimeState;
 }
 
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
@@ -77,6 +81,12 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
         },
       };
     }
+    case "set_local_inference": {
+      return {
+        ...state,
+        localInference: action.localInference,
+      };
+    }
     case "set_workflow": {
       return {
         ...state,
@@ -92,10 +102,14 @@ export function useChatWorkspaceState() {
   const [state, dispatch] = useReducer(reducer, {
     chat: initialChatState,
     workflow: initialWorkflowState,
+    localInference: localInferenceRuntime,
   });
 
   const chatState = state.chat;
   const workflow = state.workflow;
+  const localInference = state.localInference;
+  const localInferenceRef = useRef(localInference);
+  localInferenceRef.current = localInference;
   const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
 
   const currentChatType = chatState.activeChatType;
@@ -135,6 +149,56 @@ export function useChatWorkspaceState() {
     return contextMap;
   }, [chatState.messagesBySessionId, chatState.selectedSessionIdByType]);
 
+  const refreshLocalInference = async () => {
+    const currentLocalInference = localInferenceRef.current;
+    const snapshot = await ollamaRuntimeService.getRuntimeSnapshot(currentLocalInference.ollama.selectedModelId);
+
+    const nextRoutingMode = snapshot.connection.runtimeAvailable
+      ? currentLocalInference.routing.activeMode
+      : currentLocalInference.routing.activeMode === "local_only" || currentLocalInference.routing.activeMode === "sensitive_local_only"
+        ? "hybrid"
+        : currentLocalInference.routing.activeMode;
+
+    const nextAgentAssignments = currentLocalInference.routing.agentAssignments.map((assignment) => {
+      if (snapshot.connection.runtimeAvailable) {
+        return assignment;
+      }
+
+      const localPreferred = assignment.preferredBackend === "ollama" || assignment.preferredBackend === "local";
+      const fallbackBackend = assignment.fallbackBackend === "ollama" ? "cloud" : assignment.fallbackBackend;
+
+      return {
+        ...assignment,
+        preferredBackend: localPreferred ? "cloud" : assignment.preferredBackend,
+        fallbackBackend,
+        assignedModelId: localPreferred ? undefined : assignment.assignedModelId,
+      };
+    });
+
+    dispatch({
+      type: "set_local_inference",
+      localInference: {
+        ...currentLocalInference,
+        ollama: snapshot.connection,
+        modelRegistry: snapshot.modelRegistry.length > 0 ? snapshot.modelRegistry : currentLocalInference.modelRegistry,
+        routing: {
+          ...currentLocalInference.routing,
+          activeMode: nextRoutingMode,
+          agentAssignments: nextAgentAssignments,
+        },
+        resources: {
+          ...currentLocalInference.resources,
+          autoFallbackReady: !snapshot.connection.runtimeAvailable || currentLocalInference.resources.autoFallbackReady,
+          degradedMode: snapshot.connection.serviceState === "degraded" || snapshot.connection.serviceState === "error",
+        },
+        scenarioLog: [
+          `${new Date().toISOString()}: Ollama ${snapshot.connection.serviceState} (${snapshot.connection.offlineReason ?? "runtime healthy"}).`,
+          ...currentLocalInference.scenarioLog.slice(0, 7),
+        ],
+      },
+    });
+  };
+
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: localShellState.project.workspaceName,
     currentBranch:
@@ -165,7 +229,7 @@ export function useChatWorkspaceState() {
     browserSession,
     evidenceFlow: evidenceFlowState,
     releaseControl: releaseControlState,
-    localInference: localInferenceRuntime,
+    localInference,
     localShell: localShellState,
   };
 
@@ -262,6 +326,22 @@ export function useChatWorkspaceState() {
     };
   }, [currentChatSessionId, gitService, workflow]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncOllamaRuntime = async () => {
+      await refreshLocalInference();
+      if (cancelled) return;
+    };
+
+    void syncOllamaRuntime();
+    const timer = setInterval(() => void syncOllamaRuntime(), 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   return {
     chatState,
     workspaceState,
@@ -270,6 +350,7 @@ export function useChatWorkspaceState() {
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
     approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
       if (!task?.github) return;

@@ -48,6 +48,7 @@ export interface OllamaConnectionState {
   runtimeAvailable: boolean;
   connectionHealthy: boolean;
   lastHealthCheckIso: string | null;
+  lastModelRefreshIso: string | null;
   selectedModelId: string | null;
   failureState?: string;
   offlineReason?: string;
@@ -66,6 +67,8 @@ export interface LocalModelRegistryEntry {
   latencyMsP50?: number;
   tokensPerSecond?: number;
   memoryCostGb?: number;
+  metadataCompleteness?: "runtime" | "placeholder";
+  lastSeenIso?: string;
   status: "active" | "inactive";
 }
 
