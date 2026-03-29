@@ -129,13 +129,13 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">GitHub flow</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.github_flow" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Branch</span><span className="text-foreground font-mono truncate max-w-[130px]">{activeTask?.github?.branch?.localBranchName ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Task link</span><span className="text-primary font-mono">{activeTask?.id ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Sync mode</span><span className="text-foreground font-mono uppercase">{activeTask?.github?.syncMode ?? "manual"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Push gate</span><span className="text-warning font-mono">{activeTask?.github?.pushWorkflow.requiresApproval ? "Approval required" : "No gate"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Review</span><span className="text-foreground font-mono">{activeTask?.github?.pullRequest?.status ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.branch" as never)}</span><span className="text-foreground font-mono truncate max-w-[130px]">{activeTask?.github?.branch?.localBranchName ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.task_link" as never)}</span><span className="text-primary font-mono">{activeTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.sync_mode" as never)}</span><span className="text-foreground font-mono uppercase">{activeTask?.github?.syncMode ?? "manual"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.push_gate" as never)}</span><span className="text-warning font-mono">{activeTask?.github?.pushWorkflow.requiresApproval ? t("rail.approval_required" as never) : t("rail.no_gate" as never)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review" as never)}</span><span className="text-foreground font-mono">{activeTask?.github?.pullRequest?.status ?? "—"}</span></div>
         </div>
       </div>
 
