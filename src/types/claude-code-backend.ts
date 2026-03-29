@@ -103,13 +103,13 @@ export interface ClaudeCodeRunFailure {
 export function mapClaudeStateToBackendStatus(state: ClaudeCodeBackendState): AgentBackendStatus {
   switch (state) {
     case "not_installed":
-      return "not_configured";
+      return "not_installed";
     case "installed":
-      return "not_configured";
+      return "installed";
     case "configured":
       return "configured";
     case "ready":
-      return "available";
+      return "ready";
     case "unavailable":
       return "unavailable";
     case "degraded":

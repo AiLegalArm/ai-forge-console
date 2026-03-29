@@ -8,7 +8,7 @@ describe("claudeCodeAdapter", () => {
 
     expect(availability.installed).toBe(true);
     expect(availability.configured).toBe(true);
-    expect(availability.status).toBe("available");
+    expect(availability.status).toBe("ready");
     expect(availability.health).toBe("healthy");
   });
 
