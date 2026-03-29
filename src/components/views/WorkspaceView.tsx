@@ -140,10 +140,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Evidence drawer</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.evidence" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Task evidence</span><span className="text-foreground font-mono">{taskEvidence.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Blocking evidence</span><span className="text-destructive font-mono">{blockerEvidence.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.task_evidence" as never)}</span><span className="text-foreground font-mono">{taskEvidence.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blocking" as never)}</span><span className="text-destructive font-mono">{blockerEvidence.length}</span></div>
           {taskEvidence.slice(0, 2).map((evidenceId) => (
             <div key={evidenceId} className="text-muted-foreground truncate">• {workspaceState.evidenceFlow.records.find((entry) => entry.id === evidenceId)?.title ?? evidenceId}</div>
           ))}
