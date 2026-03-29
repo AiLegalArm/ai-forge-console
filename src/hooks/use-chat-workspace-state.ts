@@ -10,6 +10,8 @@ import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
+import { openRouterProviderService } from "@/lib/openrouter-provider-service";
+import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
@@ -203,7 +205,29 @@ export function useChatWorkspaceState() {
 
   const refreshLocalInference = async () => {
     const currentLocalInference = localInferenceRef.current;
-    const snapshot = await ollamaRuntimeService.getRuntimeSnapshot(currentLocalInference.ollama.selectedModelId);
+    const [snapshot, openRouterSnapshot] = await Promise.all([
+      ollamaRuntimeService.getRuntimeSnapshot(currentLocalInference.ollama.selectedModelId),
+      openRouterProviderService.getProviderSnapshot(),
+    ]);
+
+    const nextHybridRegistry = [
+      ...openRouterSnapshot.models,
+      ...snapshot.modelRegistry.map((model) => ({
+        id: `ollama-${model.id}`,
+        provider: "ollama" as const,
+        providerModelId: model.name,
+        displayName: `${model.displayName} (Ollama)`,
+        costTier: "low" as const,
+        qualityTier: model.weightClass === "xlarge" || model.weightClass === "large" ? ("high" as const) : ("medium" as const),
+        speedTier: model.weightClass === "small" || model.weightClass === "tiny" ? ("fast" as const) : ("balanced" as const),
+        contextSuitability: model.capabilityTags.includes("long_context") ? ("high" as const) : ("medium" as const),
+        codingSuitability: model.capabilityTags.includes("coding") ? ("high" as const) : ("medium" as const),
+        auditSuitability: model.capabilityTags.includes("auditing") ? ("high" as const) : ("medium" as const),
+        reviewSuitability: model.capabilityTags.includes("reviewing") ? ("high" as const) : ("medium" as const),
+        structuredOutputSuitability: model.capabilityTags.includes("structured_output") ? ("high" as const) : ("medium" as const),
+        availability: model.localAvailability === "available" ? ("available" as const) : ("degraded" as const),
+      })),
+    ];
 
     const nextRoutingMode = snapshot.connection.runtimeAvailable
       ? currentLocalInference.routing.activeMode
@@ -211,7 +235,7 @@ export function useChatWorkspaceState() {
         ? "hybrid"
         : currentLocalInference.routing.activeMode;
 
-    const nextAgentAssignments = currentLocalInference.routing.agentAssignments.map((assignment) => {
+    const baseAssignments = currentLocalInference.routing.agentAssignments.map((assignment) => {
       if (snapshot.connection.runtimeAvailable) {
         return assignment;
       }
@@ -227,11 +251,15 @@ export function useChatWorkspaceState() {
       };
     });
 
+    const nextAgentAssignments = modelRoutingEngine.assignAgents(baseAssignments, nextHybridRegistry);
+
     dispatch({
       type: "set_local_inference",
       localInference: {
         ...currentLocalInference,
         ollama: snapshot.connection,
+        cloud: openRouterSnapshot.config,
+        hybridModelRegistry: nextHybridRegistry,
         modelRegistry: snapshot.modelRegistry.length > 0 ? snapshot.modelRegistry : currentLocalInference.modelRegistry,
         routing: {
           ...currentLocalInference.routing,
@@ -260,7 +288,7 @@ export function useChatWorkspaceState() {
       activeRepository?.defaultBranch ??
       "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
-    activeProvider: currentSession?.providerMeta.provider ?? "Anthropic",
+    activeProvider: currentSession?.providerMeta.provider ?? "OpenRouter",
     activeBackend: currentSession?.providerMeta.backend ?? "hybrid",
     privacyMode: "private",
     syncStatus: activeRepository?.state ?? "disconnected",
