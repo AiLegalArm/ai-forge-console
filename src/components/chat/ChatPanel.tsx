@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
@@ -300,16 +300,27 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         )}
 
-        {messages.map((msg: ChatMessage) => (
-          <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
+        {messages.map((msg: ChatMessage, idx: number) => (
+          <div
+            key={msg.id}
+            className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]} animate-fade-in`}
+            style={{ animationDelay: `${idx * 40}ms`, animationFillMode: "backwards" }}
+          >
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
               <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
                 {msg.authorLabel || roleLabelMap[msg.role].label}
               </span>
+              {msg.status === "streaming" && (
+                <span className="text-[9px] text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
+              )}
               <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
             </div>
-            <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            {msg.status === "streaming" ? (
+              <StreamingText text={msg.content} />
+            ) : (
+              <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            )}
             {msg.linked?.taskTitle && (
               <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
@@ -318,6 +329,8 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             ) : null}
           </div>
         ))}
+
+        <TypingIndicator agents={messages.filter(m => m.status === "streaming").map(m => m.authorLabel || roleLabelMap[m.role]?.label || "")} />
       </div>
 
       <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
@@ -410,6 +423,42 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StreamingText({ text }: { text: string }) {
+  const [visibleLen, setVisibleLen] = useState(0);
+  useEffect(() => {
+    setVisibleLen(0);
+    const id = setInterval(() => {
+      setVisibleLen((prev) => {
+        if (prev >= text.length) { clearInterval(id); return prev; }
+        return Math.min(prev + 2, text.length);
+      });
+    }, 18);
+    return () => clearInterval(id);
+  }, [text]);
+  return (
+    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+      {text.slice(0, visibleLen)}
+      {visibleLen < text.length && <span className="inline-block w-1.5 h-3 bg-primary animate-pulse ml-0.5 rounded-sm" />}
+    </p>
+  );
+}
+
+function TypingIndicator({ agents }: { agents: string[] }) {
+  if (agents.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 animate-fade-in">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span className="text-[10px] font-mono text-muted-foreground">
+        {agents.join(", ")} typing…
+      </span>
     </div>
   );
 }
