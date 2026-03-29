@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw,
+  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
@@ -78,6 +78,25 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const activeDraft = chatState.draftInputBySessionId[sessionId] ?? "";
   const activeApproval = chatState.approvalRequestBySessionId[sessionId];
   const placeholders = chatState.attachmentPlaceholdersBySessionId[sessionId] ?? [];
+  const hasSentFirstMessage = Object.values(chatState.messagesBySessionId)
+    .some((sessionMessages) => sessionMessages.some((message) => message.role === "user"));
+  const hasConnectedProvider = workspaceState.providerSource.length > 0 && workspaceState.activeModel.length > 0;
+  const hasConnectedRepository = workspaceState.repository.connected;
+  const firstRunChecklist = [
+    { id: "project", label: "Project ready", done: Boolean(workspaceState.activeProjectId) },
+    { id: "repo", label: "Git repository connected", done: hasConnectedRepository },
+    { id: "provider", label: "Provider and model selected", done: hasConnectedProvider },
+    { id: "chat", label: "First message sent", done: hasSentFirstMessage },
+    { id: "activity", label: "Activity stream visible", done: workspaceState.workflow.activityEvents.length > 0 },
+    {
+      id: "audit",
+      label: "Audit/review/deploy state visible",
+      done: Boolean(workspaceState.currentReviewId || workspaceState.releaseReadinessStatus),
+    },
+  ];
+  const completedChecklistItems = firstRunChecklist.filter((step) => step.done).length;
+  const onboardingComplete = completedChecklistItems === firstRunChecklist.length;
+  const sendDisabled = !hasConnectedProvider;
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
@@ -189,6 +208,30 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
       <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
         <div className="rounded-lg border border-border p-2 bg-card space-y-3">
+          <div className={`rounded border p-2 space-y-2 ${onboardingComplete ? "border-success/40 bg-success/5" : "border-primary/30 bg-primary/5"}`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-wider font-mono text-primary">First-run flow</p>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                {completedChecklistItems}/{firstRunChecklist.length} complete
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px] font-mono">
+              {firstRunChecklist.map((step) => (
+                <div key={step.id} className="flex items-center gap-1.5">
+                  {step.done ? <CheckCircle className="h-3 w-3 text-success" /> : <Clock className="h-3 w-3 text-warning" />}
+                  <span className={step.done ? "text-foreground" : "text-muted-foreground"}>{step.label}</span>
+                </div>
+              ))}
+            </div>
+            {!onboardingComplete ? (
+              <div className="text-[10px] text-muted-foreground font-mono inline-flex items-center gap-1">
+                Continue left-to-right: project → repo → provider/model → first message.
+                <ArrowRight className="h-3 w-3" />
+              </div>
+            ) : (
+              <div className="text-[10px] text-success font-mono">Core journey complete. Continue driving from chat.</div>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground inline-flex items-center gap-1" onClick={() => {
               onCreateProject({ name: projectNameInput || "New Project", description: projectDescriptionInput, projectType: projectTypeInput });
@@ -248,6 +291,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 <div className="text-primary">Sync status card</div>
                 <div className="text-muted-foreground">{workspaceState.repository.name} • {workspaceState.repository.url}</div>
                 <button onClick={onDisconnectRepository} className="text-destructive underline">Disconnect repository</button>
+              </div>
+            ) : null}
+            {!workspaceState.repository.connected ? (
+              <div className="rounded border border-warning/30 bg-warning/5 p-2 text-warning">
+                Connect a repository to unlock commit, review, and deploy continuity.
               </div>
             ) : null}
           </div>
@@ -391,13 +439,23 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 }
               }}
               placeholder={t("chat.placeholder")}
+              disabled={sendDisabled}
               className="w-full bg-input border border-border rounded-lg px-2 sm:px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-mono"
             />
           </div>
-          <button onClick={() => onSendMessage(activeTab)} className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0">
+          <button
+            onClick={() => onSendMessage(activeTab)}
+            disabled={sendDisabled}
+            className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>
+        {sendDisabled ? (
+          <p className="text-[10px] font-mono text-warning px-1">
+            Connect and select a provider/model above before sending your first command.
+          </p>
+        ) : null}
 
         {showSlashMenu && (
           <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border rounded-lg shadow-lg p-1 min-w-[180px] sm:min-w-[200px] z-50">
