@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check,
+  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
@@ -49,9 +49,9 @@ interface ChatPanelProps {
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
-  onAddLocalProject: (name: string, localPath: string) => void;
-  onCreateProject: (name: string) => void;
-  onConnectRepository: (urlOrName: string) => void;
+  onAddLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => void;
+  onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
+  onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
 }
@@ -61,8 +61,15 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [projectNameInput, setProjectNameInput] = useState("");
+  const [projectDescriptionInput, setProjectDescriptionInput] = useState("");
+  const [projectTypeInput, setProjectTypeInput] = useState("web-app");
   const [projectPathInput, setProjectPathInput] = useState("");
+  const [projectRootInput, setProjectRootInput] = useState("");
   const [repoInput, setRepoInput] = useState("");
+  const [repoNameInput, setRepoNameInput] = useState("");
+  const [repoBranchInput, setRepoBranchInput] = useState("main");
+  const [providerSelection, setProviderSelection] = useState<"openrouter" | "ollama">(workspaceState.providerSource);
+  const [lastOnboardingMessage, setLastOnboardingMessage] = useState("Choose an onboarding action to get started.");
 
   const activeTab = workspaceState.currentConversationType;
   const messages = chatContexts[activeTab];
@@ -181,29 +188,68 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
-        <div className="rounded-lg border border-border p-2 bg-card space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground" onClick={() => onAddLocalProject(projectNameInput || "Local Project", projectPathInput || "/path/to/local/project")}>Add Local Project</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onConnectRepository(repoInput || "https://github.com/org/repo.git")}>Connect Git Repository</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onCreateProject(projectNameInput || "New Project")}>Create Project</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border" onClick={() => onProviderSourceChange("openrouter")}>Connect Provider</button>
+        <div className="rounded-lg border border-border p-2 bg-card space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground inline-flex items-center gap-1" onClick={() => {
+              onCreateProject({ name: projectNameInput || "New Project", description: projectDescriptionInput, projectType: projectTypeInput });
+              setLastOnboardingMessage(`Created project "${projectNameInput || "New Project"}".`);
+            }}><FolderPlus className="h-3 w-3" />Create Project</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+              onAddLocalProject({ name: projectNameInput || "Local Project", localPath: projectPathInput || "/workspace/my-local-project", projectRoot: projectRootInput || projectPathInput || "/workspace/my-local-project" });
+              setLastOnboardingMessage(`Added local project "${projectNameInput || "Local Project"}".`);
+            }}><HardDriveDownload className="h-3 w-3" />Add Local Project</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+              const resolvedUrl = repoInput || "https://github.com/org/repo.git";
+              const resolvedName = repoNameInput || resolvedUrl.split("/").pop()?.replace(".git", "") || "repo";
+              onConnectRepository({ name: resolvedName, url: resolvedUrl, branch: repoBranchInput || "main" });
+              setLastOnboardingMessage(`Connected repository "${resolvedName}" on ${repoBranchInput || "main"}.`);
+            }}><GitBranchPlus className="h-3 w-3" />Connect Git Repository</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+              onProviderSourceChange(providerSelection);
+              setLastOnboardingMessage(`Provider connected: ${providerSelection}.`);
+            }}><PlugZap className="h-3 w-3" />Connect Provider</button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border rounded bg-background px-2 py-1 text-xs" />
-            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1 text-xs" />
-            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="https://github.com/org/repo.git" className="border border-border rounded bg-background px-2 py-1 text-xs md:col-span-2" />
+          <div className="text-[10px] text-muted-foreground font-mono">{lastOnboardingMessage}</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Short description" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Project type / label (optional)" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root (placeholder)" className="border border-border rounded bg-background px-2 py-1" />
+            <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border rounded bg-background px-2 py-1">
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama</option>
+            </select>
+            <input value={repoNameInput} onChange={(e) => setRepoNameInput(e.target.value)} placeholder="Repository name" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="Repository URL / path" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={repoBranchInput} onChange={(e) => setRepoBranchInput(e.target.value)} placeholder="Branch" className="border border-border rounded bg-background px-2 py-1" />
           </div>
-          <div className="text-[10px] font-mono space-y-1">
-            <p>Projects:</p>
+          <div className="rounded border border-border/70 p-2 text-[10px] font-mono space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Active project context</span>
+              <span className="text-primary">{workspaceState.currentProject}</span>
+            </div>
             <div className="flex flex-wrap gap-1">
               {workspaceState.projects.map((project) => (
                 <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded border ${workspaceState.activeProjectId === project.id ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>
-                  {project.name} ({project.source})
+                  {project.name} • {project.source} • {project.projectType ?? "general"}
                 </button>
               ))}
             </div>
-            <p className="text-muted-foreground">Repo: {workspaceState.repository.connected ? `${workspaceState.repository.name} • ${workspaceState.repository.branch}` : "disconnected"}</p>
-            {workspaceState.repository.connected ? <button onClick={onDisconnectRepository} className="text-[10px] text-destructive underline">Disconnect repository</button> : null}
+            <div className="flex flex-wrap gap-2">
+              <span className={`rounded-full px-2 py-0.5 border ${workspaceState.repository.connected ? "border-success text-success" : "border-border text-muted-foreground"}`}>
+                Repo {workspaceState.repository.connected ? "connected" : "disconnected"}
+              </span>
+              <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><GitBranchPlus className="h-3 w-3" />{workspaceState.repository.branch ?? "no-branch"}</span>
+              <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><RefreshCw className="h-3 w-3" />{workspaceState.repository.syncStatus ?? "idle"}</span>
+            </div>
+            {workspaceState.repository.connected ? (
+              <div className="rounded border border-primary/20 bg-primary/5 p-2 space-y-1">
+                <div className="text-primary">Sync status card</div>
+                <div className="text-muted-foreground">{workspaceState.repository.name} • {workspaceState.repository.url}</div>
+                <button onClick={onDisconnectRepository} className="text-destructive underline">Disconnect repository</button>
+              </div>
+            ) : null}
           </div>
         </div>
 

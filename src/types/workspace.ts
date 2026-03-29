@@ -25,12 +25,24 @@ export interface AgentRuntimeState {
 export interface WorkspaceProjectEntry {
   id: string;
   name: string;
+  description?: string;
+  projectType?: string;
   source: "local" | "git" | "manual";
   localPath?: string;
-  repositoryUrl?: string;
-  repositoryName?: string;
+  projectRoot?: string;
   branch: string;
   status: "active" | "idle" | "disconnected";
+  repository?: {
+    connected: boolean;
+    name?: string;
+    url?: string;
+    branch?: string;
+    syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
+  };
+  provider?: {
+    connected: boolean;
+    source?: "openrouter" | "ollama";
+  };
 }
 
 export interface WorkspaceRepositoryState {
@@ -38,6 +50,8 @@ export interface WorkspaceRepositoryState {
   url?: string;
   name?: string;
   branch?: string;
+  syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
+  connectionState?: "connected" | "disconnected";
 }
 
 export interface WorkspaceRuntimeState {
