@@ -1,23 +1,25 @@
 import {
   FolderKanban, Files, GitBranch, Wand2, Library, Bot, Plug, ShieldCheck,
-  Database, Rocket, Globe, Package, Settings, ChevronLeft, X,
+  Database, Rocket, Globe, Package, Settings, ChevronLeft, X, MessageSquare,
 } from "lucide-react";
 import type { NavSection } from "./AppLayout";
+import { useI18n } from "@/lib/i18n";
 
-const navItems: { id: NavSection; icon: React.ElementType; label: string }[] = [
-  { id: "projects", icon: FolderKanban, label: "Projects" },
-  { id: "files", icon: Files, label: "Files" },
-  { id: "git", icon: GitBranch, label: "Git" },
-  { id: "prompt-studio", icon: Wand2, label: "Prompt Studio" },
-  { id: "prompt-library", icon: Library, label: "Prompt Library" },
-  { id: "agents", icon: Bot, label: "Agents" },
-  { id: "providers", icon: Plug, label: "Providers" },
-  { id: "audits", icon: ShieldCheck, label: "Audits" },
-  { id: "supabase-import", icon: Database, label: "Supabase Import" },
-  { id: "deploy", icon: Rocket, label: "Deploy" },
-  { id: "domains", icon: Globe, label: "Domains" },
-  { id: "release", icon: Package, label: "Release" },
-  { id: "settings", icon: Settings, label: "Settings" },
+const navItems: { id: NavSection; icon: React.ElementType; labelKey: string }[] = [
+  { id: "workspace", icon: MessageSquare, labelKey: "nav.workspace" },
+  { id: "projects", icon: FolderKanban, labelKey: "nav.projects" },
+  { id: "files", icon: Files, labelKey: "nav.files" },
+  { id: "git", icon: GitBranch, labelKey: "nav.git" },
+  { id: "prompt-studio", icon: Wand2, labelKey: "nav.prompt-studio" },
+  { id: "prompt-library", icon: Library, labelKey: "nav.prompt-library" },
+  { id: "agents", icon: Bot, labelKey: "nav.agents" },
+  { id: "providers", icon: Plug, labelKey: "nav.providers" },
+  { id: "audits", icon: ShieldCheck, labelKey: "nav.audits" },
+  { id: "supabase-import", icon: Database, labelKey: "nav.supabase-import" },
+  { id: "deploy", icon: Rocket, labelKey: "nav.deploy" },
+  { id: "domains", icon: Globe, labelKey: "nav.domains" },
+  { id: "release", icon: Package, labelKey: "nav.release" },
+  { id: "settings", icon: Settings, labelKey: "nav.settings" },
 ];
 
 interface SidebarProps {
@@ -29,6 +31,8 @@ interface SidebarProps {
 }
 
 export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle, isMobile }: SidebarProps) {
+  const { t } = useI18n();
+
   return (
     <aside
       className={`flex flex-col border-r border-border bg-sidebar shrink-0 transition-all duration-200 h-full ${
@@ -47,10 +51,10 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
                   ? "text-primary bg-sidebar-accent border-r-2 border-primary"
                   : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent"
               }`}
-              title={collapsed && !isMobile ? item.label : undefined}
+              title={collapsed && !isMobile ? t(item.labelKey as any) : undefined}
             >
               <item.icon className="h-3.5 w-3.5 shrink-0" />
-              {(!collapsed || isMobile) && <span className="font-medium truncate">{item.label}</span>}
+              {(!collapsed || isMobile) && <span className="font-medium truncate">{t(item.labelKey as any)}</span>}
             </button>
           );
         })}
