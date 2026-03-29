@@ -60,11 +60,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
-    orchestrator: { label: "Orchestrator", color: "text-accent" },
+    orchestrator: { label: t("chat.orchestrator" as never), color: "text-accent" },
     agent: { label: t("chat.agent_label"), color: "text-accent" },
     system: { label: t("chat.system"), color: "text-muted-foreground" },
     auditor: { label: t("chat.auditor_label"), color: "text-warning" },
-    reviewer: { label: "Reviewer", color: "text-info" },
+    reviewer: { label: t("chat.reviewer" as never), color: "text-info" },
   };
 
   return (
