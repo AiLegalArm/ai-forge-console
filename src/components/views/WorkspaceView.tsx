@@ -226,7 +226,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
         </div>
       </div>
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Per-agent backends</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.per_agent" as never)}</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">
           {workspaceState.localInference.routing.agentAssignments.slice(0, 6).map((assignment) => (
             <div key={assignment.agentId} className="flex justify-between text-muted-foreground gap-1">
