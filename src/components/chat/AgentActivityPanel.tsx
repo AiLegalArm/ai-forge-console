@@ -53,7 +53,7 @@ export function AgentActivityPanel({ activeAgents, events }: AgentActivityPanelP
             )}
             <div className="min-w-0">
               <p className={`text-[10px] font-mono truncate ${eventStyles[event.severity ?? "info"] ?? "text-primary"}`}>{event.title}</p>
-              <p className="text-[9px] text-muted-foreground truncate">{event.taskId ?? "No task"} • {formatTime(event.createdAtIso)}</p>
+              <p className="text-[9px] text-muted-foreground truncate">{event.taskId ?? t("agent.no_task" as never)} • {formatTime(event.createdAtIso)}</p>
             </div>
           </div>
         ))}

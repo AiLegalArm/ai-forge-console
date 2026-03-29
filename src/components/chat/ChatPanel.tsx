@@ -60,11 +60,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
-    orchestrator: { label: "Orchestrator", color: "text-accent" },
+    orchestrator: { label: t("chat.orchestrator" as never), color: "text-accent" },
     agent: { label: t("chat.agent_label"), color: "text-accent" },
     system: { label: t("chat.system"), color: "text-muted-foreground" },
     auditor: { label: t("chat.auditor_label"), color: "text-warning" },
-    reviewer: { label: "Reviewer", color: "text-info" },
+    reviewer: { label: t("chat.reviewer" as never), color: "text-info" },
   };
 
   return (
@@ -72,7 +72,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       <div className="flex items-center justify-between border-b border-border bg-card px-2 py-1">
         <div className="flex items-center gap-1 text-[10px] font-mono text-primary">
           <Waypoints className="h-3 w-3" />
-          <span>{activeSession?.title ?? "Orchestrator-first command surface"}</span>
+          <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
         <span className="text-[10px] text-muted-foreground hidden sm:inline">
           {activeSession?.providerMeta.backend} • {activeSession?.providerMeta.provider}
@@ -104,25 +104,25 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {activeTab === "audit" && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono text-warning">
-            Audit findings: {auditSummary.critical} critical • {auditSummary.high} high • score {auditSummary.score}
+            {t("chat.audit_findings" as never)} {auditSummary.critical} {t("chat.critical" as never)} • {auditSummary.high} {t("chat.high" as never)} • {t("chat.score" as never)} {auditSummary.score}
           </div>
         )}
         {activeTab === "review" && (
           <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
-            Review evidence: {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} linked items •
-            blockers {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
+            {t("chat.review_evidence" as never)} {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} {t("chat.linked_items" as never)} •
+            {t("chat.blockers" as never)} {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
           </div>
         )}
 
         {activeApproval && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono">
-            <p className="text-warning">Approval requested: {activeApproval.title}</p>
+            <p className="text-warning">{t("chat.approval_requested" as never)} {activeApproval.title}</p>
             <p className="text-muted-foreground mt-1">{activeApproval.description}</p>
             <button
               onClick={() => onApprovalResolve(sessionId)}
               className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground"
             >
-              <Check className="h-3 w-3" /> Mark approved
+              <Check className="h-3 w-3" /> {t("chat.mark_approved" as never)}
             </button>
           </div>
         )}
@@ -130,7 +130,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {workspaceState.pendingApprovals.length > 0 && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono space-y-1">
-            <p className="text-warning">Workflow approvals pending</p>
+            <p className="text-warning">{t("chat.workflow_approvals" as never)}</p>
             {workspaceState.pendingApprovals.map((approval) => (
               <div key={approval.id} className="flex items-center justify-between gap-2">
                 <span className="text-foreground truncate">{approval.title}</span>
@@ -138,7 +138,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                   onClick={() => onWorkflowApprovalResolve?.(approval.id)}
                   className="text-[10px] rounded bg-primary px-1.5 py-0.5 text-primary-foreground"
                 >
-                  Approve
+                  {t("chat.approve" as never)}
                 </button>
               </div>
             ))}
@@ -156,10 +156,10 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             </div>
             <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             {msg.linked?.taskTitle && (
-              <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task ↔ {msg.linked.taskTitle}</p>
+              <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
             {msg.linked?.evidenceIds?.length ? (
-              <p className="text-[10px] text-info mt-1 font-mono">Evidence ↔ {msg.linked.evidenceIds.join(", ")}</p>
+              <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
             ) : null}
           </div>
         ))}
@@ -195,7 +195,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {placeholders.length > 0 && (
           <div className="px-1 text-[10px] font-mono text-muted-foreground">
-            Attachments staged: {placeholders.map((item) => item.name).join(", ")}
+            {t("chat.attachments" as never)} {placeholders.map((item) => item.name).join(", ")}
           </div>
         )}
 
@@ -254,13 +254,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 }
 
 function OrchestratorSummary({ currentTask }: { currentTask: string }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 sm:p-2.5">
-      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">Main workflow</p>
+      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">{t("chat.main_workflow" as never)}</p>
       <p className="text-xs text-foreground">
         command → orchestrator plan → approvals → agent execution stream → audit/review summary → code/deploy
       </p>
-      <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task: {currentTask}</p>
+      <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {currentTask}</p>
     </div>
   );
 }
