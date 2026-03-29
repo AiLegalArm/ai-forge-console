@@ -103,7 +103,7 @@ export class OpenRouterProviderService {
   private async healthCheck(apiKey: string): Promise<SafeResult<true>> {
     const response = await this.fetchWithTimeout("/models", apiKey);
     if (!response.ok) {
-      return response;
+      return response as { ok: false; error: string };
     }
     return { ok: true, data: true };
   }
