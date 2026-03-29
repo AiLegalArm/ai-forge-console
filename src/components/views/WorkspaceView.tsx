@@ -250,20 +250,21 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
 }
 
 function DesignView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+  const { t } = useI18n();
   const session = workspaceState.designSession;
   return (
     <div className="p-4 space-y-3">
-      <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Palette className="h-4 w-4 text-primary" /> Design Agent</h1>
+      <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Palette className="h-4 w-4 text-primary" /> {t("design.agent" as never)}</h1>
       <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-2">
-        <div className="flex justify-between"><span className="text-muted-foreground">State</span><span className="font-mono text-primary">{session.state}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Brief</span><span className="font-mono text-foreground">{session.brief.title}</span></div>
-        <div className="text-muted-foreground">Page structure: {session.layoutProposal.pageStructure.join(" → ")}</div>
-        <div className="text-muted-foreground">Components: {session.layoutProposal.componentInventory.join(", ")}</div>
-        <div className="text-muted-foreground">Variants: {session.layoutProposal.statesAndVariants.join(", ")}</div>
-        <div className="text-muted-foreground">Tokens: {session.tokenHandoff.designTokens.join(", ")}</div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("design.state" as never)}</span><span className="font-mono text-primary">{session.state}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("design.brief" as never)}</span><span className="font-mono text-foreground">{session.brief.title}</span></div>
+        <div className="text-muted-foreground">{t("design.page_structure" as never)} {session.layoutProposal.pageStructure.join(" → ")}</div>
+        <div className="text-muted-foreground">{t("design.components" as never)} {session.layoutProposal.componentInventory.join(", ")}</div>
+        <div className="text-muted-foreground">{t("design.variants" as never)} {session.layoutProposal.statesAndVariants.join(", ")}</div>
+        <div className="text-muted-foreground">{t("design.tokens" as never)} {session.tokenHandoff.designTokens.join(", ")}</div>
       </div>
       <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
-        <div className="font-mono text-primary">UX concerns / handoff</div>
+        <div className="font-mono text-primary">{t("design.ux_concerns" as never)}</div>
         {session.findings.map((finding) => (
           <div key={finding.id} className="flex items-start gap-2 text-muted-foreground">
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-warning" />
