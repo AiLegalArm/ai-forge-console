@@ -1,15 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Terminal, FileText, TestTube, Code, Activity, ChevronUp, ChevronDown } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-
-const mockTerminalLines = [
-  { time: "14:32:01", text: "$ npm run build", type: "command" as const },
-  { time: "14:32:02", text: "vite v5.4.19 building for production...", type: "info" as const },
-  { time: "14:32:03", text: "✓ 142 modules transformed.", type: "success" as const },
-  { time: "14:32:03", text: "dist/index.html         0.46 kB │ gzip:  0.30 kB", type: "info" as const },
-  { time: "14:32:03", text: "dist/assets/index.js  247.12 kB │ gzip: 78.34 kB", type: "info" as const },
-  { time: "14:32:03", text: "✓ built in 1.2s", type: "success" as const },
-];
+import type { TerminalSessionState } from "@/types/local-shell";
 
 const mockAgentTrace = [
   { time: "14:31:45", agent: "Planner Agent", action: "Decomposing task into 8 subtasks", status: "done" },
@@ -22,9 +14,10 @@ const mockAgentTrace = [
 interface BottomPanelProps {
   expanded: boolean;
   onToggle: () => void;
+  terminal: TerminalSessionState;
 }
 
-export function BottomPanel({ expanded, onToggle }: BottomPanelProps) {
+export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) {
   const { t } = useI18n();
   const tabConfig = [
     { id: "terminal", icon: Terminal, label: t("bp.terminal") },
@@ -35,6 +28,8 @@ export function BottomPanel({ expanded, onToggle }: BottomPanelProps) {
   ];
   const [activeTab, setActiveTab] = useState("terminal");
   const height = expanded ? "h-64" : "h-36";
+
+  const latestCommand = useMemo(() => terminal.history[0], [terminal.history]);
 
   return (
     <div className={`${height} border-t border-border bg-panel shrink-0 flex flex-col transition-all`}>
@@ -58,17 +53,20 @@ export function BottomPanel({ expanded, onToggle }: BottomPanelProps) {
       <div className="flex-1 overflow-auto p-2 font-mono text-xs">
         {activeTab === "terminal" && (
           <div className="space-y-0.5">
-            {mockTerminalLines.map((l, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="text-muted-foreground shrink-0">{l.time}</span>
-                <span className={l.type === "success" ? "text-success" : l.type === "command" ? "text-primary" : "text-foreground"}>{l.text}</span>
+            <div className="text-muted-foreground mb-1">session {terminal.sessionId} · cwd {terminal.workingDirectory}</div>
+            {terminal.output.map((line) => (
+              <div key={line.id} className="flex gap-2">
+                <span className="text-muted-foreground shrink-0">{line.timestamp}</span>
+                <span className={line.stream === "stderr" ? "text-warning" : line.stream === "system" ? "text-primary" : "text-foreground"}>{line.text}</span>
               </div>
             ))}
-            <div className="flex gap-2 items-center">
-              <span className="text-muted-foreground">14:32:04</span>
-              <span className="text-primary">$</span>
-              <span className="w-1.5 h-3.5 bg-primary animate-pulse" />
-            </div>
+            {latestCommand?.state === "running" ? (
+              <div className="flex gap-2 items-center">
+                <span className="text-muted-foreground">now</span>
+                <span className="text-primary">$</span>
+                <span className="w-1.5 h-3.5 bg-primary animate-pulse" />
+              </div>
+            ) : null}
           </div>
         )}
         {activeTab === "agent-trace" && (
@@ -83,31 +81,9 @@ export function BottomPanel({ expanded, onToggle }: BottomPanelProps) {
             ))}
           </div>
         )}
-        {activeTab === "logs" && (
-          <div className="text-muted-foreground">
-            <div>[INFO] Application started on port 5173</div>
-            <div>[INFO] Hot module replacement enabled</div>
-            <div>[WARN] Deprecation warning: useEffect cleanup</div>
-            <div>[INFO] 3 routes registered</div>
-          </div>
-        )}
-        {activeTab === "tests" && (
-          <div className="space-y-0.5">
-            <div><span className="text-success">✓</span> src/components/Header.test.tsx (4 tests) <span className="text-muted-foreground">120ms</span></div>
-            <div><span className="text-success">✓</span> src/lib/utils.test.ts (8 tests) <span className="text-muted-foreground">45ms</span></div>
-            <div><span className="text-destructive">✗</span> src/hooks/useAuth.test.ts (1 failed) <span className="text-muted-foreground">230ms</span></div>
-            <div className="text-muted-foreground mt-1">Tests: 12 passed, 1 failed | Coverage: 37%</div>
-          </div>
-        )}
-        {activeTab === "python" && (
-          <div className="space-y-0.5">
-            <div className="text-primary">Python 3.12.0 | Execution Environment</div>
-            <div><span className="text-muted-foreground">{'>>>'}</span> import pandas as pd</div>
-            <div><span className="text-muted-foreground">{'>>>'}</span> df = pd.read_csv("data.csv")</div>
-            <div><span className="text-muted-foreground">{'>>>'}</span> df.shape</div>
-            <div className="text-foreground">(1024, 12)</div>
-          </div>
-        )}
+        {activeTab === "logs" && <div className="text-muted-foreground">Local runtime logs routed to the desktop shell.</div>}
+        {activeTab === "tests" && <div className="text-muted-foreground">Tests are available from task-bound terminal commands.</div>}
+        {activeTab === "python" && <div className="text-muted-foreground">Python runtime is available when enabled by local capabilities.</div>}
       </div>
     </div>
   );

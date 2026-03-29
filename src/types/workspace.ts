@@ -4,6 +4,7 @@ import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/work
 import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { EvidenceFlowState } from "@/types/evidence";
+import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { ReleaseControlState } from "@/types/release";
 
 export type PrivacyMode = "private" | "team";
@@ -42,6 +43,7 @@ export interface WorkspaceRuntimeState {
   evidenceFlow: EvidenceFlowState;
   releaseControl: ReleaseControlState;
   localInference: LocalInferenceRuntimeState;
+  localShell: LocalShellWorkspaceState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;

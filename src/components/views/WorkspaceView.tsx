@@ -201,6 +201,29 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
         </div>
       </div>
 
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Local shell</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Execution mode</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Workspace</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.localShell.project.workspaceName}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Instructions</span><span className={`font-mono ${workspaceState.localShell.project.projectInstructionsDetected ? "text-success" : "text-warning"}`}>{workspaceState.localShell.project.projectInstructionsDetected ? "detected" : "missing"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Git changes</span><span className={`font-mono ${workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"}`}>{workspaceState.localShell.project.hasLocalChanges ? "dirty" : "clean"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Terminal</span><span className="text-foreground font-mono">{workspaceState.localShell.terminal.state}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Capability gates</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          {workspaceState.localShell.capabilities.map((gate) => (
+            <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
+              <span>{gate.capability.replaceAll("_", " ")}</span>
+              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "approval" : "allowed"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Per-agent backends</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">

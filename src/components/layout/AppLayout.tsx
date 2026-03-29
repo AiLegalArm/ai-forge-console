@@ -40,6 +40,7 @@ export default function AppLayout() {
         onToggleRight={() => setMobileRightOpen(!mobileRightOpen)}
         onToggleBottom={() => setMobileBottomOpen(!mobileBottomOpen)}
         currentProject={workspaceState.currentProject}
+        localShell={workspaceState.localShell}
       />
       <div className="flex flex-1 overflow-hidden relative">
         {mobileSidebarOpen && (
@@ -67,17 +68,17 @@ export default function AppLayout() {
               onWorkflowApprovalResolve={approveWorkflowApproval}
             />
             <div className="hidden md:flex flex-col">
-              <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} />
+              <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />
             </div>
           </div>
           <div className="hidden lg:flex">
-            <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} />
+            <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} workspaceState={workspaceState} />
           </div>
           {mobileRightOpen && (
             <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileRightOpen(false)}>
               <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
               <div className="absolute right-0 top-0 bottom-0 w-72" onClick={(e) => e.stopPropagation()}>
-                <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} isMobile onClose={() => setMobileRightOpen(false)} />
+                <RightPanel activeTab={rightPanelTab} onTabChange={setRightPanelTab} workspaceState={workspaceState} isMobile onClose={() => setMobileRightOpen(false)} />
               </div>
             </div>
           )}
@@ -86,7 +87,7 @@ export default function AppLayout() {
       {mobileBottomOpen && (
         <div className="fixed inset-x-0 bottom-0 z-40 md:hidden">
           <div className="bg-panel border-t border-border h-64">
-            <BottomPanel expanded onToggle={() => setMobileBottomOpen(false)} />
+            <BottomPanel expanded onToggle={() => setMobileBottomOpen(false)} terminal={workspaceState.localShell.terminal} />
           </div>
         </div>
       )}

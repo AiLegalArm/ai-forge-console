@@ -1,6 +1,7 @@
 import { type AppMode } from "./AppLayout";
-import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal } from "lucide-react";
+import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { LocalShellWorkspaceState } from "@/types/local-shell";
 
 const modeKeys = {
   plan: "plan" as const,
@@ -23,9 +24,10 @@ interface TopBarProps {
   onToggleRight?: () => void;
   onToggleBottom?: () => void;
   currentProject: string;
+  localShell: LocalShellWorkspaceState;
 }
 
-export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom, currentProject }: TopBarProps) {
+export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onToggleBottom, currentProject, localShell }: TopBarProps) {
   const { t, lang, setLang } = useI18n();
 
   return (
@@ -59,7 +61,6 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
       </div>
 
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-        {/* Language toggle */}
         <button
           onClick={() => setLang(lang === "ru" ? "en" : "ru")}
           className="px-1.5 py-0.5 text-[10px] font-mono bg-surface text-foreground rounded hover:bg-surface-hover transition-colors"
@@ -67,11 +68,14 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           {lang === "ru" ? "EN" : "RU"}
         </button>
         <div className="hidden md:flex items-center gap-2">
-          <Cloud className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-mono">{t("cloud")}</span>
+          <ShieldCheck className={`h-3.5 w-3.5 ${localShell.security.safeDefaultsEnabled ? "text-success" : "text-warning"}`} />
+          <span className="text-xs font-mono">{localShell.executionMode.replaceAll("_", " ")}</span>
+          <span className="text-xs">|</span>
+          <Cloud className={`h-3.5 w-3.5 ${localShell.executionMode === "cloud_assisted" ? "text-primary" : ""}`} />
+          <span className="text-xs font-mono">{localShell.security.privacyMode}</span>
           <span className="text-xs">|</span>
           <Smartphone className="h-3.5 w-3.5" />
-          <span className="text-xs font-mono">{t("mobile")}</span>
+          <span className="text-xs font-mono">{localShell.desktopShellMode}</span>
         </div>
         <button onClick={onToggleBottom} className="md:hidden p-1 text-muted-foreground hover:text-foreground">
           <Terminal className="h-4 w-4" />
