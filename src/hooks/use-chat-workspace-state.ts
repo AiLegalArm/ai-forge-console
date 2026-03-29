@@ -3,8 +3,11 @@ import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
-import { browserSession, designSession } from "@/data/mock-agent-workspace";
+import { browserSession as initialBrowserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
+import { BrowserAutomationService, resolveBrowserAutomationAdapter } from "@/lib/browser-automation-service";
+import type { BrowserSession } from "@/types/browser-automation";
+import type { EvidenceRecord } from "@/types/evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
@@ -21,12 +24,15 @@ type Action =
   | { type: "clear_approval"; sessionId: string }
   | { type: "approve_workflow_approval"; approvalId: string }
   | { type: "set_local_inference"; localInference: LocalInferenceRuntimeState }
-  | { type: "set_workflow"; workflow: WorkflowState };
+  | { type: "set_workflow"; workflow: WorkflowState }
+  | { type: "set_browser_execution"; browserSession: BrowserSession; browserEvidenceRecords: EvidenceRecord[] };
 
 interface WorkspaceReducerState {
   chat: ChatState;
   workflow: WorkflowState;
   localInference: LocalInferenceRuntimeState;
+  browserSession: BrowserSession;
+  browserEvidenceRecords: EvidenceRecord[];
 }
 
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
@@ -93,6 +99,13 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
         workflow: action.workflow,
       };
     }
+    case "set_browser_execution": {
+      return {
+        ...state,
+        browserSession: action.browserSession,
+        browserEvidenceRecords: action.browserEvidenceRecords,
+      };
+    }
     default:
       return state;
   }
@@ -103,14 +116,19 @@ export function useChatWorkspaceState() {
     chat: initialChatState,
     workflow: initialWorkflowState,
     localInference: localInferenceRuntime,
+    browserSession: initialBrowserSession,
+    browserEvidenceRecords: [],
   });
 
   const chatState = state.chat;
   const workflow = state.workflow;
   const localInference = state.localInference;
+  const browserSession = state.browserSession;
+  const browserEvidenceRecords = state.browserEvidenceRecords;
   const localInferenceRef = useRef(localInference);
   localInferenceRef.current = localInference;
   const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
+  const browserAutomationService = useMemo(() => new BrowserAutomationService(resolveBrowserAutomationAdapter()), []);
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -199,6 +217,25 @@ export function useChatWorkspaceState() {
     });
   };
 
+  const mergedEvidenceFlow = useMemo(() => {
+    const browserEvidenceIds = browserEvidenceRecords.map((record) => record.id);
+    const records = [...evidenceFlowState.records, ...browserEvidenceRecords];
+    return {
+      ...evidenceFlowState,
+      records,
+      linkedByChatSessionId: {
+        ...evidenceFlowState.linkedByChatSessionId,
+        [browserSession.chatSessionId]: [...(evidenceFlowState.linkedByChatSessionId[browserSession.chatSessionId] ?? []), ...browserEvidenceIds],
+      },
+      linkedByTaskId: {
+        ...evidenceFlowState.linkedByTaskId,
+        [browserSession.taskId]: [...(evidenceFlowState.linkedByTaskId[browserSession.taskId] ?? []), ...browserEvidenceIds],
+      },
+      linkedByReviewId: evidenceFlowState.linkedByReviewId,
+      releaseReadinessBlockers: Array.from(new Set([...evidenceFlowState.releaseReadinessBlockers, ...browserEvidenceRecords.filter((record) => record.blocking).map((record) => record.id)])),
+    };
+  }, [browserEvidenceRecords, browserSession.chatSessionId, browserSession.taskId]);
+
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: localShellState.project.workspaceName,
     currentBranch:
@@ -227,11 +264,37 @@ export function useChatWorkspaceState() {
     auditors: auditorControlState,
     designSession,
     browserSession,
-    evidenceFlow: evidenceFlowState,
+    evidenceFlow: mergedEvidenceFlow,
     releaseControl: releaseControlState,
     localInference,
     localShell: localShellState,
   };
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const runBrowserScenario = async () => {
+      const session = browserAutomationService.createSession({
+        sessionId: initialBrowserSession.id,
+        taskId: initialBrowserSession.taskId,
+        chatSessionId: initialBrowserSession.chatSessionId,
+        scenario: initialBrowserSession.scenario,
+      });
+
+      const outcome = await browserAutomationService.executeScenario(session);
+      const terminated = browserAutomationService.terminateSession(outcome.session);
+
+      if (cancelled) return;
+      dispatch({ type: "set_browser_execution", browserSession: terminated, browserEvidenceRecords: outcome.evidenceRecords });
+    };
+
+    void runBrowserScenario();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [browserAutomationService]);
 
   useEffect(() => {
     let cancelled = false;

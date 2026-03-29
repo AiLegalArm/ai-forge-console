@@ -1,4 +1,5 @@
-import type { BrowserSession, DesignSession } from "@/types/agents";
+import type { DesignSession } from "@/types/agents";
+import type { BrowserSession } from "@/types/browser-automation";
 
 export const designSession: DesignSession = {
   id: "design-session-1",
@@ -73,33 +74,67 @@ export const designSession: DesignSession = {
 
 export const browserSession: BrowserSession = {
   id: "browser-session-1",
+  taskId: "task-rbac-release",
+  chatSessionId: "review-session-1",
+  scenarioId: "scenario-invite-preview",
   runState: "failed",
+  sessionState: "failed",
+  resultState: "failed",
+  runtimeState: "failed",
+  currentStepId: "step-3",
   scenario: {
     id: "scenario-invite-preview",
     title: "Invite user flow on staging preview",
     targetUrl: "https://preview.acme.dev/workspace",
+    expectedOutcome: "Invite flow succeeds without console/network blockers",
+    status: "failed",
+    passFail: "failed",
+    linkedEvidenceIds: ["ev-browser-step-fail-1", "ev-browser-console-1", "ev-browser-network-1"],
+    updatedAtIso: "2026-03-29T10:47:54.000Z",
     steps: [
-      { id: "step-1", label: "Open workspace", expected: "Workspace shell loads", status: "passed" },
-      { id: "step-2", label: "Open invite modal", expected: "Modal opens with role selector", status: "passed" },
+      { id: "step-1", label: "Open workspace", expected: "Workspace shell loads", status: "passed", evidenceIds: [] },
+      { id: "step-2", label: "Open invite modal", expected: "Modal opens with role selector", status: "passed", evidenceIds: [] },
       {
         id: "step-3",
         label: "Submit invite",
         expected: "Invite API responds 200 and toast shows success",
         status: "failed",
-        resultNote: "Received 429 and error toast remained visible.",
-        evidenceIds: ["ev-browser-step-fail-1", "ev-browser-console-1", "ev-browser-network-1"],
+        evidenceIds: ["ev-browser-step-fail-1"],
       },
     ],
   },
-  consoleSummary: [
-    "UnhandledPromiseRejection: invite retry exhausted",
-    "POST /api/invite returned status 429",
-  ],
-  networkSummary: [
-    "3/10 invite requests throttled in test window",
-    "x-ratelimit-remaining hit 0 during submit step",
-  ],
+  consoleSummary: ["UnhandledPromiseRejection: invite retry exhausted", "POST /api/invite returned status 429"],
+  networkSummary: ["3/10 invite requests throttled in test window", "x-ratelimit-remaining hit 0 during submit step"],
   screenshotReferences: ["artifact://browser/failures/invite-modal-429.png"],
+  evidenceReferences: ["ev-browser-step-fail-1", "ev-browser-console-1", "ev-browser-network-1"],
+  evidenceCatalog: [
+    { id: "ev-browser-step-fail-1", type: "step_failure", title: "Invite submit step failure", uri: "artifact://browser/steps/step-3-failure.json", linkedStepId: "step-3", createdAtIso: "2026-03-29T10:47:49.000Z" },
+    { id: "ev-browser-console-1", type: "console", title: "Console retry failure", uri: "artifact://browser/console/invite-retry.log", createdAtIso: "2026-03-29T10:47:49.100Z" },
+    { id: "ev-browser-network-1", type: "network", title: "Invite API 429", uri: "artifact://browser/network/invite-429.har", createdAtIso: "2026-03-29T10:47:49.050Z" },
+  ],
+  consoleEvents: [
+    {
+      id: "browser-console-event-1",
+      level: "error",
+      message: "UnhandledPromiseRejection: invite retry exhausted",
+      timestampIso: "2026-03-29T10:47:49.000Z",
+    },
+    {
+      id: "browser-console-event-2",
+      level: "error",
+      message: "POST /api/invite returned status 429",
+      timestampIso: "2026-03-29T10:47:49.100Z",
+    },
+  ],
+  networkEvents: [
+    {
+      id: "browser-network-event-1",
+      method: "POST",
+      url: "https://preview.acme.dev/api/invite",
+      statusCode: 429,
+      timestampIso: "2026-03-29T10:47:49.050Z",
+    },
+  ],
   findings: [
     {
       id: "browser-find-ui-1",
@@ -121,12 +156,67 @@ export const browserSession: BrowserSession = {
     },
   ],
   executionLog: [
-    { status: "scenario_started", summary: "Scenario started on preview build", timestampIso: "2026-03-29T10:47:40.000Z" },
-    { status: "step_passed", summary: "Step 1 passed", timestampIso: "2026-03-29T10:47:43.000Z" },
-    { status: "step_passed", summary: "Step 2 passed", timestampIso: "2026-03-29T10:47:45.000Z" },
-    { status: "step_failed", summary: "Step 3 failed with 429", timestampIso: "2026-03-29T10:47:49.000Z" },
-    { status: "evidence_captured", summary: "Captured screenshot, console and network evidence", timestampIso: "2026-03-29T10:47:52.000Z" },
-    { status: "run_completed", summary: "Run completed with blockers", timestampIso: "2026-03-29T10:47:54.000Z" },
+    {
+      id: "browser-log-1",
+      status: "scenario_started",
+      summary: "Scenario started on preview build",
+      sessionId: "browser-session-1",
+      timestampIso: "2026-03-29T10:47:40.000Z",
+    },
+    {
+      id: "browser-log-2",
+      status: "step_passed",
+      summary: "Step 1 passed",
+      sessionId: "browser-session-1",
+      stepId: "step-1",
+      timestampIso: "2026-03-29T10:47:43.000Z",
+    },
+    {
+      id: "browser-log-3",
+      status: "step_passed",
+      summary: "Step 2 passed",
+      sessionId: "browser-session-1",
+      stepId: "step-2",
+      timestampIso: "2026-03-29T10:47:45.000Z",
+    },
+    {
+      id: "browser-log-4",
+      status: "step_failed",
+      summary: "Step 3 failed with 429",
+      sessionId: "browser-session-1",
+      stepId: "step-3",
+      timestampIso: "2026-03-29T10:47:49.000Z",
+    },
+    {
+      id: "browser-log-5",
+      status: "evidence_captured",
+      summary: "Captured screenshot, console and network evidence",
+      sessionId: "browser-session-1",
+      timestampIso: "2026-03-29T10:47:52.000Z",
+    },
+    {
+      id: "browser-log-6",
+      status: "run_completed",
+      summary: "Run completed with blockers",
+      sessionId: "browser-session-1",
+      timestampIso: "2026-03-29T10:47:54.000Z",
+    },
   ],
+  failureState: {
+    state: "failed",
+    reason: "step_failure",
+    message: "Received 429 and error toast remained visible.",
+    failedStepId: "step-3",
+    occurredAtIso: "2026-03-29T10:47:49.000Z",
+  },
+  summary: {
+    scenarioId: "scenario-invite-preview",
+    title: "Invite user flow on staging preview",
+    totalSteps: 3,
+    failedSteps: 1,
+    resultState: "failed",
+  },
+  createdAtIso: "2026-03-29T10:47:40.000Z",
   updatedAtIso: "2026-03-29T10:47:54.000Z",
+  endedAtIso: "2026-03-29T10:47:54.000Z",
 };
