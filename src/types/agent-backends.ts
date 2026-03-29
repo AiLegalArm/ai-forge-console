@@ -6,6 +6,7 @@ export type AgentBackendStatus =
   | "configured"
   | "ready"
   | "busy"
+  | "degraded"
   | "unavailable"
   | "error";
 

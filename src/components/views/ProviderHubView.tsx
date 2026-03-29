@@ -33,6 +33,7 @@ const backendStatusColor: Record<AgentBackendStatus, string> = {
   ready: "text-success",
   busy: "text-warning",
   unavailable: "text-destructive",
+  degraded: "text-warning",
   error: "text-destructive",
 };
 
@@ -124,13 +125,13 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                     <span className={`text-[10px] font-mono ${backend.availability.installed ? "text-success" : "text-muted-foreground"}`}>
                       {backend.availability.installed ? "connected" : "not connected"}
                     </span>
-                    <span className={`text-[10px] font-mono ${backend.availability.status === "available" ? "text-success" : "text-muted-foreground"}`}>
-                      {backend.availability.status === "available" ? "active" : "inactive"}
+                    <span className={`text-[10px] font-mono ${backend.availability.active ? "text-success" : "text-muted-foreground"}`}>
+                      {backend.availability.active ? "active" : "inactive"}
                     </span>
-                    <span className={`text-[10px] font-mono ${backend.availability.status === "available" || backend.availability.status === "degraded" ? "text-info" : "text-muted-foreground"}`}>
-                      {backend.availability.status === "available" || backend.availability.status === "degraded"
-                        ? "preference candidate"
-                        : "not a candidate"}
+                    <span
+                      className={`text-[10px] font-mono ${backend.availability.preferenceCandidateFor?.length ? "text-info" : "text-muted-foreground"}`}
+                    >
+                      {backend.availability.preferenceCandidateFor?.length ? "preference candidate" : "not a candidate"}
                     </span>
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground">{backend.availability.health}</span>
