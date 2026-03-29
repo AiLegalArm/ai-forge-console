@@ -56,6 +56,18 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   );
 }
 
+function formatRelativeTime(iso?: string) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function EmptyPanelState({
   title,
   detail,
@@ -141,36 +153,44 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
       <InfoRow label="Chat / Review" value={`${workspaceState.currentConversationType} · ${workspaceState.currentReviewId ?? "no-review"}`} />
       <InfoRow label="Provider / Runtime" value={`${workspaceState.activeProvider} · ${workspaceState.activeBackend}`} />
       <InfoRow label="Release readiness" value={workspaceState.releaseReadinessStatus} />
+      <InfoRow label="Task status" value={`${workspaceState.currentTaskStatus} · ${workspaceState.currentPhase}`} />
     </SectionCard>
   );
 
   switch (tab as TabId) {
     case "preview": {
-      const previewUrl = workspaceState.releaseControl.deployments.find((dep) => dep.environment === "preview")?.previewTarget ?? "localhost:5173";
+      const previewDeployment = workspaceState.releaseControl.deployments.find((dep) => dep.environment === "preview");
+      const previewUrl = previewDeployment?.previewTarget;
       const previewStatus = workspaceState.localShell.runtime.previewRuntime;
       const previewTone: Tone = previewStatus === "healthy" ? "ok" : previewStatus === "down" ? "danger" : "warn";
+      const hasPreviewContext = Boolean(previewDeployment || workspaceState.localShell.project.runtimeResourcesAvailable);
       return (
         <div className="space-y-2.5">
           {contextHeader}
           <SectionCard title="Preview Surface">
             <div className="aspect-video rounded border border-border bg-background/60 flex items-center justify-center">
-              <span className="text-[11px] font-mono text-muted-foreground">{previewUrl}</span>
+              <span className="text-[11px] font-mono text-muted-foreground">{previewUrl ?? "Preview target not assigned yet"}</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <StatusChip label={`Status: ${previewStatus}`} tone={previewTone} />
               <StatusChip label={`Target: ${workspaceState.deploymentMode}`} tone="neutral" />
               <StatusChip label={`Branch: ${workspaceState.currentBranch}`} tone="neutral" />
             </div>
+            <InfoRow label="Current preview target" value={previewUrl ?? "not set"} />
+            <InfoRow label="Preview deploy status" value={previewDeployment?.status ?? "not deployed"} />
+            <InfoRow label="Active project context" value={workspaceState.currentProject} />
             <InfoRow label="Active task context" value={activeTask?.id ?? "No linked task"} />
             <InfoRow label="Last refresh" value={formatTime(workspaceState.localShell.terminal.output[0]?.timestampIso)} />
-            <InfoRow label="Live metadata" value={workspaceState.localShell.project.runtimeResourcesAvailable ? "live-capable" : "placeholder"} />
+            <InfoRow label="Last refresh age" value={formatRelativeTime(workspaceState.localShell.terminal.output[0]?.timestampIso)} />
+            <InfoRow label="Live metadata" value={workspaceState.localShell.project.runtimeResourcesAvailable ? "live-ready metadata available" : "placeholder metadata only"} />
+            <InfoRow label="Review relation" value={workspaceState.currentReviewId ?? "not linked to review"} />
           </SectionCard>
-          {!previewUrl ? (
+          {!hasPreviewContext ? (
             <EmptyPanelState
-              title="Preview is not linked"
-              detail="Use this panel to validate current branch behavior before review and release."
-              missing="Preview target URL"
-              action="Trigger preview deploy from Deploy tab or run local preview runtime."
+              title="Preview workspace is waiting for signal"
+              detail="This area validates branch behavior before review, release gates, and domain assignment."
+              missing="Preview deploy or active local runtime heartbeat"
+              action="Run a preview deploy or start local preview to attach live metadata and status."
             />
           ) : null}
         </div>
@@ -182,6 +202,7 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
       const passedSteps = session.scenario.steps.filter((step) => step.status === "passed").length;
       const failedStep = session.scenario.steps.find((step) => step.status === "failed");
       const browserTone: Tone = session.sessionState === "failed" ? "danger" : session.sessionState === "completed" ? "ok" : "warn";
+      const latestLog = session.executionLog.at(-1);
 
       return (
         <div className="space-y-2.5">
@@ -192,18 +213,22 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
               <StatusChip label={`Session: ${session.sessionState}`} tone={browserTone} />
               <StatusChip label={`Run: ${session.runState}`} tone={browserTone} />
             </div>
+            <InfoRow label="Current browser scenario" value={session.scenario.targetUrl ?? "target URL missing"} />
+            <InfoRow label="Current session state" value={`${session.runtimeState} runtime · ${session.resultState} result`} />
             <InfoRow label="Step progress" value={`${passedSteps}/${totalSteps} passed`} />
             <InfoRow label="Evidence captured" value={`${session.evidenceReferences.length} refs`} />
-            <InfoRow label="Console / Network" value={`${session.consoleEvents.length} console · ${session.networkEvents.length} network`} />
-            <InfoRow label="Latest result" value={session.executionLog.at(-1)?.summary ?? "No run events"} />
+            <InfoRow label="Console / Network" value={`${session.consoleEvents.length} events · ${session.networkEvents.length} requests`} />
+            <InfoRow label="Latest result" value={latestLog?.summary ?? "No run events"} />
+            <InfoRow label="Latest result age" value={formatRelativeTime(latestLog?.timestampIso)} />
             <InfoRow label="Last failure" value={session.failureState.message ?? "none"} />
+            <InfoRow label="Task / review relation" value={`${session.linkedTaskId ?? workspaceState.currentTask} · ${session.linkedChatId ?? workspaceState.currentChatSessionId}`} />
           </SectionCard>
           {!session.scenario.id ? (
             <EmptyPanelState
-              title="No browser scenario running"
-              detail="Use browser runs to produce QA evidence linked to active review and release gates."
-              missing="Scenario + session"
-              action="Start a browser scenario from the task chat to populate this panel."
+              title="Browser evidence surface is idle"
+              detail="This panel tracks scenario progress, runtime errors, and evidence that can block release."
+              missing="Scenario run linked to the active task/review"
+              action="Start a browser scenario from chat and attach it to the current review."
             />
           ) : null}
           {failedStep ? <p className="text-[11px] text-warning">Blocked step: {failedStep.label}</p> : null}
@@ -213,6 +238,7 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
     case "design": {
       const session = workspaceState.designSession;
       const blockers = session.findings.filter((finding) => finding.blocking).length;
+      const mappedTasks = Array.from(new Set(session.componentMap.map((component) => component.linkedTaskId).filter(Boolean)));
       return (
         <div className="space-y-2.5">
           {contextHeader}
@@ -222,13 +248,22 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
               <StatusChip label={`State: ${session.state}`} tone={session.state === "approved" ? "ok" : "warn"} />
               <StatusChip label={`Target: ${session.brief.targetScreen}`} tone="neutral" />
             </div>
-            <InfoRow label="Design brief" value={session.brief.title} />
+            <InfoRow label="Active design session" value={session.id} />
+            <InfoRow label="Design brief summary" value={`${session.brief.title} (${session.brief.goals.length} goals)`} />
             <InfoRow label="Component map" value={`${session.componentMap.length} mapped components`} />
             <InfoRow label="Token handoff" value={`${session.tokenHandoff.designTokens.length} tokens · ${session.tokenHandoff.handoffNotes.length} notes`} />
-            <InfoRow label="Findings" value={`${session.findings.length} total · ${blockers} blocking`} />
-            <InfoRow label="Task relation" value={activeTask?.id ?? session.componentMap[0]?.linkedTaskId ?? "No task linked"} />
+            <InfoRow label="Findings count" value={`${session.findings.length} total · ${blockers} blocking`} />
+            <InfoRow label="Workspace / task relation" value={mappedTasks.length ? mappedTasks.join(", ") : activeTask?.id ?? "No task linked"} />
             <InfoRow label="Updated" value={formatTime(session.updatedAtIso)} />
           </SectionCard>
+          {session.componentMap.length === 0 ? (
+            <EmptyPanelState
+              title="Design context has no mapped components"
+              detail="Use this panel to connect design intent to implementation and release risk."
+              missing="Component map + handoff details for this task"
+              action="Capture a design snapshot and add mapped components tied to the active task."
+            />
+          ) : null}
         </div>
       );
     }
@@ -238,6 +273,7 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
       const preview = deployments.find((deployment) => deployment.environment === "preview");
       const production = deployments.find((deployment) => deployment.environment === "production");
       const warnings = deployments.filter((deployment) => deployment.status === "blocked" || deployment.status === "failed");
+      const releaseLinked = activeCandidate?.linkedDeploymentId === latest?.id || activeCandidate?.linkedDeploymentId === production?.id;
       return (
         <div className="space-y-2.5">
           {contextHeader}
@@ -247,10 +283,22 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
               <StatusChip label={`Preview: ${preview?.status ?? "none"}`} tone={preview?.status === "preview_ready" ? "ok" : "warn"} />
               <StatusChip label={`Prod readiness: ${workspaceState.releaseReadinessStatus}`} tone={workspaceState.releaseReadinessStatus === "go" ? "ok" : "warn"} />
             </div>
+            <InfoRow label="Latest deploy state" value={`${latest?.environment ?? "none"} · ${latest?.status ?? "none"}`} />
+            <InfoRow label="Preview deploy status" value={`${preview?.status ?? "missing"}${preview?.previewTarget ? ` @ ${preview.previewTarget}` : ""}`} />
+            <InfoRow label="Production readiness" value={workspaceState.releaseReadinessStatus} />
             <InfoRow label="Rollback availability" value={production?.rollbackAvailable ? "available" : "not available"} />
             <InfoRow label="Linked release" value={activeCandidate?.label ?? "No active release candidate"} />
+            <InfoRow label="Release link state" value={releaseLinked ? "deployment linked to current release" : "release linkage missing"} />
             <InfoRow label="Current blocker" value={production?.blockedReason ?? "none"} />
           </SectionCard>
+          {deployments.length === 0 ? (
+            <EmptyPanelState
+              title="No deployment records in this workspace"
+              detail="This panel reflects preview/prod progress and rollback posture for the active release candidate."
+              missing="Deploy run history linked to active branch/release"
+              action="Trigger a preview deploy from the task flow, then request production readiness checks."
+            />
+          ) : null}
           {warnings.length > 0 ? (
             <div className="rounded border border-warning/30 bg-warning/10 p-2 text-[11px] text-warning">
               {warnings.length} deployment warnings/blockers impacting release flow.
@@ -272,16 +320,20 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
               <StatusChip label={`Verification: ${current?.verificationState ?? "unconfigured"}`} tone={current?.verificationState === "verified" ? "ok" : "warn"} />
               <StatusChip label={`DNS: ${current?.dnsState ?? "unconfigured"}`} tone={current?.dnsState === "verified" ? "ok" : "warn"} />
             </div>
+            <InfoRow label="Domain connection state" value={workspaceState.repository.connected ? "repository-linked domain flow" : "local-only workspace"} />
+            <InfoRow label="Verification state" value={current?.verificationState ?? "unconfigured"} />
+            <InfoRow label="DNS status" value={current?.dnsState ?? "unconfigured"} />
             <InfoRow label="Current assignment" value={`${current?.name ?? "none"} → ${current?.targetEnvironment ?? "unassigned"}`} />
             <InfoRow label="Prod / Preview relation" value={`${domains.filter((d) => d.targetEnvironment === "production").length} prod · ${domains.filter((d) => d.targetEnvironment === "preview").length} preview`} />
             <InfoRow label="Domain blockers" value={blocked.length ? blocked.map((domain) => domain.name).join(", ") : "none"} />
+            <InfoRow label="Release relation" value={activeCandidate?.label ?? "not tied to active release"} />
           </SectionCard>
           {domains.length === 0 ? (
             <EmptyPanelState
-              title="No domains connected"
-              detail="This panel tracks readiness between preview and production domains for release-safe routing."
-              missing="Domain records"
-              action="Connect a domain and verify DNS records to enable assignment checks."
+              title="Domain routing is unconfigured"
+              detail="This panel keeps preview and production assignment status visible before promoting a release."
+              missing="Verified domain + assignment targets"
+              action="Connect domain records, complete DNS verification, and bind to active deploy."
             />
           ) : null}
         </div>
@@ -296,6 +348,7 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
       const blockers = findings.filter((finding) => finding.blocking);
       const latestFinding = findings[0];
       const noGo = workspaceState.auditors.gateDecisions.some((gate) => gate.verdict === "no_go" || gate.verdict === "not_ready");
+      const latestGate = workspaceState.auditors.gateDecisions.at(-1);
 
       return (
         <div className="space-y-2.5">
@@ -315,8 +368,17 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
             </div>
             <InfoRow label="Blockers" value={`${blockers.length} blocking findings`} />
             <InfoRow label="Latest finding" value={latestFinding ? `${latestFinding.id}: ${latestFinding.title}` : "No findings"} />
-            <InfoRow label="Release relation" value={`${workspaceState.currentTask} · ${workspaceState.currentReviewId ?? "no review"}`} />
+            <InfoRow label="Latest gate" value={latestGate ? `${latestGate.stage} · ${latestGate.verdict}` : "no gate updates"} />
+            <InfoRow label="Release relation" value={`${workspaceState.currentTask} · ${workspaceState.currentReviewId ?? "no review"} · ${activeCandidate?.id ?? "no-candidate"}`} />
           </SectionCard>
+          {findings.length === 0 ? (
+            <EmptyPanelState
+              title="Audit stream has no findings yet"
+              detail="This panel summarizes severity and release impact from current audit runs."
+              missing="Audit findings linked to task/review/release"
+              action="Run auditors for the active task or review to generate gate signals."
+            />
+          ) : null}
         </div>
       );
     }
