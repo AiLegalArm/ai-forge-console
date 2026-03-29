@@ -10,7 +10,7 @@ import type { ChatTab } from "@/data/mock-chat";
 export type NavSection =
   | "workspace" | "projects" | "files" | "git" | "prompt-studio" | "prompt-library"
   | "agents" | "providers" | "audits" | "supabase-import" | "deploy"
-  | "domains" | "release" | "settings";
+  | "domains" | "design" | "browser" | "release" | "settings";
 
 export type AppMode = "plan" | "build" | "audit" | "release";
 

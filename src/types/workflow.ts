@@ -14,6 +14,12 @@ export type AgentActivityEventType =
   | "completed"
   | "failed"
   | "audit_triggered"
+  | "design_session_started"
+  | "design_finding_logged"
+  | "browser_scenario_started"
+  | "browser_step_passed"
+  | "browser_step_failed"
+  | "evidence_attached"
   | "review_triggered"
   | "deploy_triggered";
 
@@ -195,11 +201,13 @@ export interface WorkflowTask {
   linkedAuditorTypes?: AuditorType[];
   linkedReviewId?: string;
   linkedReleaseCandidateId?: string;
+  linkedEvidenceIds?: string[];
   branchName?: string;
   phase: TaskPhase;
   progressSummary: string;
   auditVerdict?: AuditorVerdict;
   auditFindingCount?: number;
+  designBrowserBlockers?: number;
   updatedAtIso: string;
   github?: TaskGitHubState;
 }

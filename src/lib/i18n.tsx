@@ -24,6 +24,8 @@ const translations = {
   "nav.supabase-import": { en: "Supabase Import", ru: "Импорт Supabase" },
   "nav.deploy": { en: "Deploy", ru: "Деплой" },
   "nav.domains": { en: "Domains", ru: "Домены" },
+  "nav.design": { en: "Design", ru: "Дизайн" },
+  "nav.browser": { en: "Browser", ru: "Браузер" },
   "nav.release": { en: "Release", ru: "Релиз" },
   "nav.settings": { en: "Settings", ru: "Настройки" },
 
