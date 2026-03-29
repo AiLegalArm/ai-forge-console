@@ -444,10 +444,10 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
 
       {activeReleaseCandidate ? (
         <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
-          <div className="font-mono text-primary">Release candidate linkage</div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Candidate</span><span className="font-mono text-foreground">{activeReleaseCandidate.id}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Branch</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedBranch}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Review</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedReviewId ?? "—"}</span></div>
+          <div className="font-mono text-primary">{t("deploy.rc_linkage" as never)}</div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("deploy.candidate" as never)}</span><span className="font-mono text-foreground">{activeReleaseCandidate.id}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.branch" as never)}</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedBranch}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review" as never)}</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedReviewId ?? "—"}</span></div>
         </div>
       ) : null}
     </div>
