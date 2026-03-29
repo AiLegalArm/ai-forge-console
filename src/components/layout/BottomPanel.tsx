@@ -56,7 +56,7 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
             <div className="text-muted-foreground mb-1">session {terminal.sessionId} · cwd {terminal.workingDirectory}</div>
             {terminal.output.map((line) => (
               <div key={line.id} className="flex gap-2">
-                <span className="text-muted-foreground shrink-0">{line.timestamp}</span>
+                <span className="text-muted-foreground shrink-0">{new Date(line.timestampIso).toLocaleTimeString()}</span>
                 <span className={line.stream === "stderr" ? "text-warning" : line.stream === "system" ? "text-primary" : "text-foreground"}>{line.text}</span>
               </div>
             ))}
