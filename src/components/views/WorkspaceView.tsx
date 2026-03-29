@@ -43,11 +43,12 @@ interface WorkspaceViewProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
-  if (section === "git") return <GitView workspaceState={workspaceState} />;
+  if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
   if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
   if (section === "domains") return <DomainsView workspaceState={workspaceState} />;
   if (section === "design") return <DesignView workspaceState={workspaceState} />;
@@ -320,7 +321,13 @@ function FilesView() {
   );
 }
 
-function GitView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+function GitView({
+  workspaceState,
+  onGitAction,
+}: {
+  workspaceState: WorkspaceRuntimeState;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+}) {
   const { t } = useI18n();
   const activeTask =
     workspaceState.workflow.tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ??
@@ -354,6 +361,8 @@ function GitView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) 
         <div className="flex justify-between"><span className="text-muted-foreground">Commit status</span><span className="font-mono text-primary">{commitState?.status ?? "idle"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Push status</span><span className="font-mono text-primary">{pushState?.status ?? "idle"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Push approval</span><span className={`font-mono ${pushState?.requiresApproval ? "text-warning" : "text-success"}`}>{pushState?.requiresApproval ? "required" : "not required"}</span></div>
+        {pushState?.pendingError ? <div className="text-warning">{pushState.pendingError}</div> : null}
+        {commitState?.pendingError ? <div className="text-destructive">{commitState.pendingError}</div> : null}
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
@@ -373,9 +382,11 @@ function GitView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) 
       </div>
 
       <div className="flex gap-1.5">
-        <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
-        <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
-        <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.sync")}</button>
+        <button onClick={() => activeTask && void onGitAction("stage_all", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Stage all</button>
+        <button onClick={() => activeTask && void onGitAction("commit", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Commit</button>
+        <button onClick={() => activeTask && void onGitAction("push", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
+        <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
+        <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.sync")}</button>
       </div>
     </div>
   );

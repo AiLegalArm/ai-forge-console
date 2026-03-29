@@ -1,4 +1,4 @@
-import { useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
@@ -7,6 +7,7 @@ import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
+import { createLocalGitService } from "@/lib/local-git-service";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
@@ -16,7 +17,8 @@ type Action =
   | { type: "select_session"; chatType: ChatType; sessionId: string }
   | { type: "update_draft"; sessionId: string; value: string }
   | { type: "clear_approval"; sessionId: string }
-  | { type: "approve_workflow_approval"; approvalId: string };
+  | { type: "approve_workflow_approval"; approvalId: string }
+  | { type: "set_workflow"; workflow: WorkflowState };
 
 interface WorkspaceReducerState {
   chat: ChatState;
@@ -75,6 +77,12 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
         },
       };
     }
+    case "set_workflow": {
+      return {
+        ...state,
+        workflow: action.workflow,
+      };
+    }
     default:
       return state;
   }
@@ -88,6 +96,7 @@ export function useChatWorkspaceState() {
 
   const chatState = state.chat;
   const workflow = state.workflow;
+  const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -160,6 +169,99 @@ export function useChatWorkspaceState() {
     localShell: localShellState,
   };
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncGitSnapshot = async () => {
+      const snapshot = await gitService.getSnapshot();
+      if (cancelled || snapshot.branch === "unknown") return;
+
+      const updatedWorkflow: WorkflowState = {
+        ...workflow,
+        tasks: workflow.tasks.map((task) => {
+          if (!task.github) return task;
+          const isBoundToCurrentBranch =
+            task.github.branch?.localBranchName === snapshot.branch || task.branchName === snapshot.branch;
+          const lifecycle = snapshot.clean ? (snapshot.aheadBy > 0 ? "committed" : "branch_created") : "local_changes";
+          const nextBranchName = task.github.branch?.localBranchName ?? task.branchName;
+          const requiresWriteApproval = task.github.syncMode === "auto_commit" || task.github.syncMode === "auto_push";
+          const hasDirtyChanges = !snapshot.clean && isBoundToCurrentBranch;
+
+          return {
+            ...task,
+            github: {
+              ...task.github,
+              branchLifecycle: isBoundToCurrentBranch ? lifecycle : task.github.branchLifecycle,
+              branch: isBoundToCurrentBranch
+                ? snapshot.branchState
+                : {
+                    ...(task.github.branch ?? snapshot.branchState),
+                    localBranchName: nextBranchName ?? task.github.branch?.localBranchName ?? snapshot.branch,
+                  },
+              commitSummary: isBoundToCurrentBranch
+                ? snapshot.clean
+                  ? "Working tree clean."
+                  : `${snapshot.stagedSummary.filesChanged} changed file(s) on branch.`
+                : `Task branch mismatch: on ${snapshot.branch}.`,
+              commitWorkflow: {
+                ...task.github.commitWorkflow,
+                stagedChanges: isBoundToCurrentBranch
+                  ? snapshot.stagedSummary
+                  : {
+                      ...task.github.commitWorkflow.stagedChanges,
+                      hasUncommittedChanges: true,
+                    },
+              },
+              pushWorkflow: {
+                ...task.github.pushWorkflow,
+                behindRemoteByCommits: isBoundToCurrentBranch ? snapshot.behindBy : task.github.pushWorkflow.behindRemoteByCommits,
+                status:
+                  task.github.pushWorkflow.status === "approval_required"
+                    ? "approval_required"
+                    : task.github.syncMode === "auto_push" && requiresWriteApproval && hasDirtyChanges
+                      ? "approval_required"
+                    : snapshot.aheadBy > 0
+                      ? "ready"
+                      : task.github.pushWorkflow.status,
+                pendingError:
+                  task.github.syncMode === "auto_push" && hasDirtyChanges
+                    ? "Auto-push requested, awaiting approval checkpoint."
+                    : task.github.pushWorkflow.pendingError,
+              },
+            },
+            branchName: isBoundToCurrentBranch ? snapshot.branch : task.branchName,
+          };
+        }),
+        github: {
+          ...workflow.github,
+          repositories: workflow.github.repositories.map((repo) =>
+            repo.id === workflow.github.activeRepositoryId
+              ? { ...repo, state: "connected", lastSyncAtIso: new Date().toISOString(), lastError: undefined }
+              : repo,
+          ),
+        },
+      };
+
+      const activeTaskForSync =
+        workflow.tasks.find((task) => task.linkedChatSessionId === currentChatSessionId) ?? workflow.tasks[0];
+      const activeTaskChanged =
+        activeTaskForSync?.github?.branch?.localBranchName !== snapshot.branch ||
+        activeTaskForSync?.github?.commitWorkflow.stagedChanges.filesChanged !== snapshot.stagedSummary.filesChanged ||
+        activeTaskForSync?.github?.pushWorkflow.behindRemoteByCommits !== snapshot.behindBy;
+
+      if (activeTaskChanged) {
+        dispatch({ type: "set_workflow", workflow: updatedWorkflow });
+      }
+    };
+
+    void syncGitSnapshot();
+    const timer = setInterval(() => void syncGitSnapshot(), 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [currentChatSessionId, gitService, workflow]);
+
   return {
     chatState,
     workspaceState,
@@ -168,5 +270,105 @@ export function useChatWorkspaceState() {
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
     approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
+      const task = workflow.tasks.find((entry) => entry.id === taskId);
+      if (!task?.github) return;
+
+      const pendingPushApproval = workflow.approvals.find(
+        (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "pending",
+      );
+      const pushApproved = workflow.approvals.some(
+        (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "approved",
+      );
+
+      if (action === "push" && task.github.pushWorkflow.requiresApproval && !pushApproved) {
+        const approvalId = pendingPushApproval?.id ?? `approval-push-${task.id}`;
+        const nextApprovals = pendingPushApproval
+          ? workflow.approvals
+          : [
+              ...workflow.approvals,
+              {
+                id: approvalId,
+                category: "push_approval",
+                title: `Approve push for ${task.title}`,
+                reason: `Push to ${task.github.branch?.localBranchName ?? task.branchName ?? "task branch"} requires explicit approval.`,
+                status: "pending" as const,
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                requestedBy: "git-service",
+                requestedAtIso: new Date().toISOString(),
+              },
+            ];
+
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            approvals: nextApprovals,
+            tasks: workflow.tasks.map((entry) =>
+              entry.id === task.id
+                ? {
+                    ...entry,
+                    status: "awaiting_approval",
+                    github: {
+                      ...entry.github!,
+                      pushWorkflow: {
+                        ...entry.github!.pushWorkflow,
+                        status: "approval_required",
+                        linkedApprovalId: approvalId,
+                        pendingError: "Push blocked until approval is granted.",
+                      },
+                    },
+                  }
+                : entry,
+            ),
+          },
+        });
+        return;
+      }
+
+      const result =
+        action === "stage_all"
+          ? await gitService.stageAll()
+          : action === "unstage_all"
+            ? await gitService.unstageAll()
+            : action === "commit"
+              ? await gitService.commit(task.github.commitWorkflow.draftMessage || `chore(${task.id}): update task changes`)
+              : action === "push"
+                ? await gitService.push(task.github.branch?.localBranchName)
+                : await gitService.pull();
+
+      const nextWorkflow: WorkflowState = {
+        ...workflow,
+        tasks: workflow.tasks.map((entry) => {
+          if (entry.id !== task.id || !entry.github) return entry;
+          return {
+            ...entry,
+            github: {
+              ...entry.github,
+              commitWorkflow:
+                action === "commit"
+                  ? {
+                      ...entry.github.commitWorkflow,
+                      status: result.ok ? "committed" : "failed",
+                      pendingError: result.ok ? undefined : result.details,
+                    }
+                  : entry.github.commitWorkflow,
+              pushWorkflow:
+                action === "push"
+                  ? {
+                      ...entry.github.pushWorkflow,
+                      status: result.ok ? "pushed" : "failed",
+                      pendingError: result.ok ? undefined : result.details,
+                      lastPushedAtIso: result.ok ? new Date().toISOString() : entry.github.pushWorkflow.lastPushedAtIso,
+                    }
+                  : entry.github.pushWorkflow,
+            },
+          };
+        }),
+      };
+
+      dispatch({ type: "set_workflow", workflow: nextWorkflow });
+    },
   };
 }
