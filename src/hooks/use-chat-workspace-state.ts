@@ -10,6 +10,7 @@ import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
+import { hasDuplicateLocalPath, selectLocalProjectPath, validateLocalProjectPath } from "@/lib/local-project-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
@@ -213,6 +214,24 @@ export function useChatWorkspaceState() {
     syncStatus: "idle",
     connectionState: "disconnected",
   });
+
+  type AddLocalProjectResult = {
+    ok: boolean;
+    message: string;
+    code:
+      | "added"
+      | "selection_cancelled"
+      | "missing_path"
+      | "invalid_path"
+      | "inaccessible_path"
+      | "duplicate_path"
+      | "empty_folder";
+    path?: string;
+    projectId?: string;
+    projectName?: string;
+    hasGitRepository?: boolean;
+    hasAgentsInstructions?: boolean;
+  };
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -704,18 +723,48 @@ export function useChatWorkspaceState() {
         },
       });
     },
-    addLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => {
+    addLocalProject: async (payload?: { name?: string; localPath?: string; projectRoot?: string }): Promise<AddLocalProjectResult> => {
+      const selectedPath = payload?.localPath?.trim() ? payload.localPath.trim() : undefined;
+
+      let resolvedPath = selectedPath;
+      let inferredName = payload?.name?.trim();
+      if (!resolvedPath) {
+        const pickedPath = await selectLocalProjectPath();
+        if (pickedPath.status === "cancelled") {
+          return { ok: false, code: "selection_cancelled", message: pickedPath.message || "Project selection cancelled." };
+        }
+        if (pickedPath.status === "error" || !pickedPath.path) {
+          return { ok: false, code: "inaccessible_path", message: pickedPath.message || "Unable to select a local path." };
+        }
+        resolvedPath = pickedPath.path;
+        inferredName = inferredName || pickedPath.inferredName;
+      }
+
+      const validation = await validateLocalProjectPath(resolvedPath);
+      if (validation.code !== "ok") {
+        return { ok: false, code: validation.code, message: validation.message, path: validation.normalizedPath };
+      }
+
+      const normalizedPath = validation.normalizedPath || resolvedPath;
+      const existingPaths = projects.map((project) => project.localPath || project.projectRoot).filter(Boolean) as string[];
+      if (hasDuplicateLocalPath(normalizedPath, existingPaths)) {
+        return { ok: false, code: "duplicate_path", message: "This local project path is already added.", path: normalizedPath };
+      }
+
       const id = `project-local-${Date.now()}`;
+      const nextName = inferredName || validation.inferredName || "Local Project";
+      const branch = localShellRef.current.project.gitBranch || "main";
+
       setProjects((prev) => [
         {
           id,
-          name: payload.name,
+          name: nextName,
           description: "Local project connected from this machine",
           projectType: "local",
           source: "local",
-          localPath: payload.localPath,
-          projectRoot: payload.projectRoot || payload.localPath,
-          branch: "main",
+          localPath: normalizedPath,
+          projectRoot: payload?.projectRoot || normalizedPath,
+          branch,
           status: "active",
           repository: {
             connected: false,
@@ -730,6 +779,30 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            workspaceName: nextName,
+            activeProjectRoot: normalizedPath,
+            projectInstructionsDetected: Boolean(validation.hasAgentsInstructions),
+            runtimeResourcesAvailable: true,
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        code: "added",
+        message: "Local project added and activated.",
+        path: normalizedPath,
+        projectId: id,
+        projectName: nextName,
+        hasGitRepository: validation.hasGitRepository,
+        hasAgentsInstructions: validation.hasAgentsInstructions,
+      };
     },
     createProject: (payload: { name: string; description?: string; projectType?: string }) => {
       const id = `project-manual-${Date.now()}`;
@@ -799,6 +872,20 @@ export function useChatWorkspaceState() {
       setActiveProjectId(projectId);
       setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
       const selectedProject = projects.find((project) => project.id === projectId);
+      if (selectedProject?.source === "local" && (selectedProject.localPath || selectedProject.projectRoot)) {
+        const nextPath = selectedProject.localPath || selectedProject.projectRoot || localShellRef.current.project.activeProjectRoot;
+        dispatch({
+          type: "set_local_shell",
+          localShell: {
+            ...localShellRef.current,
+            project: {
+              ...localShellRef.current.project,
+              workspaceName: selectedProject.name,
+              activeProjectRoot: nextPath,
+            },
+          },
+        });
+      }
       if (selectedProject?.repository?.connected) {
         setRepository({
           connected: true,

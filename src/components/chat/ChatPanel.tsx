@@ -49,7 +49,7 @@ interface ChatPanelProps {
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
   onRoutingProfileChange: (profile: AppRoutingModeProfile) => void;
-  onAddLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => void;
+  onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string; path?: string }>;
   onCreateProject: (payload: { name: string; description?: string; projectType?: string }) => void;
   onConnectRepository: (payload: { name: string; url: string; branch: string }) => void;
   onDisconnectRepository: () => void;
@@ -243,8 +243,17 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               setLastOnboardingMessage(`Created project "${projectNameInput || "New Project"}".`);
             }}><FolderPlus className="h-3 w-3" />Create Project</button>
             <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
-              onAddLocalProject({ name: projectNameInput || "Local Project", localPath: projectPathInput || "/workspace/my-local-project", projectRoot: projectRootInput || projectPathInput || "/workspace/my-local-project" });
-              setLastOnboardingMessage(`Added local project "${projectNameInput || "Local Project"}".`);
+              void (async () => {
+                const result = await onAddLocalProject({
+                  name: projectNameInput || "Local Project",
+                  localPath: projectPathInput || undefined,
+                  projectRoot: projectRootInput || projectPathInput || undefined,
+                });
+                setLastOnboardingMessage(result.message);
+                if (result.ok && result.path) {
+                  setProjectPathInput(result.path);
+                }
+              })();
             }}><HardDriveDownload className="h-3 w-3" />Add Local Project</button>
             <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
               const resolvedUrl = repoInput || "https://github.com/org/repo.git";
@@ -263,7 +272,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Short description" className="border border-border rounded bg-background px-2 py-1" />
             <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Project type / label (optional)" className="border border-border rounded bg-background px-2 py-1" />
             <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root (placeholder)" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root override (optional)" className="border border-border rounded bg-background px-2 py-1" />
             <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border rounded bg-background px-2 py-1">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
