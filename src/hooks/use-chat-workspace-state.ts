@@ -1,6 +1,7 @@
 import { useMemo, useReducer } from "react";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
+import { localInferenceRuntime } from "@/data/mock-local-inference";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
@@ -125,7 +126,7 @@ export function useChatWorkspaceState() {
       "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
     activeProvider: currentSession?.providerMeta.provider ?? "Anthropic",
-    activeBackend: currentSession?.providerMeta.backend ?? "ollama",
+    activeBackend: currentSession?.providerMeta.backend ?? "hybrid",
     privacyMode: "private",
     syncStatus: activeRepository?.state ?? "disconnected",
     activeAgents,
@@ -135,6 +136,7 @@ export function useChatWorkspaceState() {
     currentTaskStatus: activeWorkflowTask?.status ?? "queued",
     pendingApprovals,
     workflow,
+    localInference: localInferenceRuntime,
   };
 
   return {

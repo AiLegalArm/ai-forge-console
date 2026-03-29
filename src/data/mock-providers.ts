@@ -19,12 +19,12 @@ export const providers: Provider[] = [
   { id: "p-3", name: "Gemini", type: "built-in", status: "connected", models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"], capabilities: ["chat", "code", "vision", "function-calling", "multimodal"], costTier: "medium", privacyMode: false, fallbackEnabled: true, requestsToday: 456, avgLatency: 250 },
   { id: "p-4", name: "Grok", type: "built-in", status: "connected", models: ["grok-3", "grok-3-mini"], capabilities: ["chat", "code", "function-calling"], costTier: "medium", privacyMode: false, fallbackEnabled: false, requestsToday: 89, avgLatency: 340 },
   { id: "p-5", name: "DeepSeek", type: "built-in", status: "connected", models: ["deepseek-r1", "deepseek-v3", "deepseek-coder"], capabilities: ["chat", "code", "reasoning", "function-calling"], costTier: "low", privacyMode: false, fallbackEnabled: true, requestsToday: 234, avgLatency: 420 },
-  { id: "p-6", name: "Ollama via VPS", type: "self-hosted", status: "connected", models: ["llama-3.3-70b", "codestral", "qwen-2.5-coder", "deepseek-r1-distill"], capabilities: ["chat", "code", "local-inference"], costTier: "low", privacyMode: true, fallbackEnabled: false, requestsToday: 567, avgLatency: 890 },
+  { id: "p-6", name: "Ollama Local Runtime", type: "self-hosted", status: "connected", models: ["qwen3-coder:14b", "llama3.3:70b-instruct", "phi4:mini", "mistral-small:3.1"], capabilities: ["chat", "code", "local-inference", "privacy-local"], costTier: "low", privacyMode: true, fallbackEnabled: true, requestsToday: 912, avgLatency: 640 },
   { id: "p-7", name: "Custom Gateway", type: "custom", status: "disconnected", models: [], capabilities: [], costTier: "enterprise", privacyMode: true, fallbackEnabled: false, requestsToday: 0, avgLatency: 0, compatible: "OpenAI-compatible" },
 ];
 
 export const providerCategories = [
-  { label: "Built-in Providers", count: 6 },
+  { label: "Built-in Providers", count: 5 },
   { label: "Custom Providers", count: 1 },
   { label: "OpenAI-compatible", count: 0 },
   { label: "Anthropic-compatible", count: 0 },
