@@ -131,3 +131,17 @@ export interface BrowserSession {
   endedAtIso?: string;
   updatedAtIso: string;
 }
+
+
+export interface BrowserScenarioRunResult {
+  consoleSummary: string[];
+  networkSummary: string[];
+  screenshotUris: string[];
+  stepResults: Array<{ stepId: string; passed: boolean; note?: string }>;
+  consoleIssues?: string[];
+  networkIssues?: string[];
+  uiFindings?: string[];
+  networkEvents?: Array<{ method: string; url: string; statusCode: number }>;
+  consoleEvents?: Array<{ level: "log" | "warn" | "error"; message: string }>;
+  failure?: { code: BrowserFailureCode; message: string; stepId?: string };
+}
