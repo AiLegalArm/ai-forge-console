@@ -427,6 +427,42 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   );
 }
 
+function StreamingText({ text }: { text: string }) {
+  const [visibleLen, setVisibleLen] = useState(0);
+  useEffect(() => {
+    setVisibleLen(0);
+    const id = setInterval(() => {
+      setVisibleLen((prev) => {
+        if (prev >= text.length) { clearInterval(id); return prev; }
+        return Math.min(prev + 2, text.length);
+      });
+    }, 18);
+    return () => clearInterval(id);
+  }, [text]);
+  return (
+    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+      {text.slice(0, visibleLen)}
+      {visibleLen < text.length && <span className="inline-block w-1.5 h-3 bg-primary animate-pulse ml-0.5 rounded-sm" />}
+    </p>
+  );
+}
+
+function TypingIndicator({ agents }: { agents: string[] }) {
+  if (agents.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 animate-fade-in">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span className="text-[10px] font-mono text-muted-foreground">
+        {agents.join(", ")} typing…
+      </span>
+    </div>
+  );
+}
+
 function OrchestratorSummary({ currentTask }: { currentTask: string }) {
   const { t } = useI18n();
   return (
