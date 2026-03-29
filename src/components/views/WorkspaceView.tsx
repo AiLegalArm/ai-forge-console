@@ -461,7 +461,7 @@ function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Globe className="h-4 w-4 text-primary" /> {t("domains")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">Domain readiness</span><span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-warning"}`}>{finalDecision.status}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("domains.readiness" as never)}</span><span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-warning"}`}>{finalDecision.status}</span></div>
       </div>
       <div className="space-y-2">
         {domains.map((domain) => (
