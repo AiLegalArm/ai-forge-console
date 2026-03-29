@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Globe, Palette, ShieldCheck, Rocket, Link } from "lucide-react";
+import { Eye, Globe, Palette, ShieldCheck, Rocket, Link, X } from "lucide-react";
 
 const tabs = [
   { id: "preview", icon: Eye, label: "Preview" },
@@ -13,12 +13,14 @@ const tabs = [
 interface RightPanelProps {
   activeTab: string;
   onTabChange: (t: string) => void;
+  isMobile?: boolean;
+  onClose?: () => void;
 }
 
-export function RightPanel({ activeTab, onTabChange }: RightPanelProps) {
+export function RightPanel({ activeTab, onTabChange, isMobile, onClose }: RightPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  if (collapsed) {
+  if (!isMobile && collapsed) {
     return (
       <div className="w-8 border-l border-border bg-panel flex flex-col items-center py-2 gap-1.5 shrink-0">
         {tabs.map((t) => (
@@ -36,27 +38,27 @@ export function RightPanel({ activeTab, onTabChange }: RightPanelProps) {
   }
 
   return (
-    <div className="w-80 border-l border-border bg-panel flex flex-col shrink-0">
-      <div className="flex items-center border-b border-border">
+    <div className={`${isMobile ? "w-full h-full" : "w-80"} border-l border-border bg-panel flex flex-col shrink-0`}>
+      <div className="flex items-center border-b border-border overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => onTabChange(t.id)}
-            className={`flex items-center gap-1 px-2.5 py-2 text-xs transition-colors border-b-2 ${
+            className={`flex items-center gap-1 px-2 py-2 text-xs transition-colors border-b-2 shrink-0 ${
               activeTab === t.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <t.icon className="h-3 w-3" />
-            <span className="hidden xl:inline">{t.label}</span>
+            <span className="text-[10px] sm:text-xs">{t.label}</span>
           </button>
         ))}
         <button
-          onClick={() => setCollapsed(true)}
-          className="ml-auto px-2 text-muted-foreground hover:text-foreground text-xs"
+          onClick={isMobile ? onClose : () => setCollapsed(true)}
+          className="ml-auto px-2 text-muted-foreground hover:text-foreground shrink-0"
         >
-          ›
+          {isMobile ? <X className="h-3.5 w-3.5" /> : <span>›</span>}
         </button>
       </div>
       <div className="flex-1 overflow-auto p-3">
@@ -105,7 +107,7 @@ function RightPanelContent({ tab }: { tab: string }) {
         <div className="space-y-3 text-xs">
           <div className="bg-surface rounded p-3 border border-border space-y-2">
             <div className="font-semibold text-foreground">Deploy Status</div>
-            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-success animate-pulse-glow" /><span className="text-muted-foreground">Production: <span className="text-success font-mono">Healthy</span></span></div>
+            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-success animate-pulse" /><span className="text-muted-foreground">Production: <span className="text-success font-mono">Healthy</span></span></div>
             <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary" /><span className="text-muted-foreground">Staging: <span className="text-primary font-mono">Deploying</span></span></div>
           </div>
         </div>
