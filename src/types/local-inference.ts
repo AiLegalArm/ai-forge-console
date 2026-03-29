@@ -4,6 +4,38 @@ export type ProviderBackend = "cloud" | "local" | "ollama" | "hybrid";
 export type ModelProvider = "openrouter" | "ollama";
 
 export type RoutingMode = "cloud_preferred" | "local_preferred" | "hybrid" | "local_only" | "sensitive_local_only";
+export type AppRoutingModeProfile = "cheap_fast" | "balanced" | "quality_first" | "privacy_first" | "local_only";
+export type RoutingPresetId =
+  | "or_fast"
+  | "or_balanced"
+  | "or_deep"
+  | "or_code_heavy"
+  | "or_audit_strict"
+  | "or_release_critical"
+  | "ol_local_fast"
+  | "ol_local_balanced"
+  | "ol_local_private"
+  | "ol_local_reviewer";
+
+export type RoutingAgentId =
+  | "planner"
+  | "architect"
+  | "frontend"
+  | "backend"
+  | "supabase"
+  | "designer"
+  | "browser"
+  | "reviewer"
+  | "deploy"
+  | "domain"
+  | "codeAuditor"
+  | "securityAuditor"
+  | "aiAuditor"
+  | "promptAuditor"
+  | "toolAuditor"
+  | "gitAuditor"
+  | "testAuditor"
+  | "releaseAuditor";
 
 export type PrivacyRoutingMode = "standard" | "sensitive" | "strict_local";
 
@@ -190,9 +222,31 @@ export interface LocalResourceState {
 
 export interface BackendRoutingState {
   activeMode: RoutingMode;
+  appModeProfile: AppRoutingModeProfile;
   conversationOverrides: Record<string, RoutingMode>;
   agentAssignments: AgentBackendAssignment[];
   rules: RoutingRule[];
+  presets: Record<RoutingPresetId, {
+    provider: "openrouter" | "ollama";
+    backend: ProviderBackend;
+    profile: string;
+    purpose: readonly string[];
+  }>;
+  agentRoutingDefaults: Record<RoutingAgentId, {
+    primary?: RoutingPresetId;
+    fallback?: RoutingPresetId;
+    firstPass?: RoutingPresetId;
+    finalPass?: RoutingPresetId;
+  }>;
+  appRoutingModes: Record<AppRoutingModeProfile, {
+    planner: RoutingPresetId;
+    workers: readonly RoutingPresetId[];
+    reviewer: RoutingPresetId;
+    auditorsFirstPass: readonly RoutingPresetId[];
+    auditorsFinalPass: readonly RoutingPresetId[];
+    release: RoutingPresetId;
+    cloudAllowed: boolean;
+  }>;
 }
 
 export interface LocalInferenceRuntimeState {
