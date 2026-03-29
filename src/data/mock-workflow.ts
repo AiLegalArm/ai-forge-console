@@ -302,7 +302,7 @@ const tasks: WorkflowTask[] = [
 const approvals: WorkflowApproval[] = [
   {
     id: "approval-git-push-1",
-    category: "git_push",
+    category: "push_approval",
     title: "Approve git push to feat/rbac-task-rbac-exec",
     reason: "Agent completed implementation; push includes schema and auth flow changes.",
     status: "pending",
@@ -315,7 +315,7 @@ const approvals: WorkflowApproval[] = [
   },
   {
     id: "approval-deploy-1",
-    category: "deploy",
+    category: "production_deploy_approval",
     title: "Approve staging deploy",
     reason: "Review is green with one non-blocking suggestion.",
     status: "pending",
@@ -326,7 +326,7 @@ const approvals: WorkflowApproval[] = [
   },
   {
     id: "approval-release-gate-1",
-    category: "release_go_no_go",
+    category: "release_approval",
     title: "Release go/no-go decision required",
     reason: "Release Auditor returned no-go due to unresolved critical security and test findings.",
     status: "pending",
@@ -334,6 +334,18 @@ const approvals: WorkflowApproval[] = [
     chatId: "review-session-1",
     requestedBy: "release-auditor",
     requestedAtIso: "2026-03-29T10:48:10.000Z",
+  },
+
+  {
+    id: "approval-release-gate-2",
+    category: "release_go_no_go",
+    title: "Finalize release go/no-go",
+    reason: "Explicit release gate acknowledgement required by policy.",
+    status: "pending",
+    taskId: "task-rbac-release",
+    chatId: "review-session-1",
+    requestedBy: "release-orchestrator",
+    requestedAtIso: "2026-03-29T10:48:20.000Z",
   },
   {
     id: "approval-sensitive-provider-1",
