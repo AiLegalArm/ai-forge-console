@@ -42,12 +42,16 @@ export interface AgentActivityEvent {
 
 export type ApprovalCategory =
   | "git_push"
+  | "push_approval"
   | "auto_push_enablement"
   | "deploy"
+  | "production_deploy_approval"
   | "domain_assignment"
+  | "domain_assignment_approval"
+  | "release_go_no_go"
+  | "release_approval"
   | "destructive_file_operations"
-  | "sensitive_provider_usage"
-  | "release_go_no_go";
+  | "sensitive_provider_usage";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "dismissed";
 

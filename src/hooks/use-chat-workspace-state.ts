@@ -5,6 +5,7 @@ import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
 import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
+import { releaseControlState } from "@/data/mock-release-control";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
@@ -143,6 +144,7 @@ export function useChatWorkspaceState() {
     designSession,
     browserSession,
     evidenceFlow: evidenceFlowState,
+    releaseControl: releaseControlState,
     localInference: localInferenceRuntime,
   };
 

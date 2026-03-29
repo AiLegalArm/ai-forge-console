@@ -4,6 +4,7 @@ import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/work
 import type { AgentRole, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { EvidenceFlowState } from "@/types/evidence";
+import type { ReleaseControlState } from "@/types/release";
 
 export type PrivacyMode = "private" | "team";
 export type SyncStatus = "disconnected" | "connected" | "syncing" | "dirty" | "up_to_date" | "conflict" | "blocked" | "error";
@@ -39,6 +40,7 @@ export interface WorkspaceRuntimeState {
   designSession: DesignSession;
   browserSession: BrowserSession;
   evidenceFlow: EvidenceFlowState;
+  releaseControl: ReleaseControlState;
   localInference: LocalInferenceRuntimeState;
 }
 
