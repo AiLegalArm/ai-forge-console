@@ -183,12 +183,12 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
 
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Backend routing</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.backend_routing" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Conversation mode</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replace(/_/g, " ")}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Privacy mode</span><span className="text-success font-mono uppercase">{workspaceState.localInference.routing.rules.find((rule) => rule.scope === "task" && rule.scopeRefId === activeTask?.id)?.privacyMode ?? "standard"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Active local model</span><span className="text-foreground font-mono">{workspaceState.localInference.modelRegistry.find((model) => model.id === workspaceState.localInference.ollama.selectedModelId)?.displayName ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Fallback ready</span><span className={`font-mono ${workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"}`}>{workspaceState.localInference.resources.autoFallbackReady ? "yes" : "no"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.conv_mode" as never)}</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replace(/_/g, " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.privacy_mode" as never)}</span><span className="text-success font-mono uppercase">{workspaceState.localInference.routing.rules.find((rule) => rule.scope === "task" && rule.scopeRefId === activeTask?.id)?.privacyMode ?? "standard"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.active_model" as never)}</span><span className="text-foreground font-mono">{workspaceState.localInference.modelRegistry.find((model) => model.id === workspaceState.localInference.ollama.selectedModelId)?.displayName ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.fallback" as never)}</span><span className={`font-mono ${workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"}`}>{workspaceState.localInference.resources.autoFallbackReady ? t("rail.yes" as never) : t("rail.no" as never)}</span></div>
         </div>
       </div>
 
