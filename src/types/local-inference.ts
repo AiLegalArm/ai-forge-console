@@ -1,8 +1,41 @@
 export type OllamaServiceState = "unknown" | "available" | "unavailable" | "starting" | "degraded" | "error";
 
 export type ProviderBackend = "cloud" | "local" | "ollama" | "hybrid";
+export type ModelProvider = "openrouter" | "ollama";
 
 export type RoutingMode = "cloud_preferred" | "local_preferred" | "hybrid" | "local_only" | "sensitive_local_only";
+export type AppRoutingModeProfile = "cheap_fast" | "balanced" | "quality_first" | "privacy_first" | "local_only";
+export type RoutingPresetId =
+  | "or_fast"
+  | "or_balanced"
+  | "or_deep"
+  | "or_code_heavy"
+  | "or_audit_strict"
+  | "or_release_critical"
+  | "ol_local_fast"
+  | "ol_local_balanced"
+  | "ol_local_private"
+  | "ol_local_reviewer";
+
+export type RoutingAgentId =
+  | "planner"
+  | "architect"
+  | "frontend"
+  | "backend"
+  | "supabase"
+  | "designer"
+  | "browser"
+  | "reviewer"
+  | "deploy"
+  | "domain"
+  | "codeAuditor"
+  | "securityAuditor"
+  | "aiAuditor"
+  | "promptAuditor"
+  | "toolAuditor"
+  | "gitAuditor"
+  | "testAuditor"
+  | "releaseAuditor";
 
 export type PrivacyRoutingMode = "standard" | "sensitive" | "strict_local";
 
@@ -12,12 +45,44 @@ export type PerformanceMode = "balanced" | "latency_first" | "quality_first";
 
 export type AgentRole =
   | "planner"
+  | "architect"
+  | "frontend"
+  | "backend"
   | "worker"
+  | "security_auditor"
+  | "tool_auditor"
+  | "git_auditor"
+  | "test_auditor"
+  | "release_auditor"
   | "prompt_auditor"
   | "code_auditor"
   | "ai_auditor"
   | "reviewer"
   | "orchestrator";
+
+export type RoutingProfile =
+  | "cheap_fast"
+  | "balanced"
+  | "deep_reasoning"
+  | "code_heavy"
+  | "audit_strict"
+  | "release_critical"
+  | "local_private";
+
+export type TaskType =
+  | "planning"
+  | "architecture"
+  | "frontend"
+  | "backend"
+  | "coding"
+  | "review"
+  | "audit"
+  | "security"
+  | "release";
+
+export type ModelTier = "low" | "medium" | "high" | "premium";
+export type ModelSpeedTier = "slow" | "balanced" | "fast";
+export type ModelAvailability = "available" | "degraded" | "offline";
 
 export type ModelWeightClass = "tiny" | "small" | "medium" | "large" | "xlarge";
 
@@ -72,6 +137,52 @@ export interface LocalModelRegistryEntry {
   status: "active" | "inactive";
 }
 
+export interface CloudProviderConfigState {
+  provider: "openrouter";
+  enabled: boolean;
+  active: boolean;
+  apiKeyConfigured: boolean;
+  status: "connected" | "disconnected" | "degraded" | "error";
+  baseUrl?: string;
+  failureState?: string;
+  lastHealthCheckIso: string | null;
+}
+
+export interface HybridModelRegistryEntry {
+  id: string;
+  provider: ModelProvider;
+  providerModelId: string;
+  displayName: string;
+  costTier: ModelTier;
+  qualityTier: ModelTier;
+  speedTier: ModelSpeedTier;
+  contextSuitability: ModelTier;
+  codingSuitability: ModelTier;
+  auditSuitability: ModelTier;
+  reviewSuitability: ModelTier;
+  structuredOutputSuitability: ModelTier;
+  availability: ModelAvailability;
+}
+
+export interface RoutingInput {
+  agentRole: AgentRole;
+  taskType: TaskType;
+  privacyMode: PrivacyRoutingMode;
+  preferredBackend?: ProviderBackend;
+  fallbackRequired?: boolean;
+  maxCostTier?: ModelTier;
+  latencyPriority?: "low" | "medium" | "high";
+}
+
+export interface RoutingDecision {
+  profile: RoutingProfile;
+  selectedProvider: ModelProvider;
+  selectedModelId: string | null;
+  fallbackProvider: ModelProvider;
+  fallbackModelId: string | null;
+  reason: string;
+}
+
 export interface RoutingRule {
   id: string;
   scope: "global" | "conversation" | "agent" | "task";
@@ -88,6 +199,11 @@ export interface AgentBackendAssignment {
   agentId: string;
   agentRole: AgentRole;
   routingMode: RoutingMode;
+  routingProfile?: RoutingProfile;
+  preferredProvider?: ModelProvider;
+  preferredModelId?: string;
+  fallbackProvider?: ModelProvider;
+  fallbackModelId?: string;
   preferredBackend: ProviderBackend;
   fallbackBackend: ProviderBackend;
   assignedModelId?: string;
@@ -106,13 +222,37 @@ export interface LocalResourceState {
 
 export interface BackendRoutingState {
   activeMode: RoutingMode;
+  appModeProfile: AppRoutingModeProfile;
   conversationOverrides: Record<string, RoutingMode>;
   agentAssignments: AgentBackendAssignment[];
   rules: RoutingRule[];
+  presets: Record<RoutingPresetId, {
+    provider: "openrouter" | "ollama";
+    backend: ProviderBackend;
+    profile: string;
+    purpose: readonly string[];
+  }>;
+  agentRoutingDefaults: Record<RoutingAgentId, {
+    primary?: RoutingPresetId;
+    fallback?: RoutingPresetId;
+    firstPass?: RoutingPresetId;
+    finalPass?: RoutingPresetId;
+  }>;
+  appRoutingModes: Record<AppRoutingModeProfile, {
+    planner: RoutingPresetId;
+    workers: readonly RoutingPresetId[];
+    reviewer: RoutingPresetId;
+    auditorsFirstPass: readonly RoutingPresetId[];
+    auditorsFinalPass: readonly RoutingPresetId[];
+    release: RoutingPresetId;
+    cloudAllowed: boolean;
+  }>;
 }
 
 export interface LocalInferenceRuntimeState {
+  cloud: CloudProviderConfigState;
   ollama: OllamaConnectionState;
+  hybridModelRegistry: HybridModelRegistryEntry[];
   modelRegistry: LocalModelRegistryEntry[];
   routing: BackendRoutingState;
   resources: LocalResourceState;

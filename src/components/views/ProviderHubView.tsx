@@ -1,5 +1,5 @@
 import { cloudAndCustomProviders, providerCategories } from "@/data/mock-providers";
-import { Plug, Wifi, WifiOff, AlertTriangle, CheckCircle2, ServerCrash, Cpu, ShieldCheck } from "lucide-react";
+import { Plug, Wifi, WifiOff, AlertTriangle, CheckCircle2, ServerCrash, Cpu, ShieldCheck, Cloud } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 import { listAgentBackendSummaries } from "@/lib/agent-backends/provider-hub";
@@ -33,6 +33,7 @@ const backendStatusColor: Record<AgentBackendStatus, string> = {
   ready: "text-success",
   busy: "text-warning",
   unavailable: "text-destructive",
+  degraded: "text-warning",
   error: "text-destructive",
 };
 
@@ -121,6 +122,17 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                       {backend.availability.status.replaceAll("_", " ")}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground">{backend.eventStreamMode}</span>
+                    <span className={`text-[10px] font-mono ${backend.availability.installed ? "text-success" : "text-muted-foreground"}`}>
+                      {backend.availability.installed ? "connected" : "not connected"}
+                    </span>
+                    <span className={`text-[10px] font-mono ${backend.availability.active ? "text-success" : "text-muted-foreground"}`}>
+                      {backend.availability.active ? "active" : "inactive"}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono ${backend.availability.preferenceCandidateFor?.length ? "text-info" : "text-muted-foreground"}`}
+                    >
+                      {backend.availability.preferenceCandidateFor?.length ? "preference candidate" : "not a candidate"}
+                    </span>
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground">{backend.availability.health}</span>
                 </div>
@@ -162,6 +174,19 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
       </div>
 
       <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-1 pb-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <Cloud className={`h-3.5 w-3.5 ${localInferenceRuntime.cloud.status === "connected" ? "text-success" : "text-warning"}`} />
+            <h2 className="text-xs font-semibold text-foreground">OpenRouter cloud runtime</h2>
+            <span className={`text-[10px] font-mono uppercase ${localInferenceRuntime.cloud.status === "connected" ? "text-success" : localInferenceRuntime.cloud.status === "error" ? "text-destructive" : "text-warning"}`}>
+              {localInferenceRuntime.cloud.status}
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            API key: {localInferenceRuntime.cloud.apiKeyConfigured ? "configured" : "missing"} • checked: {localInferenceRuntime.cloud.lastHealthCheckIso ?? "never"}
+          </span>
+        </div>
+
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">
             {localInferenceRuntime.ollama.serviceState === "available" ? (
@@ -215,6 +240,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
             Privacy / routing controls
           </div>
           <div className="flex justify-between"><span className="text-muted-foreground">Global mode</span><span className="font-mono text-primary uppercase">{localInferenceRuntime.routing.activeMode}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">App routing profile</span><span className="font-mono text-info uppercase">{localInferenceRuntime.routing.appModeProfile}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Sensitive tasks</span><span className="font-mono text-success">local only enforced</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Fallback readiness</span><span className="font-mono text-foreground">{localInferenceRuntime.resources.autoFallbackReady ? "ready" : "not-ready"}</span></div>
         </div>
@@ -252,13 +278,73 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
       </div>
 
       <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Routing context visibility</h2>
+        <div className="space-y-1.5 text-xs text-muted-foreground mb-4">
+          <div className="flex justify-between gap-2">
+            <span>Current task</span>
+            <span className="font-mono text-foreground text-right truncate">{workspaceState.currentTask}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span>Session</span>
+            <span className="font-mono text-foreground">{workspaceState.currentChatSessionId}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span>Privacy mode</span>
+            <span className="font-mono text-success uppercase">{workspaceState.privacyMode}</span>
+          </div>
+        </div>
+
         <h2 className="text-xs font-semibold text-foreground mb-2">Agent/backend mapping</h2>
         <div className="space-y-1.5 text-xs text-muted-foreground">
           {localInferenceRuntime.routing.agentAssignments.map((assignment) => (
             <div key={assignment.agentId} className="flex justify-between gap-2">
               <span className="truncate">{assignment.agentRole}</span>
+              <span className="font-mono text-foreground text-right truncate" title={`${assignment.preferredProvider ?? "?"}/${assignment.preferredModelId ?? "auto"} -> ${assignment.fallbackProvider ?? "?"}/${assignment.fallbackModelId ?? "auto"}`}>
+                {assignment.routingProfile ?? "balanced"} • {assignment.preferredBackend} → {assignment.fallbackBackend}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Hybrid model registry</h2>
+        <div className="space-y-1 text-[10px]">
+          {localInferenceRuntime.hybridModelRegistry.slice(0, 10).map((model) => (
+            <div key={model.id} className="flex items-center justify-between border-b border-border/40 pb-1">
+              <span className="text-foreground truncate">{model.displayName}</span>
+              <span className="font-mono text-muted-foreground uppercase">
+                {model.provider} • {model.costTier}/{model.qualityTier}/{model.speedTier}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Routing presets</h2>
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {Object.entries(localInferenceRuntime.routing.presets).map(([presetId, preset]) => (
+            <div key={presetId} className="flex justify-between gap-2">
+              <span className="truncate font-mono text-foreground">{presetId}</span>
+              <span className="font-mono text-right truncate">
+                {preset.provider} / {preset.profile}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Per-agent default routing</h2>
+        <div className="space-y-1.5 text-xs text-muted-foreground">
+          {Object.entries(localInferenceRuntime.routing.agentRoutingDefaults).map(([agentId, defaults]) => (
+            <div key={agentId} className="flex justify-between gap-2">
+              <span className="truncate">{agentId}</span>
               <span className="font-mono text-foreground text-right truncate">
-                {assignment.preferredBackend} → {assignment.fallbackBackend}
+                {"firstPass" in defaults
+                  ? `${defaults.firstPass} → ${defaults.finalPass}`
+                  : `${defaults.primary} → ${defaults.fallback}`}
               </span>
             </div>
           ))}
