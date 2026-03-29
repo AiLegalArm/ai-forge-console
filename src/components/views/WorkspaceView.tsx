@@ -357,34 +357,34 @@ function GitView({
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><GitBranch className="h-4 w-4 text-primary" /> {t("git")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">Repository</span><span className="font-mono text-foreground">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "Not connected"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Remote</span><span className="font-mono text-foreground">{activeRepo?.remoteUrl ?? "—"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Connection</span><span className="font-mono text-primary uppercase">{workspaceState.syncStatus}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Task branch</span><span className="font-mono text-primary">{branchState?.localBranchName ?? activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Branch lifecycle</span><span className="font-mono text-foreground">{activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Sync mode</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Review mode</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.reviewMode ?? "chat_review"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.repository" as never)}</span><span className="font-mono text-foreground">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : t("git.not_connected" as never)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.remote")}</span><span className="font-mono text-foreground">{activeRepo?.remoteUrl ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.connection" as never)}</span><span className="font-mono text-primary uppercase">{workspaceState.syncStatus}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.task_branch" as never)}</span><span className="font-mono text-primary">{branchState?.localBranchName ?? activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.branch_lifecycle" as never)}</span><span className="font-mono text-foreground">{activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.sync_mode" as never)}</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.review_mode" as never)}</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.reviewMode ?? "chat_review"}</span></div>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
-        <div className="flex items-center gap-2 text-primary"><GitCommitHorizontal className="h-3.5 w-3.5" /> Commit & Push</div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Dirty / staged</span><span className="font-mono text-foreground">{commitState?.stagedChanges.hasUncommittedChanges ? `${commitState.stagedChanges.filesChanged} files` : "clean"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Draft message</span><span className="font-mono text-foreground truncate max-w-[320px]">{commitState?.draftMessage ?? "—"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Commit status</span><span className="font-mono text-primary">{commitState?.status ?? "idle"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Push status</span><span className="font-mono text-primary">{pushState?.status ?? "idle"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Push approval</span><span className={`font-mono ${pushState?.requiresApproval ? "text-warning" : "text-success"}`}>{pushState?.requiresApproval ? "required" : "not required"}</span></div>
+        <div className="flex items-center gap-2 text-primary"><GitCommitHorizontal className="h-3.5 w-3.5" /> {t("git.commit_push" as never)}</div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.dirty_staged" as never)}</span><span className="font-mono text-foreground">{commitState?.stagedChanges.hasUncommittedChanges ? `${commitState.stagedChanges.filesChanged} ${t("git.files" as never)}` : t("rail.clean" as never)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.draft_message" as never)}</span><span className="font-mono text-foreground truncate max-w-[320px]">{commitState?.draftMessage ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.commit_status" as never)}</span><span className="font-mono text-primary">{commitState?.status ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.push_status" as never)}</span><span className="font-mono text-primary">{pushState?.status ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.push_approval" as never)}</span><span className={`font-mono ${pushState?.requiresApproval ? "text-warning" : "text-success"}`}>{pushState?.requiresApproval ? t("git.required" as never) : t("git.not_required" as never)}</span></div>
         {pushState?.pendingError ? <div className="text-warning">{pushState.pendingError}</div> : null}
         {commitState?.pendingError ? <div className="text-destructive">{commitState.pendingError}</div> : null}
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
-        <div className="flex items-center gap-2 text-primary"><Upload className="h-3.5 w-3.5" /> Review & Audit</div>
-        <div className="flex justify-between"><span className="text-muted-foreground">PR status</span><span className="font-mono text-foreground">{reviewState?.status ?? "not_opened"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Review chat</span><span className="font-mono text-foreground">{reviewState?.reviewChatSessionId ?? "—"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Auditors</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Merge readiness</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Release gate</span><span className={`font-mono ${reviewState?.releaseGateReadiness === "blocked" ? "text-warning" : "text-success"}`}>{reviewState?.releaseGateReadiness ?? "not_ready"}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Open findings</span><span className="font-mono text-warning">{openFindings.length}</span></div>
+        <div className="flex items-center gap-2 text-primary"><Upload className="h-3.5 w-3.5" /> {t("git.review_audit" as never)}</div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.pr_status" as never)}</span><span className="font-mono text-foreground">{reviewState?.status ?? "not_opened"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.review_chat" as never)}</span><span className="font-mono text-foreground">{reviewState?.reviewChatSessionId ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.auditors" as never)}</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.merge_readiness" as never)}</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.release_gate" as never)}</span><span className={`font-mono ${reviewState?.releaseGateReadiness === "blocked" ? "text-warning" : "text-success"}`}>{reviewState?.releaseGateReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.open_findings" as never)}</span><span className="font-mono text-warning">{openFindings.length}</span></div>
         {openFindings[0] ? (
           <div className="flex items-center gap-1 text-warning">
             <ShieldAlert className="h-3 w-3" />
@@ -394,8 +394,8 @@ function GitView({
       </div>
 
       <div className="flex gap-1.5">
-        <button onClick={() => activeTask && void onGitAction("stage_all", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Stage all</button>
-        <button onClick={() => activeTask && void onGitAction("commit", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Commit</button>
+        <button onClick={() => activeTask && void onGitAction("stage_all", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.stage_all" as never)}</button>
+        <button onClick={() => activeTask && void onGitAction("commit", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.commit" as never)}</button>
         <button onClick={() => activeTask && void onGitAction("push", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.sync")}</button>
