@@ -73,12 +73,12 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
 
   const renderContent = () => {
     switch (activeSection) {
-      case "projects": return <ProjectsView />;
+      case "projects": return <ProjectsView workspaceState={workspaceState} onAddLocalProject={onAddLocalProject} onActiveProjectChange={onActiveProjectChange} />;
       case "prompt-studio": return <PromptStudioView />;
       case "prompt-library": return <PromptLibraryView />;
-      case "agents": return <AgentStudioView />;
+      case "agents": return <AgentStudioView workspaceState={workspaceState} />;
       case "providers": return <ProviderHubView workspaceState={workspaceState} onRefreshLocalInference={onRefreshLocalInference} />;
-      case "audits": return <AuditsView />;
+      case "audits": return <AuditsView workspaceState={workspaceState} />;
       case "supabase-import": return <SupabaseImportView />;
       case "release": return <ReleaseCenterView />;
       case "settings": return <SettingsView />;

@@ -363,10 +363,25 @@ function GitView({
   const pushState = activeTask?.github?.pushWorkflow;
   const reviewState = activeTask?.github?.pullRequest;
   const openFindings = reviewState?.findings.filter((finding) => finding.status === "open") ?? [];
+  const repoConnected = workspaceState.repository.connected || Boolean(activeRepo);
+  const dirty = workspaceState.localShell.project.hasLocalChanges || Boolean(commitState?.stagedChanges.hasUncommittedChanges);
+  const lastGitEvent = [...workspaceState.workflow.activityEvents].reverse().find((event) =>
+    ["review_triggered", "execution_update", "completed", "blocked"].includes(event.type) &&
+    (event.title.toLowerCase().includes("git") || event.details?.toLowerCase().includes("branch") || event.details?.toLowerCase().includes("push")),
+  );
 
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><GitBranch className="h-4 w-4 text-primary" /> {t("git")}</h1>
+      <div className="bg-card border border-border rounded-lg p-3 grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
+        <div><span className="text-muted-foreground block">repo</span><span className={repoConnected ? "text-success" : "text-warning"}>{repoConnected ? "connected" : "disconnected"}</span></div>
+        <div><span className="text-muted-foreground block">branch</span><span className="text-foreground truncate">{workspaceState.currentBranch}</span></div>
+        <div><span className="text-muted-foreground block">status</span><span className={dirty ? "text-warning" : "text-success"}>{dirty ? "dirty" : "clean"}</span></div>
+        <div><span className="text-muted-foreground block">sync mode</span><span className="text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
+        <div><span className="text-muted-foreground block">task branch</span><span className="text-primary truncate">{branchState?.localBranchName ?? activeTask?.branchName ?? "none"}</span></div>
+        <div><span className="text-muted-foreground block">project/repo</span><span className="text-foreground truncate">{workspaceState.currentProject} / {activeRepo?.name ?? "none"}</span></div>
+      </div>
+      {lastGitEvent ? <div className="text-[10px] text-muted-foreground border border-border rounded px-2 py-1">last action: <span className="text-foreground">{lastGitEvent.title}</span> • {lastGitEvent.createdAtIso}</div> : null}
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.repository" as never)}</span><span className="font-mono text-foreground">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : t("git.not_connected" as never)}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.remote")}</span><span className="font-mono text-foreground">{activeRepo?.remoteUrl ?? "—"}</span></div>
@@ -402,6 +417,16 @@ function GitView({
             <span className="truncate">{openFindings[0].title}</span>
           </div>
         ) : null}
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-3 space-y-1 text-xs">
+        <div className="text-primary font-mono text-[11px]">Branch per task visibility</div>
+        {workspaceState.workflow.tasks.slice(0, 6).map((task) => (
+          <div key={task.id} className="flex items-center justify-between gap-2 text-[10px]">
+            <span className="text-muted-foreground truncate">{task.title}</span>
+            <span className="font-mono text-foreground truncate">{task.github?.branch?.localBranchName ?? task.branchName ?? task.github?.branchLifecycle ?? "no_branch"}</span>
+          </div>
+        ))}
       </div>
 
       <div className="flex gap-1.5">
