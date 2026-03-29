@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, Globe, Palette, ShieldCheck, Rocket, Link, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { auditGateDecisions, auditSummary } from "@/data/mock-audits";
 
 interface RightPanelProps {
   activeTab: string;
@@ -75,21 +76,23 @@ function RightPanelContent({ tab }: { tab: string }) {
           </div>
         </div>
       );
-    case "audit-results":
+    case "audit-results": {
+      const noGoGates = auditGateDecisions.filter((gate) => gate.verdict === "no_go").length;
       return (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">{t("au.health")}</span>
-            <span className="text-lg font-mono font-bold text-warning">72</span>
+            <span className="text-lg font-mono font-bold text-warning">{auditSummary.score}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-destructive/10 border border-destructive/20 rounded p-2"><span className="font-mono text-destructive text-lg">2</span><p className="text-muted-foreground">{t("au.critical")}</p></div>
-            <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">3</span><p className="text-muted-foreground">{t("au.high")}</p></div>
-            <div className="bg-info/10 border border-info/20 rounded p-2"><span className="font-mono text-info text-lg">2</span><p className="text-muted-foreground">{t("au.medium")}</p></div>
-            <div className="bg-success/10 border border-success/20 rounded p-2"><span className="font-mono text-success text-lg">1</span><p className="text-muted-foreground">{t("au.resolved")}</p></div>
+            <div className="bg-destructive/10 border border-destructive/20 rounded p-2"><span className="font-mono text-destructive text-lg">{auditSummary.critical}</span><p className="text-muted-foreground">{t("au.critical")}</p></div>
+            <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">{auditSummary.high}</span><p className="text-muted-foreground">{t("au.high")}</p></div>
+            <div className="bg-info/10 border border-info/20 rounded p-2"><span className="font-mono text-info text-lg">{auditSummary.medium}</span><p className="text-muted-foreground">{t("au.medium")}</p></div>
+            <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">{noGoGates}</span><p className="text-muted-foreground">No-Go gates</p></div>
           </div>
         </div>
       );
+    }
     case "deploy":
       return (
         <div className="space-y-3 text-xs">

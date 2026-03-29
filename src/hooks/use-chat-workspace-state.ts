@@ -1,4 +1,5 @@
 import { useMemo, useReducer } from "react";
+import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
@@ -136,6 +137,7 @@ export function useChatWorkspaceState() {
     currentTaskStatus: activeWorkflowTask?.status ?? "queued",
     pendingApprovals,
     workflow,
+    auditors: auditorControlState,
     localInference: localInferenceRuntime,
   };
 

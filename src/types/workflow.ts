@@ -1,3 +1,5 @@
+import type { AuditGateDecision, AuditorType, AuditorVerdict } from "@/types/audits";
+
 export type ActivitySeverity = "info" | "warning" | "critical";
 
 export type AgentActivityEventType =
@@ -143,6 +145,7 @@ export interface PullRequestState {
   findings: PullRequestReviewFinding[];
   mergeReadiness: "not_ready" | "ready" | "blocked";
   releaseGateReadiness: "not_ready" | "ready" | "blocked";
+  auditGate?: AuditGateDecision;
 }
 
 export interface TaskGitHubState {
@@ -189,10 +192,14 @@ export interface WorkflowTask {
   dependencyTaskIds: string[];
   linkedChatSessionId: string;
   linkedAuditId?: string;
+  linkedAuditorTypes?: AuditorType[];
   linkedReviewId?: string;
+  linkedReleaseCandidateId?: string;
   branchName?: string;
   phase: TaskPhase;
   progressSummary: string;
+  auditVerdict?: AuditorVerdict;
+  auditFindingCount?: number;
   updatedAtIso: string;
   github?: TaskGitHubState;
 }

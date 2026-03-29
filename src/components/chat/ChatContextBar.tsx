@@ -20,6 +20,13 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
   const activeLocalModel = workspaceState.localInference.modelRegistry.find(
     (model) => model.id === workspaceState.localInference.ollama.selectedModelId,
   );
+  const activeTask = workspaceState.workflow.tasks.find(
+    (task) => task.linkedChatSessionId === workspaceState.currentChatSessionId || task.title === workspaceState.currentTask,
+  );
+  const currentTaskAuditFindings = workspaceState.auditors.findings.filter(
+    (finding) => finding.linked.taskId === activeTask?.id,
+  );
+  const noGoGates = workspaceState.auditors.gateDecisions.filter((gate) => gate.verdict === "no_go").length;
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
@@ -69,6 +76,11 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <Cpu className="h-3 w-3 text-primary animate-pulse shrink-0" />
       <span className="text-primary">{runningCount} {t("ctx.active")}</span>
       <span className="text-warning hidden md:inline">{workspaceState.pendingApprovals.length} approvals</span>
+      <span className="text-border hidden md:inline">|</span>
+      <span className="text-warning hidden md:inline">{currentTaskAuditFindings.length} audit findings</span>
+      <span className={`hidden md:inline ${noGoGates > 0 ? "text-destructive" : "text-success"}`}>
+        {noGoGates > 0 ? `${noGoGates} no-go gates` : "all gates go"}
+      </span>
 
       <div className="ml-auto hidden lg:flex items-center gap-1.5">
         <Eye className="h-3 w-3 text-muted-foreground" />
