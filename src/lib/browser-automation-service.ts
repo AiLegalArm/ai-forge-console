@@ -186,7 +186,7 @@ export class BrowserAutomationService {
         }
 
         scenario.steps = scenario.steps.map((existing) => (existing.id === step.id ? updatedStep : existing));
-        scenario.currentStepId = step.id;
+        (scenario as any).currentStepId = step.id;
 
         if (result.status === "failed") {
           events.push(createExecutionEvent("step_failed", `Step failed: ${step.label}`, sessionId, step.id));
