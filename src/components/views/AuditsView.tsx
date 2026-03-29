@@ -25,6 +25,7 @@ export function AuditsView() {
         <div className="flex gap-1.5">
           <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">Run Full Audit</button>
           <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Remediate All</button>
+          <button className="px-3 py-1 text-xs font-mono bg-warning/20 text-warning rounded border border-warning/30">Open Audit Chat</button>
         </div>
       </div>
 
