@@ -20,7 +20,7 @@ export const codexAdapter = createPendingAdapter({
   availability: {
     installed: true,
     configured: true,
-    status: "available",
+    status: "ready",
     health: "healthy",
     statusDetail: "Adapter contract wired; backend execution bridge pending.",
   },

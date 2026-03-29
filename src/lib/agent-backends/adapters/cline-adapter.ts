@@ -20,7 +20,7 @@ export const clineAdapter = createPendingAdapter({
   availability: {
     installed: false,
     configured: false,
-    status: "unavailable",
+    status: "not_installed",
     health: "unhealthy",
     statusDetail: "Runtime bridge is not installed on this machine.",
   },
