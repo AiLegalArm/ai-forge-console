@@ -432,10 +432,10 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
               <span className={`font-mono uppercase ${deployment.status === "blocked" ? "text-destructive" : "text-primary"}`}>{deployment.status}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div><span className="text-muted-foreground">Source</span><div className="font-mono text-foreground">{deployment.source}</div></div>
-              <div><span className="text-muted-foreground">Rollback</span><div className={`font-mono ${deployment.rollbackAvailable ? "text-success" : "text-muted-foreground"}`}>{deployment.rollbackAvailable ? "available" : "unavailable"}</div></div>
-              <div><span className="text-muted-foreground">Preview target</span><div className="font-mono text-foreground truncate">{deployment.previewTarget ?? "—"}</div></div>
-              <div><span className="text-muted-foreground">Production target</span><div className="font-mono text-foreground truncate">{deployment.productionTarget ?? "—"}</div></div>
+              <div><span className="text-muted-foreground">{t("deploy.source" as never)}</span><div className="font-mono text-foreground">{deployment.source}</div></div>
+              <div><span className="text-muted-foreground">{t("deploy.rollback_label" as never)}</span><div className={`font-mono ${deployment.rollbackAvailable ? "text-success" : "text-muted-foreground"}`}>{deployment.rollbackAvailable ? t("deploy.available" as never) : t("deploy.unavailable" as never)}</div></div>
+              <div><span className="text-muted-foreground">{t("deploy.preview_target" as never)}</span><div className="font-mono text-foreground truncate">{deployment.previewTarget ?? "—"}</div></div>
+              <div><span className="text-muted-foreground">{t("deploy.prod_target" as never)}</span><div className="font-mono text-foreground truncate">{deployment.productionTarget ?? "—"}</div></div>
             </div>
             {deployment.blockedReason ? <div className="text-warning text-[10px]">{deployment.blockedReason}</div> : null}
           </div>
