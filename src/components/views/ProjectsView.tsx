@@ -1,15 +1,17 @@
 import { FolderKanban, Clock3, Folder, Link2, CheckCircle2, PlusCircle, ArrowRightLeft } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useState } from "react";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 interface ProjectsViewProps {
   workspaceState: WorkspaceRuntimeState;
-  onAddLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => void;
+  onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string }>;
   onActiveProjectChange: (projectId: string) => void;
 }
 
 export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjectChange }: ProjectsViewProps) {
   const { t } = useI18n();
+  const [projectFeedback, setProjectFeedback] = useState<string>("");
   const localCount = workspaceState.projects.filter((project) => project.source === "local").length;
   const connectedRepoCount = workspaceState.projects.filter((project) => project.repository?.connected).length;
   const recentProjects = workspaceState.projects.slice(0, 5);
@@ -22,7 +24,12 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
         </h1>
         <div className="flex gap-1.5">
           <button
-            onClick={() => onAddLocalProject({ name: "Imported Local Project", localPath: `${workspaceState.localShell.project.activeProjectRoot}/../imported-project` })}
+            onClick={() => {
+              void (async () => {
+                const result = await onAddLocalProject();
+                setProjectFeedback(result.message);
+              })();
+            }}
             className="px-3 py-1 text-xs font-mono border border-border rounded hover:border-primary/60"
           >
             add local project
@@ -32,6 +39,9 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
           </button>
         </div>
       </div>
+      {projectFeedback ? (
+        <div className="text-[11px] font-mono text-muted-foreground">{projectFeedback}</div>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <SummaryTile label="projects" value={workspaceState.projects.length.toString()} icon={<Folder className="h-3.5 w-3.5 text-primary" />} />
@@ -59,7 +69,7 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
                   <div className="text-right text-[10px] font-mono space-y-0.5 shrink-0">
                     {isActive && <div className="text-primary">active</div>}
                     <div className={project.source === "local" ? "text-success" : "text-muted-foreground"}>{project.source}</div>
-                    <div className={project.repository?.connected ? "text-info" : "text-warning"}>{project.repository?.connected ? "repo linked" : "repo missing"}</div>
+                    <div className={project.repository?.connected ? "text-info" : "text-warning"}>{project.repository?.connected ? `repo ${project.repository.branch ?? "unknown"}` : "repo missing"}</div>
                   </div>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">

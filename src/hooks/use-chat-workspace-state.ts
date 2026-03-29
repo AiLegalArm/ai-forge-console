@@ -10,8 +10,10 @@ import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
+import { hasDuplicateLocalPath, selectLocalProjectPath, validateLocalProjectPath } from "@/lib/local-project-service";
+import { validateRepositoryConnection } from "@/lib/local-repository-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
-import { openRouterProviderService } from "@/lib/openrouter-provider-service";
+import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
@@ -21,7 +23,7 @@ import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { WorkflowState } from "@/types/workflow";
-import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
+import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 
 type Action =
@@ -161,7 +163,7 @@ export function useChatWorkspaceState() {
   localInferenceRef.current = localInference;
   const localShellRef = useRef(localShell);
   localShellRef.current = localShell;
-  const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
+  const gitService = useMemo(() => createLocalGitService(localShell.project.activeProjectRoot), [localShell.project.activeProjectRoot]);
   const terminalService = useMemo(
     () => createLocalTerminalExecutionService(localShellState.project.activeProjectRoot),
     [],
@@ -174,6 +176,7 @@ export function useChatWorkspaceState() {
   const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
   const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
   const [routingProfile, setRoutingProfile] = useState<AppRoutingModeProfile>("balanced");
+  const [providerExecutionState, setProviderExecutionState] = useState<OpenRouterExecutionState>("idle");
   const [lastUsedModelByProvider, setLastUsedModelByProvider] = useState<Record<"openrouter" | "ollama", string>>({
     openrouter: "openai/gpt-4.1",
     ollama: "qwen3-coder:14b",
@@ -200,18 +203,29 @@ export function useChatWorkspaceState() {
     },
   ]);
   const [activeProjectId, setActiveProjectId] = useState("project-local-1");
-  const [repository, setRepository] = useState<{
-    connected: boolean;
-    url?: string;
-    name?: string;
-    branch?: string;
-    syncStatus?: "idle" | "syncing" | "up_to_date" | "behind";
-    connectionState?: "connected" | "disconnected";
-  }>({
+  const [repository, setRepository] = useState<WorkspaceRepositoryState>({
     connected: false,
     syncStatus: "idle",
     connectionState: "disconnected",
   });
+
+  type AddLocalProjectResult = {
+    ok: boolean;
+    message: string;
+    code:
+      | "added"
+      | "selection_cancelled"
+      | "missing_path"
+      | "invalid_path"
+      | "inaccessible_path"
+      | "duplicate_path"
+      | "empty_folder";
+    path?: string;
+    projectId?: string;
+    projectName?: string;
+    hasGitRepository?: boolean;
+    hasAgentsInstructions?: boolean;
+  };
 
   const currentChatType = chatState.activeChatType;
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
@@ -410,6 +424,7 @@ export function useChatWorkspaceState() {
     projects,
     activeProjectId,
     repository,
+    providerExecutionState,
   };
 
   useEffect(() => {
@@ -472,6 +487,28 @@ export function useChatWorkspaceState() {
     const syncGitSnapshot = async () => {
       const snapshot = await gitService.getSnapshot();
       if (cancelled || snapshot.branch === "unknown") return;
+
+      setRepository((prev) => ({
+        ...prev,
+        branch: snapshot.branch,
+        clean: snapshot.clean,
+        aheadBy: snapshot.aheadBy,
+        behindBy: snapshot.behindBy,
+        syncStatus: snapshot.behindBy > 0 ? "behind" : "up_to_date",
+        lastValidatedAtIso: new Date().toISOString(),
+      }));
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            gitBranch: snapshot.branch,
+            hasLocalChanges: !snapshot.clean,
+          },
+        },
+      });
 
       const updatedWorkflow: WorkflowState = {
         ...workflow,
@@ -702,18 +739,48 @@ export function useChatWorkspaceState() {
         },
       });
     },
-    addLocalProject: (payload: { name: string; localPath: string; projectRoot?: string }) => {
+    addLocalProject: async (payload?: { name?: string; localPath?: string; projectRoot?: string }): Promise<AddLocalProjectResult> => {
+      const selectedPath = payload?.localPath?.trim() ? payload.localPath.trim() : undefined;
+
+      let resolvedPath = selectedPath;
+      let inferredName = payload?.name?.trim();
+      if (!resolvedPath) {
+        const pickedPath = await selectLocalProjectPath();
+        if (pickedPath.status === "cancelled") {
+          return { ok: false, code: "selection_cancelled", message: pickedPath.message || "Project selection cancelled." };
+        }
+        if (pickedPath.status === "error" || !pickedPath.path) {
+          return { ok: false, code: "inaccessible_path", message: pickedPath.message || "Unable to select a local path." };
+        }
+        resolvedPath = pickedPath.path;
+        inferredName = inferredName || pickedPath.inferredName;
+      }
+
+      const validation = await validateLocalProjectPath(resolvedPath);
+      if (validation.code !== "ok") {
+        return { ok: false, code: validation.code, message: validation.message, path: validation.normalizedPath };
+      }
+
+      const normalizedPath = validation.normalizedPath || resolvedPath;
+      const existingPaths = projects.map((project) => project.localPath || project.projectRoot).filter(Boolean) as string[];
+      if (hasDuplicateLocalPath(normalizedPath, existingPaths)) {
+        return { ok: false, code: "duplicate_path", message: "This local project path is already added.", path: normalizedPath };
+      }
+
       const id = `project-local-${Date.now()}`;
+      const nextName = inferredName || validation.inferredName || "Local Project";
+      const branch = localShellRef.current.project.gitBranch || "main";
+
       setProjects((prev) => [
         {
           id,
-          name: payload.name,
+          name: nextName,
           description: "Local project connected from this machine",
           projectType: "local",
           source: "local",
-          localPath: payload.localPath,
-          projectRoot: payload.projectRoot || payload.localPath,
-          branch: "main",
+          localPath: normalizedPath,
+          projectRoot: payload?.projectRoot || normalizedPath,
+          branch,
           status: "active",
           repository: {
             connected: false,
@@ -728,6 +795,30 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            workspaceName: nextName,
+            activeProjectRoot: normalizedPath,
+            projectInstructionsDetected: Boolean(validation.hasAgentsInstructions),
+            runtimeResourcesAvailable: true,
+          },
+        },
+      });
+
+      return {
+        ok: true,
+        code: "added",
+        message: "Local project added and activated.",
+        path: normalizedPath,
+        projectId: id,
+        projectName: nextName,
+        hasGitRepository: validation.hasGitRepository,
+        hasAgentsInstructions: validation.hasAgentsInstructions,
+      };
     },
     createProject: (payload: { name: string; description?: string; projectType?: string }) => {
       const id = `project-manual-${Date.now()}`;
@@ -754,31 +845,81 @@ export function useChatWorkspaceState() {
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
     },
-    connectRepository: (payload: { name: string; url: string; branch: string }) => {
+    connectRepository: async (payload: { pathOrUrl: string; name?: string; branch?: string }) => {
       const activeProject = projects.find((project) => project.id === activeProjectId);
-      const nextRepository = {
-        connected: true,
-        url: payload.url,
-        name: payload.name,
-        branch: payload.branch || "main",
-        syncStatus: "up_to_date" as const,
-        connectionState: "connected" as const,
-      };
-      setRepository(nextRepository);
-      if (activeProject) {
-        setProjects((prev) =>
-          prev.map((project) =>
-            project.id === activeProject.id
-              ? {
-                  ...project,
-                  source: "git",
-                  branch: payload.branch || project.branch,
-                  repository: nextRepository,
-                }
-              : project,
-          ),
-        );
+      const validation = await validateRepositoryConnection({
+        pathOrUrl: payload.pathOrUrl,
+        activeProject: activeProject
+          ? {
+              id: activeProject.id,
+              name: activeProject.name,
+              projectRoot: activeProject.projectRoot ?? activeProject.localPath,
+              repositoryConnected: Boolean(activeProject.repository?.connected),
+            }
+          : undefined,
+        connectedRepoRoots: projects
+          .map((project) => (project.repository?.connected ? (project.projectRoot ?? project.localPath) : undefined))
+          .filter((entry): entry is string => Boolean(entry)),
+      });
+
+      if (validation.code !== "ok" || !validation.metadata || !activeProject) {
+        return { ok: false, code: validation.code, message: validation.message };
       }
+
+      const nextRepository: WorkspaceRepositoryState = {
+        connected: true,
+        url: validation.metadata.remoteUrl ?? validation.metadata.rootPath,
+        rootPath: validation.metadata.rootPath,
+        name: payload.name || validation.metadata.name,
+        branch: payload.branch || validation.metadata.branch,
+        source: validation.source,
+        syncStatus: "up_to_date",
+        connectionState: "connected",
+        clean: validation.metadata.clean,
+        aheadBy: validation.metadata.aheadBy,
+        behindBy: validation.metadata.behindBy,
+        relationToProject: "bound",
+        readyForGitWorkflow: true,
+        lastValidatedAtIso: new Date().toISOString(),
+      };
+
+      setRepository(nextRepository);
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === activeProject.id
+            ? {
+                ...project,
+                source: "git",
+                projectRoot: validation.metadata?.rootPath ?? project.projectRoot,
+                localPath: validation.metadata?.rootPath ?? project.localPath,
+                branch: nextRepository.branch || project.branch,
+                repository: {
+                  connected: true,
+                  name: nextRepository.name,
+                  url: nextRepository.url,
+                  branch: nextRepository.branch,
+                  syncStatus: nextRepository.syncStatus,
+                },
+              }
+            : project,
+        ),
+      );
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            workspaceName: activeProject.name,
+            activeProjectRoot: validation.metadata.rootPath,
+            gitBranch: nextRepository.branch ?? localShellRef.current.project.gitBranch,
+            hasLocalChanges: !validation.metadata.clean,
+          },
+        },
+      });
+
+      return { ok: true, code: "ok", message: validation.message };
     },
     disconnectRepository: () => {
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
@@ -797,14 +938,32 @@ export function useChatWorkspaceState() {
       setActiveProjectId(projectId);
       setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
       const selectedProject = projects.find((project) => project.id === projectId);
+      if (selectedProject?.source === "local" && (selectedProject.localPath || selectedProject.projectRoot)) {
+        const nextPath = selectedProject.localPath || selectedProject.projectRoot || localShellRef.current.project.activeProjectRoot;
+        dispatch({
+          type: "set_local_shell",
+          localShell: {
+            ...localShellRef.current,
+            project: {
+              ...localShellRef.current.project,
+              workspaceName: selectedProject.name,
+              activeProjectRoot: nextPath,
+            },
+          },
+        });
+      }
       if (selectedProject?.repository?.connected) {
         setRepository({
           connected: true,
           name: selectedProject.repository.name,
           url: selectedProject.repository.url,
+          rootPath: selectedProject.projectRoot ?? selectedProject.localPath,
           branch: selectedProject.repository.branch,
           syncStatus: selectedProject.repository.syncStatus,
           connectionState: "connected",
+          relationToProject: "bound",
+          readyForGitWorkflow: true,
+          source: selectedProject.source === "git" ? "project_bound" : "local_path",
         });
       } else {
         setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
@@ -851,9 +1010,9 @@ export function useChatWorkspaceState() {
         sessionId,
         role: mockResponse.role,
         authorLabel: mockResponse.authorLabel,
-        content: "Working on it…",
+        content: providerSource === "openrouter" && chatType === "main" ? "Sending request to OpenRouter…" : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
-        status: "streaming" as const,
+        status: "pending" as const,
         linked: mockResponse.linked,
         providerMeta: mockResponse.providerMeta,
       };
@@ -888,39 +1047,143 @@ export function useChatWorkspaceState() {
         },
       });
 
-      setTimeout(() => {
-        const latestChat = chatStateRef.current;
-        const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+      const executeProviderRequest = async () => {
+        if (providerSource === "openrouter" && chatType === "main") {
+          setProviderExecutionState("sending");
 
-        dispatch({
-          type: "set_chat",
-          chat: {
-            ...latestChat,
-            messagesBySessionId: {
-              ...latestChat.messagesBySessionId,
-              [sessionId]: sessionMessages.map((message) =>
-                message.id === responseId
+          const recentMessages = (currentChat.messagesBySessionId[sessionId] ?? [])
+            .filter((message) => message.role === "user" || message.role === "orchestrator" || message.role === "agent")
+            .slice(-8)
+            .map((message) => ({
+              role: message.role === "user" ? "user" : "assistant",
+              content: message.content,
+            })) as Array<{ role: "user" | "assistant"; content: string }>;
+
+          setProviderExecutionState("waiting");
+          const openRouterResult = await openRouterProviderService.executeChatCompletion({
+            model: activeModel,
+            userInput: draft,
+            contextMessages: recentMessages,
+            systemPrompt: `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.`,
+          });
+
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+          if (openRouterResult.executionState === "completed") {
+            setProviderExecutionState("streaming_ready");
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: openRouterResult.outputText,
+                          status: "completed" as const,
+                          createdAtIso: openRouterResult.receivedAtIso,
+                          providerMeta: {
+                            provider: "OpenRouter",
+                            model: openRouterResult.model,
+                            backend: "cloud",
+                            routingKey: routingProfile,
+                          },
+                        }
+                      : message,
+                  ),
+                },
+                sessions: latestChat.sessions.map((session) =>
+                  session.id === sessionId
+                    ? {
+                        ...session,
+                        lastMessageAtIso: openRouterResult.receivedAtIso,
+                        unreadCount: 0,
+                        providerMeta: {
+                          provider: "OpenRouter",
+                          model: openRouterResult.model,
+                          backend: "cloud",
+                          routingKey: routingProfile,
+                        },
+                      }
+                    : session,
+                ),
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        content: `OpenRouter request failed: ${openRouterResult.errorMessage}`,
+                        status: "failed" as const,
+                        createdAtIso: openRouterResult.receivedAtIso,
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
                   ? {
-                      ...message,
-                      content: mockResponse.content,
-                      status: "completed" as const,
-                      createdAtIso: new Date(Date.now()).toISOString(),
+                      ...session,
+                      lastMessageAtIso: openRouterResult.receivedAtIso,
+                      unreadCount: 0,
                     }
-                  : message,
+                  : session,
               ),
             },
-            sessions: latestChat.sessions.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    lastMessageAtIso: new Date().toISOString(),
-                    unreadCount: 0,
-                  }
-                : session,
-            ),
-          },
-        });
-      }, 650);
+          });
+          setProviderExecutionState("failed");
+          return;
+        }
+
+        setTimeout(() => {
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        content: mockResponse.content,
+                        status: "completed" as const,
+                        createdAtIso: new Date(Date.now()).toISOString(),
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
+                  ? {
+                      ...session,
+                      lastMessageAtIso: new Date().toISOString(),
+                      unreadCount: 0,
+                    }
+                  : session,
+              ),
+            },
+          });
+        }, 650);
+      };
+
+      void executeProviderRequest();
     },
     runBrowserScenario: async () => {
       const output = await browserAutomationService.executeScenario({
