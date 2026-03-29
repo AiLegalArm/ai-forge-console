@@ -10,7 +10,10 @@ import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
+import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import type { ChatState, ChatType } from "@/types/chat";
+import type { BrowserSession } from "@/types/agents";
+import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { WorkflowState } from "@/types/workflow";
@@ -24,6 +27,8 @@ type Action =
   | { type: "approve_workflow_approval"; approvalId: string }
   | { type: "set_local_inference"; localInference: LocalInferenceRuntimeState }
   | { type: "set_local_shell"; localShell: LocalShellWorkspaceState }
+  | { type: "set_browser_session"; browserSession: BrowserSession }
+  | { type: "set_evidence_flow"; evidenceFlow: EvidenceFlowState }
   | { type: "set_chat"; chat: ChatState }
   | { type: "set_workflow"; workflow: WorkflowState };
 
@@ -32,6 +37,8 @@ interface WorkspaceReducerState {
   workflow: WorkflowState;
   localInference: LocalInferenceRuntimeState;
   localShell: LocalShellWorkspaceState;
+  browserSession: BrowserSession;
+  evidenceFlow: EvidenceFlowState;
 }
 
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
@@ -98,6 +105,18 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
         localShell: action.localShell,
       };
     }
+    case "set_browser_session": {
+      return {
+        ...state,
+        browserSession: action.browserSession,
+      };
+    }
+    case "set_evidence_flow": {
+      return {
+        ...state,
+        evidenceFlow: action.evidenceFlow,
+      };
+    }
     case "set_chat": {
       return {
         ...state,
@@ -121,12 +140,16 @@ export function useChatWorkspaceState() {
     workflow: initialWorkflowState,
     localInference: localInferenceRuntime,
     localShell: localShellState,
+    browserSession,
+    evidenceFlow: evidenceFlowState,
   });
 
   const chatState = state.chat;
   const workflow = state.workflow;
   const localInference = state.localInference;
   const localShell = state.localShell;
+  const activeBrowserSession = state.browserSession;
+  const activeEvidenceFlow = state.evidenceFlow;
   const localInferenceRef = useRef(localInference);
   localInferenceRef.current = localInference;
   const localShellRef = useRef(localShell);
@@ -134,6 +157,10 @@ export function useChatWorkspaceState() {
   const gitService = useMemo(() => createLocalGitService(localShellState.project.activeProjectRoot), []);
   const terminalService = useMemo(
     () => createLocalTerminalExecutionService(localShellState.project.activeProjectRoot),
+    [],
+  );
+  const browserAutomationService = useMemo(
+    () => new BrowserAutomationService(new RuntimeBridgeBrowserAdapter()),
     [],
   );
 
@@ -251,8 +278,8 @@ export function useChatWorkspaceState() {
     workflow,
     auditors: auditorControlState,
     designSession,
-    browserSession,
-    evidenceFlow: evidenceFlowState,
+    browserSession: activeBrowserSession,
+    evidenceFlow: activeEvidenceFlow,
     releaseControl: releaseControlState,
     localInference,
     localShell,
@@ -429,6 +456,136 @@ export function useChatWorkspaceState() {
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
     approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    runBrowserScenario: async () => {
+      const output = await browserAutomationService.executeScenario({
+        scenario: activeBrowserSession.scenario,
+        linkedTaskId: activeWorkflowTask?.id,
+        linkedChatId: currentChatSessionId,
+      });
+
+      const runState = output.session.resultState === "passed" ? "completed" : "failed";
+      const browserSessionState: BrowserSession = {
+        ...output.session,
+        runState,
+        consoleSummary: output.session.consoleEvents.map((event) => `${event.level}: ${event.message}`).slice(0, 6),
+        networkSummary: output.session.networkEvents.map((event) => `${event.method} ${event.url} → ${event.statusCode}`).slice(0, 6),
+        findings: output.evidence
+          .filter((item) => item.kind === "console_issue" || item.kind === "network_issue" || item.kind === "scenario_summary" || item.kind === "step_failure")
+          .map((item) => ({
+            id: `finding-${item.id}`,
+            title: item.title,
+            findingType:
+              item.kind === "console_issue"
+                ? "console_issue"
+                : item.kind === "network_issue"
+                  ? "network_issue"
+                  : item.kind === "step_failure"
+                    ? "scenario_failure"
+                    : "ui_issue",
+            summary: item.summary,
+            severity: item.blocking ? "high" : "medium",
+            blocking: item.blocking,
+            linkedEvidenceId: item.id,
+          })),
+      };
+
+      const mappedEvidence: EvidenceRecord[] = output.evidence.map((capture) => ({
+        id: capture.id,
+        title: capture.title,
+        summary: capture.summary,
+        source: "browser_agent",
+        kind:
+          capture.kind === "screenshot"
+            ? "screenshot"
+            : capture.kind === "console_issue"
+              ? "console_finding"
+              : capture.kind === "network_issue"
+                ? "network_finding"
+                : capture.kind === "ui_finding"
+                  ? "ux_observation"
+                  : "scenario_trace",
+        severity: capture.blocking ? "high" : "medium",
+        blocking: capture.blocking,
+        createdAtIso: capture.createdAtIso,
+        tags: ["browser", "automation", capture.kind],
+        assets: capture.uri
+          ? [
+              {
+                id: `asset-${capture.id}`,
+                label: capture.title,
+                kind: capture.kind === "screenshot" ? "screenshot" : "trace",
+                uri: capture.uri,
+              },
+            ]
+          : [],
+        links: {
+          taskId: activeWorkflowTask?.id,
+          chatSessionId: currentChatSessionId,
+          reviewId: activeWorkflowTask?.linkedReviewId,
+          releaseCandidateId: activeWorkflowTask?.linkedReleaseCandidateId,
+        },
+      }));
+
+      const nextEvidenceFlow: EvidenceFlowState = {
+        ...activeEvidenceFlow,
+        records: [...mappedEvidence, ...activeEvidenceFlow.records.filter((record) => !record.id.startsWith("ev-browser-"))],
+        linkedByChatSessionId: {
+          ...activeEvidenceFlow.linkedByChatSessionId,
+          [currentChatSessionId]: mappedEvidence.map((record) => record.id),
+        },
+        linkedByTaskId: {
+          ...activeEvidenceFlow.linkedByTaskId,
+          ...(activeWorkflowTask?.id ? { [activeWorkflowTask.id]: mappedEvidence.map((record) => record.id) } : {}),
+        },
+        linkedByReviewId: {
+          ...activeEvidenceFlow.linkedByReviewId,
+          ...(activeWorkflowTask?.linkedReviewId ? { [activeWorkflowTask.linkedReviewId]: mappedEvidence.map((record) => record.id) } : {}),
+        },
+        releaseReadinessBlockers: mappedEvidence.filter((record) => record.blocking).map((record) => record.id),
+      };
+
+      dispatch({ type: "set_browser_session", browserSession: browserSessionState });
+      dispatch({ type: "set_evidence_flow", evidenceFlow: nextEvidenceFlow });
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...workflow,
+          activityEvents: [
+            ...output.events.map((event) => ({
+              id: event.id,
+              type:
+                event.status === "scenario_started"
+                  ? "browser_scenario_started"
+                  : event.status === "step_passed"
+                    ? "browser_step_passed"
+                    : event.status === "step_failed" || event.status === "session_failed"
+                      ? "browser_step_failed"
+                      : "evidence_attached",
+              title: event.summary,
+              details: event.stepId ? `Step ${event.stepId}` : undefined,
+              taskId: activeWorkflowTask?.id,
+              chatId: currentChatSessionId,
+              severity: event.status === "step_failed" || event.status === "session_failed" ? "critical" : "info",
+              createdAtIso: event.timestampIso,
+            })),
+            ...workflow.activityEvents,
+          ],
+          tasks: workflow.tasks.map((task) =>
+            task.id === activeWorkflowTask?.id
+              ? {
+                  ...task,
+                  linkedEvidenceIds: mappedEvidence.map((record) => record.id),
+                  designBrowserBlockers: mappedEvidence.filter((record) => record.blocking).length,
+                  auditVerdict: mappedEvidence.some((record) => record.blocking) ? "warning" : task.auditVerdict,
+                  progressSummary: mappedEvidence.some((record) => record.blocking)
+                    ? "Browser automation found blockers requiring audit/review."
+                    : "Browser automation passed.",
+                }
+              : task,
+          ),
+        },
+      });
+    },
     refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
