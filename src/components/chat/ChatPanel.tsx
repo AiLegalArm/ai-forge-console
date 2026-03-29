@@ -109,8 +109,8 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
         )}
         {activeTab === "review" && (
           <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
-            Review evidence: {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} linked items •
-            blockers {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
+            {t("chat.review_evidence" as never)} {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} {t("chat.linked_items" as never)} •
+            {t("chat.blockers" as never)} {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
           </div>
         )}
 
