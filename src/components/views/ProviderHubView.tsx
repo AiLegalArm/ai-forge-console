@@ -1,7 +1,12 @@
-import { providers, providerCategories } from "@/data/mock-providers";
-import { localInferenceRuntime } from "@/data/mock-local-inference";
+import { cloudAndCustomProviders, providerCategories } from "@/data/mock-providers";
 import { Plug, Wifi, WifiOff, AlertTriangle, CheckCircle2, ServerCrash, Cpu, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { WorkspaceRuntimeState } from "@/types/workspace";
+
+interface ProviderHubViewProps {
+  workspaceState: WorkspaceRuntimeState;
+  onRefreshLocalInference: () => Promise<void>;
+}
 
 const statusIcon: Record<string, React.ReactNode> = {
   connected: <Wifi className="h-3 w-3 text-success" />,
@@ -18,9 +23,31 @@ const ollamaStatusColor: Record<string, string> = {
   error: "text-destructive",
 };
 
-export function ProviderHubView() {
+export function ProviderHubView({ workspaceState, onRefreshLocalInference }: ProviderHubViewProps) {
   const { t } = useI18n();
+  const localInferenceRuntime = workspaceState.localInference;
   const activeLocalModel = localInferenceRuntime.modelRegistry.find((model) => model.id === localInferenceRuntime.ollama.selectedModelId);
+  const providers = [
+    ...cloudAndCustomProviders,
+    {
+      id: "p-6",
+      name: "Ollama Local Runtime",
+      type: "self-hosted" as const,
+      status:
+        localInferenceRuntime.ollama.serviceState === "available"
+          ? ("connected" as const)
+          : localInferenceRuntime.ollama.serviceState === "degraded" || localInferenceRuntime.ollama.serviceState === "starting"
+            ? ("degraded" as const)
+            : ("disconnected" as const),
+      models: localInferenceRuntime.modelRegistry.map((model) => model.name),
+      capabilities: ["chat", "code", "local-inference", "privacy-local"],
+      costTier: "low" as const,
+      privacyMode: true,
+      fallbackEnabled: true,
+      requestsToday: 0,
+      avgLatency: 0,
+    },
+  ];
 
   return (
     <div className="p-4 space-y-4">
@@ -28,7 +55,15 @@ export function ProviderHubView() {
         <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Plug className="h-4 w-4 text-primary" /> {t("ph.title")}
         </h1>
-        <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("ph.add")}</button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void onRefreshLocalInference()}
+            className="px-3 py-1 text-xs font-mono border border-border rounded hover:border-primary/50"
+          >
+            Refresh local
+          </button>
+          <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("ph.add")}</button>
+        </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -58,6 +93,7 @@ export function ProviderHubView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] font-mono">
           <div className="flex justify-between"><span className="text-muted-foreground">Runtime</span><span className="text-foreground">{localInferenceRuntime.ollama.runtimeAvailable ? "detected" : "offline"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Last check</span><span className="text-foreground">{localInferenceRuntime.ollama.lastHealthCheckIso ?? "not checked"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Last refresh</span><span className="text-foreground">{localInferenceRuntime.ollama.lastModelRefreshIso ?? "not refreshed"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Active model</span><span className="text-primary">{activeLocalModel?.displayName ?? "none"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Routing mode</span><span className="text-foreground uppercase">{localInferenceRuntime.routing.activeMode.replaceAll("_", " ")}</span></div>
         </div>
@@ -77,7 +113,7 @@ export function ProviderHubView() {
                   ))}
                 </div>
                 <div className="mt-1 text-[9px] text-muted-foreground font-mono">
-                  {model.localAvailability} • {model.weightClass} • {model.estimatedSizeGb}GB • {model.memoryCostGb ?? "~"}GB RAM
+                  {model.localAvailability} • {model.weightClass} • {model.estimatedSizeGb}GB • {model.memoryCostGb ?? "~"}GB RAM • {model.metadataCompleteness ?? "runtime"}
                 </div>
               </div>
             ))}

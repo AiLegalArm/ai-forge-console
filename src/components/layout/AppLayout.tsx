@@ -24,7 +24,7 @@ export default function AppLayout() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [mobileBottomOpen, setMobileBottomOpen] = useState(false);
 
-  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval, approveWorkflowApproval, runGitAction } = useChatWorkspaceState();
+  const { chatState, workspaceState, chatContexts, setConversationType, setDraft, clearApproval, approveWorkflowApproval, runGitAction, refreshLocalInference } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
     setActiveSection(s);
@@ -67,6 +67,7 @@ export default function AppLayout() {
               onApprovalResolve={clearApproval}
               onWorkflowApprovalResolve={approveWorkflowApproval}
               onGitAction={runGitAction}
+              onRefreshLocalInference={refreshLocalInference}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />

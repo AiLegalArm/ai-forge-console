@@ -23,9 +23,10 @@ interface CenterPanelProps {
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onRefreshLocalInference: () => Promise<void>;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRefreshLocalInference }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -53,7 +54,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
       case "prompt-studio": return <PromptStudioView />;
       case "prompt-library": return <PromptLibraryView />;
       case "agents": return <AgentStudioView />;
-      case "providers": return <ProviderHubView />;
+      case "providers": return <ProviderHubView workspaceState={workspaceState} onRefreshLocalInference={onRefreshLocalInference} />;
       case "audits": return <AuditsView />;
       case "supabase-import": return <SupabaseImportView />;
       case "release": return <ReleaseCenterView />;
