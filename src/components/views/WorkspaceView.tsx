@@ -204,13 +204,13 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
 
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Local shell</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.local_shell" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Execution mode</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replace(/_/g, " ")}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Workspace</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.localShell.project.workspaceName}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Instructions</span><span className={`font-mono ${workspaceState.localShell.project.projectInstructionsDetected ? "text-success" : "text-warning"}`}>{workspaceState.localShell.project.projectInstructionsDetected ? "detected" : "missing"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Git changes</span><span className={`font-mono ${workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"}`}>{workspaceState.localShell.project.hasLocalChanges ? "dirty" : "clean"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Terminal</span><span className="text-foreground font-mono">{workspaceState.localShell.terminal.state}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.exec_mode" as never)}</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replace(/_/g, " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.workspace" as never)}</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.localShell.project.workspaceName}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.instructions" as never)}</span><span className={`font-mono ${workspaceState.localShell.project.projectInstructionsDetected ? "text-success" : "text-warning"}`}>{workspaceState.localShell.project.projectInstructionsDetected ? t("rail.detected" as never) : t("rail.missing" as never)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.git_changes" as never)}</span><span className={`font-mono ${workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"}`}>{workspaceState.localShell.project.hasLocalChanges ? t("rail.dirty" as never) : t("rail.clean" as never)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.terminal" as never)}</span><span className="text-foreground font-mono">{workspaceState.localShell.terminal.state}</span></div>
         </div>
       </div>
 
