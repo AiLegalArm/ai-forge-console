@@ -130,7 +130,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {workspaceState.pendingApprovals.length > 0 && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono space-y-1">
-            <p className="text-warning">Workflow approvals pending</p>
+            <p className="text-warning">{t("chat.workflow_approvals" as never)}</p>
             {workspaceState.pendingApprovals.map((approval) => (
               <div key={approval.id} className="flex items-center justify-between gap-2">
                 <span className="text-foreground truncate">{approval.title}</span>
@@ -138,7 +138,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                   onClick={() => onWorkflowApprovalResolve?.(approval.id)}
                   className="text-[10px] rounded bg-primary px-1.5 py-0.5 text-primary-foreground"
                 >
-                  Approve
+                  {t("chat.approve" as never)}
                 </button>
               </div>
             ))}
