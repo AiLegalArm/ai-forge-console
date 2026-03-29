@@ -72,7 +72,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       <div className="flex items-center justify-between border-b border-border bg-card px-2 py-1">
         <div className="flex items-center gap-1 text-[10px] font-mono text-primary">
           <Waypoints className="h-3 w-3" />
-          <span>{activeSession?.title ?? "Orchestrator-first command surface"}</span>
+          <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
         <span className="text-[10px] text-muted-foreground hidden sm:inline">
           {activeSession?.providerMeta.backend} • {activeSession?.providerMeta.provider}
