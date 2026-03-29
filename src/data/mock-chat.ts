@@ -7,7 +7,6 @@ import type {
   ChatType,
 } from "@/types/chat";
 
-export type ChatTab = ChatType;
 
 const now = "2026-03-29T10:46:00.000Z";
 

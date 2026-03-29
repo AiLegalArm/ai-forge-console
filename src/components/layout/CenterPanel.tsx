@@ -9,8 +9,7 @@ import { SupabaseImportView } from "@/components/views/SupabaseImportView";
 import { ReleaseCenterView } from "@/components/views/ReleaseCenterView";
 import { WorkspaceView } from "@/components/views/WorkspaceView";
 import { SettingsView } from "@/components/views/SettingsView";
-import type { ChatTab } from "@/data/mock-chat";
-import type { ChatState } from "@/types/chat";
+import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 
 interface CenterPanelProps {
@@ -19,7 +18,7 @@ interface CenterPanelProps {
   workspaceState: WorkspaceRuntimeState;
   chatContexts: ChatContextMap;
   chatState: ChatState;
-  onConversationTypeChange: (conversation: ChatTab) => void;
+  onConversationTypeChange: (conversation: ChatType) => void;
   onDraftChange: (sessionId: string, value: string) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;

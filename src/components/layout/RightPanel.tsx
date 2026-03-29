@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Eye, Globe, Palette, ShieldCheck, Rocket, Link, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { auditGateDecisions, auditSummary } from "@/data/mock-audits";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 interface RightPanelProps {
@@ -87,17 +86,23 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
         </div>
       );
     case "audit-results": {
-      const noGoGates = auditGateDecisions.filter((gate) => gate.verdict === "no_go").length;
+      const findings = workspaceState.auditors.findings;
+      const summary = findings.reduce((acc, finding) => {
+        acc[finding.severity] += 1;
+        return acc;
+      }, { critical: 0, high: 0, medium: 0, low: 0, info: 0 });
+      const noGoGates = workspaceState.auditors.gateDecisions.filter((gate) => gate.verdict === "no_go").length;
+      const score = Math.max(0, 100 - summary.critical * 12 - summary.high * 7 - summary.medium * 3 - noGoGates * 5);
       return (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">{t("au.health")}</span>
-            <span className="text-lg font-mono font-bold text-warning">{auditSummary.score}</span>
+            <span className="text-lg font-mono font-bold text-warning">{score}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-destructive/10 border border-destructive/20 rounded p-2"><span className="font-mono text-destructive text-lg">{auditSummary.critical}</span><p className="text-muted-foreground">{t("au.critical")}</p></div>
-            <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">{auditSummary.high}</span><p className="text-muted-foreground">{t("au.high")}</p></div>
-            <div className="bg-info/10 border border-info/20 rounded p-2"><span className="font-mono text-info text-lg">{auditSummary.medium}</span><p className="text-muted-foreground">{t("au.medium")}</p></div>
+            <div className="bg-destructive/10 border border-destructive/20 rounded p-2"><span className="font-mono text-destructive text-lg">{summary.critical}</span><p className="text-muted-foreground">{t("au.critical")}</p></div>
+            <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">{summary.high}</span><p className="text-muted-foreground">{t("au.high")}</p></div>
+            <div className="bg-info/10 border border-info/20 rounded p-2"><span className="font-mono text-info text-lg">{summary.medium}</span><p className="text-muted-foreground">{t("au.medium")}</p></div>
             <div className="bg-warning/10 border border-warning/20 rounded p-2"><span className="font-mono text-warning text-lg">{noGoGates}</span><p className="text-muted-foreground">No-Go gates</p></div>
           </div>
         </div>

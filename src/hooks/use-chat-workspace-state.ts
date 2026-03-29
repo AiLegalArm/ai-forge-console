@@ -100,6 +100,10 @@ export function useChatWorkspaceState() {
 
   const activeRepository = workflow.github.repositories.find((repo) => repo.id === workflow.github.activeRepositoryId);
 
+  const activeReviewId = activeWorkflowTask?.linkedReviewId ?? currentSession?.linked.reviewId;
+  const activeReleaseCandidateId = activeWorkflowTask?.linkedReleaseCandidateId;
+  const activeAuditGate = activeWorkflowTask?.github?.pullRequest?.auditGate;
+
   const pendingApprovals = workflow.approvals.filter((approval) => {
     const inSession = approval.chatId === currentChatSessionId;
     const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
@@ -140,6 +144,11 @@ export function useChatWorkspaceState() {
     currentChatSessionId,
     currentPhase: activeWorkflowTask?.phase ?? "planning",
     currentTaskStatus: activeWorkflowTask?.status ?? "queued",
+    activeAgentId: activeWorkflowTask?.ownerAgentId ?? currentSession?.linked.agentId,
+    currentReviewId: activeReviewId,
+    currentReleaseCandidateId: activeReleaseCandidateId,
+    auditGateVerdict: activeAuditGate?.verdict,
+    releaseReadinessStatus: releaseControlState.finalDecision.status,
     pendingApprovals,
     workflow,
     auditors: auditorControlState,

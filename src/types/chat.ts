@@ -1,3 +1,5 @@
+import type { EntityLinkRef, RuntimeProviderBackend } from "@/types/contracts";
+
 export type ChatType = "main" | "agent" | "audit" | "review";
 
 export type MessageRole = "user" | "orchestrator" | "agent" | "auditor" | "reviewer" | "system";
@@ -21,22 +23,17 @@ export interface ApprovalRequest {
   requestedAtIso: string;
 }
 
-export interface ChatLinkedContext {
-  taskId?: string;
+export interface ChatLinkedContext extends EntityLinkRef {
   taskTitle?: string;
-  agentId?: string;
   agentName?: string;
   auditFindingId?: string;
   auditFindingTitle?: string;
-  evidenceIds?: string[];
-  reviewId?: string;
-  branchName?: string;
 }
 
 export interface ChatProviderMetadata {
   provider: string;
   model: string;
-  backend: "local" | "cloud" | "ollama" | "hybrid";
+  backend: RuntimeProviderBackend;
   routingKey?: string;
   runtimeRegion?: string;
 }

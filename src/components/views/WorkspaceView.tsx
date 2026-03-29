@@ -1,8 +1,7 @@
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ChatContextBar } from "@/components/chat/ChatContextBar";
 import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
-import type { ChatTab } from "@/data/mock-chat";
-import type { ChatState } from "@/types/chat";
+import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
@@ -40,7 +39,7 @@ interface WorkspaceViewProps {
   workspaceState: WorkspaceRuntimeState;
   chatContexts: ChatContextMap;
   chatState: ChatState;
-  onConversationTypeChange: (conversation: ChatTab) => void;
+  onConversationTypeChange: (conversation: ChatType) => void;
   onDraftChange: (sessionId: string, value: string) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
