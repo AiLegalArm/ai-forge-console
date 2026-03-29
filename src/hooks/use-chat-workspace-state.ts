@@ -14,6 +14,7 @@ import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
+import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
@@ -149,6 +150,8 @@ export function useChatWorkspaceState() {
   });
 
   const chatState = state.chat;
+  const chatStateRef = useRef(chatState);
+  chatStateRef.current = chatState;
   const workflow = state.workflow;
   const localInference = state.localInference;
   const localShell = state.localShell;
@@ -808,49 +811,116 @@ export function useChatWorkspaceState() {
       }
     },
     sendMessage: (chatType: ChatType) => {
-      const sessionId = chatState.selectedSessionIdByType[chatType];
-      const draft = (chatState.draftInputBySessionId[sessionId] ?? "").trim();
+      const currentChat = chatStateRef.current;
+      const sessionId = currentChat.selectedSessionIdByType[chatType];
+      const draft = (currentChat.draftInputBySessionId[sessionId] ?? "").trim();
       if (!draft) return;
-      const nowIso = new Date().toISOString();
+
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
+      const responseId = `resp-${now + 1}`;
       const userMessage = {
-        id: `user-${Date.now()}`,
+        id: `user-${now}`,
         sessionId,
         role: "user" as const,
         content: draft,
         createdAtIso: nowIso,
         status: "completed" as const,
       };
-      const responderRole = chatType === "main" ? "orchestrator" : chatType === "agent" ? "agent" : chatType === "audit" ? "auditor" : "reviewer";
-      const responseMessage = {
-        id: `resp-${Date.now()}`,
+
+      const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
+      const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const turnIndex = (currentChat.messagesBySessionId[sessionId] ?? []).length;
+      const mockResponse = createMockAssistantMessage({
+        chatType,
+        prompt: draft,
+        currentProject: workspaceState.currentProject,
+        currentTask: workspaceState.currentTask,
+        activeProvider: workspaceState.activeProvider,
+        activeModel,
+        routingMode: workspaceState.routingMode,
+        routingProfile,
+        deploymentMode,
+        activeAgent,
+        linkedContext: activeSession?.linked,
+        turnIndex,
+      });
+
+      const pendingResponse = {
+        id: responseId,
         sessionId,
-        role: responderRole,
-        authorLabel: chatType === "main" ? "Orchestrator" : chatType === "agent" ? "Agent Runtime" : chatType === "audit" ? "Audit Agent" : "Review Agent",
-        content: `Received. Working in ${deploymentMode} mode via ${providerSource === "ollama" ? "Ollama" : "OpenRouter"} (${activeModel}) with ${routingProfile} routing. Context: ${workspaceState.currentProject} / ${workspaceState.currentTask}.`,
-        createdAtIso: new Date(Date.now() + 1000).toISOString(),
-        status: "completed" as const,
-        providerMeta: {
-          provider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
-          model: activeModel,
-          backend: deploymentMode === "hybrid" ? "hybrid" : deploymentMode,
-          routingKey: routingProfile,
-        },
+        role: mockResponse.role,
+        authorLabel: mockResponse.authorLabel,
+        content: "Working on it…",
+        createdAtIso: new Date(now + 250).toISOString(),
+        status: "streaming" as const,
+        linked: mockResponse.linked,
+        providerMeta: mockResponse.providerMeta,
       };
 
       dispatch({
         type: "set_chat",
         chat: {
-          ...chatState,
+          ...currentChat,
           messagesBySessionId: {
-            ...chatState.messagesBySessionId,
-            [sessionId]: [...(chatState.messagesBySessionId[sessionId] ?? []), userMessage, responseMessage],
+            ...currentChat.messagesBySessionId,
+            [sessionId]: [...(currentChat.messagesBySessionId[sessionId] ?? []), userMessage, pendingResponse],
           },
+          sessions: currentChat.sessions.map((session) =>
+            session.id === sessionId
+              ? {
+                  ...session,
+                  lastMessageAtIso: pendingResponse.createdAtIso,
+                  providerMeta: pendingResponse.providerMeta ?? session.providerMeta,
+                  linked: {
+                    ...session.linked,
+                    taskTitle: workspaceState.currentTask,
+                    agentId: workspaceState.activeAgentId ?? session.linked.agentId,
+                    agentName: activeAgent?.name ?? session.linked.agentName,
+                  },
+                }
+              : session,
+          ),
           draftInputBySessionId: {
-            ...chatState.draftInputBySessionId,
+            ...currentChat.draftInputBySessionId,
             [sessionId]: "",
           },
         },
       });
+
+      setTimeout(() => {
+        const latestChat = chatStateRef.current;
+        const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+        dispatch({
+          type: "set_chat",
+          chat: {
+            ...latestChat,
+            messagesBySessionId: {
+              ...latestChat.messagesBySessionId,
+              [sessionId]: sessionMessages.map((message) =>
+                message.id === responseId
+                  ? {
+                      ...message,
+                      content: mockResponse.content,
+                      status: "completed" as const,
+                      createdAtIso: new Date(Date.now()).toISOString(),
+                    }
+                  : message,
+              ),
+            },
+            sessions: latestChat.sessions.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    lastMessageAtIso: new Date().toISOString(),
+                    unreadCount: 0,
+                  }
+                : session,
+            ),
+          },
+        });
+      }, 650);
     },
     runBrowserScenario: async () => {
       const output = await browserAutomationService.executeScenario({
