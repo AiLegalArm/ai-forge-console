@@ -27,11 +27,12 @@ const ollamaStatusColor: Record<string, string> = {
 };
 
 const backendStatusColor: Record<AgentBackendStatus, string> = {
-  not_configured: "text-muted-foreground",
+  not_installed: "text-muted-foreground",
+  installed: "text-warning",
   configured: "text-info",
-  available: "text-success",
+  ready: "text-success",
+  busy: "text-warning",
   unavailable: "text-destructive",
-  degraded: "text-warning",
   error: "text-destructive",
 };
 
@@ -123,6 +124,16 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                   </div>
                   <span className="text-[10px] font-mono text-muted-foreground">{backend.availability.health}</span>
                 </div>
+                <div className="flex items-center gap-2 text-[10px] font-mono">
+                  <span className={backend.availability.active ? "text-success" : "text-muted-foreground"}>
+                    {backend.availability.active ? "active" : "inactive"}
+                  </span>
+                  {backend.availability.localRuntimeAvailable !== undefined && (
+                    <span className={backend.availability.localRuntimeAvailable ? "text-success" : "text-warning"}>
+                      runtime {backend.availability.localRuntimeAvailable ? "available" : "unavailable"}
+                    </span>
+                  )}
+                </div>
                 <div className="text-[10px] text-muted-foreground">{backend.metadata.description}</div>
                 <div className="flex flex-wrap gap-1">
                   {capabilityFlags.map((capability) => (
@@ -136,6 +147,11 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
                     </span>
                   ))}
                 </div>
+                {backend.availability.preferenceCandidateFor && backend.availability.preferenceCandidateFor.length > 0 && (
+                  <div className="text-[10px] font-mono text-info">
+                    candidate for: {backend.availability.preferenceCandidateFor.join(", ")}
+                  </div>
+                )}
                 {backend.availability.statusDetail && (
                   <div className="text-[10px] font-mono text-muted-foreground">{backend.availability.statusDetail}</div>
                 )}
