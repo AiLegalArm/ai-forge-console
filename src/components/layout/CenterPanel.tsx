@@ -23,10 +23,11 @@ interface CenterPanelProps {
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onRunBrowserScenario: () => Promise<void>;
   onRefreshLocalInference: () => Promise<void>;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRefreshLocalInference }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -43,6 +44,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onApprovalResolve={onApprovalResolve}
           onWorkflowApprovalResolve={onWorkflowApprovalResolve}
           onGitAction={onGitAction}
+          onRunBrowserScenario={onRunBrowserScenario}
         />
       </div>
     );

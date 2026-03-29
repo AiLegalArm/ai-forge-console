@@ -44,15 +44,16 @@ interface WorkspaceViewProps {
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onRunBrowserScenario: () => Promise<void>;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
   if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
   if (section === "domains") return <DomainsView workspaceState={workspaceState} />;
   if (section === "design") return <DesignView workspaceState={workspaceState} />;
-  if (section === "browser") return <BrowserView workspaceState={workspaceState} />;
+  if (section === "browser") return <BrowserView workspaceState={workspaceState} onRunBrowserScenario={onRunBrowserScenario} />;
 
   return (
     <div className="flex flex-col h-full">
@@ -274,26 +275,35 @@ function DesignView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
   );
 }
 
-function BrowserView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+function BrowserView({ workspaceState, onRunBrowserScenario }: { workspaceState: WorkspaceRuntimeState; onRunBrowserScenario: () => Promise<void> }) {
   const session = workspaceState.browserSession;
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><MonitorPlay className="h-4 w-4 text-primary" /> Browser Agent</h1>
       <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-2">
         <div className="flex justify-between"><span className="text-muted-foreground">Scenario</span><span className="font-mono text-foreground">{session.scenario.title}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Linked task/chat</span><span className="font-mono text-foreground">{session.linkedTaskId ?? "—"} / {session.linkedChatId ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Run state</span><span className={`font-mono ${session.runState === "failed" ? "text-destructive" : "text-primary"}`}>{session.runState}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Session/result</span><span className="font-mono text-foreground">{session.sessionState} / {session.resultState}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Current step</span><span className="font-mono text-foreground">{session.currentStepId ?? "—"}</span></div>
         {session.scenario.steps.map((step) => (
           <div key={step.id} className="flex justify-between gap-2">
             <span className="text-muted-foreground truncate">{step.label}</span>
             <span className={`font-mono ${step.status === "failed" ? "text-destructive" : "text-success"}`}>{step.status}</span>
           </div>
         ))}
+        <button className="mt-2 text-[11px] border border-border rounded px-2 py-1 hover:bg-muted" onClick={() => void onRunBrowserScenario()}>
+          Run scenario with automation
+        </button>
       </div>
       <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
         <div className="font-mono text-primary flex items-center gap-1"><Camera className="h-3.5 w-3.5" /> Evidence captured</div>
         {session.findings.map((finding) => (
           <div key={finding.id} className="text-muted-foreground">• {finding.findingType}: {finding.summary}</div>
         ))}
+        {session.failureState.state === "failed" ? (
+          <div className="text-destructive">Failure: {session.failureState.reason} — {session.failureState.message}</div>
+        ) : null}
       </div>
     </div>
   );
