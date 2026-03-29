@@ -581,19 +581,20 @@ export function useChatWorkspaceState() {
           activityEvents: [
             ...output.events.map((event) => ({
               id: event.id,
-              type:
+              type: (
                 event.status === "scenario_started"
                   ? "browser_scenario_started"
                   : event.status === "step_passed"
                     ? "browser_step_passed"
                     : event.status === "step_failed" || event.status === "session_failed"
                       ? "browser_step_failed"
-                      : "evidence_attached",
+                      : "evidence_attached"
+              ) as AgentActivityEventType,
               title: event.summary,
               details: event.stepId ? `Step ${event.stepId}` : undefined,
               taskId: activeWorkflowTask?.id,
               chatId: currentChatSessionId,
-              severity: event.status === "step_failed" || event.status === "session_failed" ? "critical" : "info",
+              severity: (event.status === "step_failed" || event.status === "session_failed" ? "critical" : "info") as ActivitySeverity,
               createdAtIso: event.timestampIso,
             })),
             ...workflow.activityEvents,
