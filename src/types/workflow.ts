@@ -57,6 +57,126 @@ export interface WorkflowApproval {
   expiresAtIso?: string;
 }
 
+export type GitHubConnectionState =
+  | "disconnected"
+  | "connected"
+  | "syncing"
+  | "dirty"
+  | "up_to_date"
+  | "conflict"
+  | "blocked"
+  | "error";
+
+export type TaskBranchLifecycle =
+  | "no_branch"
+  | "branch_planned"
+  | "branch_created"
+  | "local_changes"
+  | "committed"
+  | "pushed"
+  | "review_opened"
+  | "merged"
+  | "rejected";
+
+export type GitHubSyncMode = "manual" | "auto_commit" | "auto_push";
+export type TaskReviewMode = "chat_review" | "pull_request" | "hybrid";
+
+export type CommitStatus = "idle" | "drafted" | "committed" | "failed";
+export type PushStatus = "idle" | "approval_required" | "ready" | "pushed" | "blocked" | "failed";
+
+export interface StagedChangesSummary {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+  notablePaths: string[];
+  hasUncommittedChanges: boolean;
+}
+
+export interface CommitEntry {
+  sha: string;
+  title: string;
+  createdAtIso: string;
+  author: string;
+  taskId?: string;
+}
+
+export interface CommitWorkflowState {
+  stagedChanges: StagedChangesSummary;
+  draftMessage: string;
+  status: CommitStatus;
+  latestCommit?: CommitEntry;
+  pendingError?: string;
+}
+
+export interface PushWorkflowState {
+  status: PushStatus;
+  requiresApproval: boolean;
+  linkedApprovalId?: string;
+  lastPushedAtIso?: string;
+  behindRemoteByCommits?: number;
+  pendingError?: string;
+}
+
+export interface RepoBranchState {
+  localBranchName: string;
+  remoteBranchName?: string;
+  trackingStatus: "not_tracking" | "tracking" | "ahead" | "behind" | "diverged";
+  aheadBy: number;
+  behindBy: number;
+}
+
+export interface PullRequestReviewFinding {
+  id: string;
+  source: "security" | "qa" | "release" | "human";
+  severity: "info" | "warning" | "critical";
+  title: string;
+  status: "open" | "resolved";
+}
+
+export interface PullRequestState {
+  id: string;
+  number?: number;
+  title: string;
+  status: "draft_review" | "ready_for_review" | "changes_requested" | "approved" | "merged" | "closed";
+  reviewChatSessionId?: string;
+  linkedAuditorIds: string[];
+  findings: PullRequestReviewFinding[];
+  mergeReadiness: "not_ready" | "ready" | "blocked";
+  releaseGateReadiness: "not_ready" | "ready" | "blocked";
+}
+
+export interface TaskGitHubState {
+  repositoryId: string;
+  repoKey: string;
+  syncMode: GitHubSyncMode;
+  reviewMode: TaskReviewMode;
+  branchLifecycle: TaskBranchLifecycle;
+  branch?: RepoBranchState;
+  commitSummary: string;
+  commitHistory: CommitEntry[];
+  commitWorkflow: CommitWorkflowState;
+  pushWorkflow: PushWorkflowState;
+  pullRequest?: PullRequestState;
+}
+
+export interface GitHubRepositoryConnection {
+  id: string;
+  provider: "github";
+  owner: string;
+  name: string;
+  remoteUrl: string;
+  defaultBranch: string;
+  state: GitHubConnectionState;
+  lastSyncAtIso?: string;
+  lastError?: string;
+}
+
+export interface GitHubSyncState {
+  activeRepositoryId?: string;
+  repositories: GitHubRepositoryConnection[];
+  globalSyncModeDefault: GitHubSyncMode;
+}
+
 export type TaskStatus = "queued" | "in_progress" | "blocked" | "awaiting_approval" | "completed" | "failed";
 
 export type TaskPhase = "planning" | "implementation" | "audit" | "review" | "release";
@@ -74,10 +194,12 @@ export interface WorkflowTask {
   phase: TaskPhase;
   progressSummary: string;
   updatedAtIso: string;
+  github?: TaskGitHubState;
 }
 
 export interface WorkflowState {
   tasks: WorkflowTask[];
   activityEvents: AgentActivityEvent[];
   approvals: WorkflowApproval[];
+  github: GitHubSyncState;
 }

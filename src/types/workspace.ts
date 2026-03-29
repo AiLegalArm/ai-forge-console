@@ -2,7 +2,7 @@ import type { ChatMessage, ChatState, ChatType } from "@/types/chat";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 
 export type PrivacyMode = "private" | "team";
-export type SyncStatus = "synced" | "syncing" | "offline";
+export type SyncStatus = "disconnected" | "connected" | "syncing" | "dirty" | "up_to_date" | "conflict" | "blocked" | "error";
 
 export interface AgentRuntimeState {
   id: string;

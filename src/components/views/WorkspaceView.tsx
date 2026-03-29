@@ -8,8 +8,17 @@ import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
 import {
-  Files, GitBranch, Rocket, Globe,
-  CheckCircle, Play, Clock, XCircle,
+  Files,
+  GitBranch,
+  Rocket,
+  Globe,
+  CheckCircle,
+  Play,
+  Clock,
+  XCircle,
+  GitCommitHorizontal,
+  Upload,
+  ShieldAlert,
 } from "lucide-react";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
@@ -35,7 +44,7 @@ interface WorkspaceViewProps {
 
 export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onApprovalResolve, onWorkflowApprovalResolve }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
-  if (section === "git") return <GitView />;
+  if (section === "git") return <GitView workspaceState={workspaceState} />;
   if (section === "deploy") return <DeployView />;
   if (section === "domains") return <DomainsView />;
 
@@ -63,6 +72,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
 
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
+  const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
@@ -81,7 +91,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
                 {taskStatusIcons[task.status]}
                 <span className="text-[10px] text-foreground truncate">{task.title}</span>
               </div>
-              <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.id}</div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
             </div>
           ))}
         </div>
@@ -103,6 +113,17 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">GitHub flow</span>
+        <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Branch</span><span className="text-foreground font-mono truncate max-w-[130px]">{activeTask?.github?.branch?.localBranchName ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Task link</span><span className="text-primary font-mono">{activeTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Sync mode</span><span className="text-foreground font-mono uppercase">{activeTask?.github?.syncMode ?? "manual"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Push gate</span><span className="text-warning font-mono">{activeTask?.github?.pushWorkflow.requiresApproval ? "Approval required" : "No gate"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Review</span><span className="text-foreground font-mono">{activeTask?.github?.pullRequest?.status ?? "—"}</span></div>
         </div>
       </div>
 
@@ -159,17 +180,58 @@ function FilesView() {
   );
 }
 
-function GitView() {
+function GitView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const activeTask =
+    workspaceState.workflow.tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ??
+    workspaceState.workflow.tasks[0];
+  const activeRepo = workspaceState.workflow.github.repositories.find(
+    (repository) => repository.id === workspaceState.workflow.github.activeRepositoryId,
+  );
+  const branchState = activeTask?.github?.branch;
+  const commitState = activeTask?.github?.commitWorkflow;
+  const pushState = activeTask?.github?.pushWorkflow;
+  const reviewState = activeTask?.github?.pullRequest;
+  const openFindings = reviewState?.findings.filter((finding) => finding.status === "open") ?? [];
+
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><GitBranch className="h-4 w-4 text-primary" /> {t("git")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.branch")}</span><span className="font-mono text-primary">main</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.remote")}</span><span className="font-mono text-foreground">github.com/user/saas-dashboard</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.status")}</span><span className="font-mono text-success">{t("git.clean")}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("git.last_push")}</span><span className="font-mono text-foreground">5m ago</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Repository</span><span className="font-mono text-foreground">{activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : "Not connected"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Remote</span><span className="font-mono text-foreground">{activeRepo?.remoteUrl ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Connection</span><span className="font-mono text-primary uppercase">{workspaceState.syncStatus}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Task branch</span><span className="font-mono text-primary">{branchState?.localBranchName ?? activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Branch lifecycle</span><span className="font-mono text-foreground">{activeTask?.github?.branchLifecycle ?? "no_branch"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Sync mode</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.syncMode ?? workspaceState.workflow.github.globalSyncModeDefault}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review mode</span><span className="font-mono text-foreground uppercase">{activeTask?.github?.reviewMode ?? "chat_review"}</span></div>
       </div>
+
+      <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
+        <div className="flex items-center gap-2 text-primary"><GitCommitHorizontal className="h-3.5 w-3.5" /> Commit & Push</div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Dirty / staged</span><span className="font-mono text-foreground">{commitState?.stagedChanges.hasUncommittedChanges ? `${commitState.stagedChanges.filesChanged} files` : "clean"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Draft message</span><span className="font-mono text-foreground truncate max-w-[320px]">{commitState?.draftMessage ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Commit status</span><span className="font-mono text-primary">{commitState?.status ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Push status</span><span className="font-mono text-primary">{pushState?.status ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Push approval</span><span className={`font-mono ${pushState?.requiresApproval ? "text-warning" : "text-success"}`}>{pushState?.requiresApproval ? "required" : "not required"}</span></div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
+        <div className="flex items-center gap-2 text-primary"><Upload className="h-3.5 w-3.5" /> Review & Audit</div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR status</span><span className="font-mono text-foreground">{reviewState?.status ?? "not_opened"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review chat</span><span className="font-mono text-foreground">{reviewState?.reviewChatSessionId ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Auditors</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Merge readiness</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Release gate</span><span className={`font-mono ${reviewState?.releaseGateReadiness === "blocked" ? "text-warning" : "text-success"}`}>{reviewState?.releaseGateReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Open findings</span><span className="font-mono text-warning">{openFindings.length}</span></div>
+        {openFindings[0] ? (
+          <div className="flex items-center gap-1 text-warning">
+            <ShieldAlert className="h-3 w-3" />
+            <span className="truncate">{openFindings[0].title}</span>
+          </div>
+        ) : null}
+      </div>
+
       <div className="flex gap-1.5">
         <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
         <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
