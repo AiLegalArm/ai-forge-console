@@ -151,13 +151,13 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Audit / Review</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.audit_review" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Audit linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Review linkage</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Design state</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Browser run</span><span className="text-foreground font-mono">{workspaceState.browserSession.runState}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Mode</span><span className="text-primary font-mono uppercase">{mode}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.design_state" as never)}</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.browser_run" as never)}</span><span className="text-foreground font-mono">{workspaceState.browserSession.runState}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.mode" as never)}</span><span className="text-primary font-mono uppercase">{mode}</span></div>
         </div>
       </div>
 
