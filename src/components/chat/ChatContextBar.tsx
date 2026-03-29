@@ -57,7 +57,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="text-border hidden sm:inline">|</span>
 
       <span className="hidden md:inline text-muted-foreground">route</span>
-      <span className="hidden md:inline text-primary uppercase">{conversationRoutingMode.replaceAll("_", " ")}</span>
+      <span className="hidden md:inline text-primary uppercase">{conversationRoutingMode.replace(/_/g, " ")}</span>
       <span className="hidden md:inline text-muted-foreground">•</span>
       <span className="hidden md:inline text-foreground">{activeLocalModel?.displayName ?? "no local model"}</span>
       <span className={`hidden md:inline ${ollamaState === "available" ? "text-success" : "text-warning"}`}>

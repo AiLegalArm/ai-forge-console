@@ -209,7 +209,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
           <div className="flex justify-between"><span className="text-muted-foreground">Last check</span><span className="text-foreground">{localInferenceRuntime.ollama.lastHealthCheckIso ?? "not checked"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Last refresh</span><span className="text-foreground">{localInferenceRuntime.ollama.lastModelRefreshIso ?? "not refreshed"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Active model</span><span className="text-primary">{activeLocalModel?.displayName ?? "none"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Routing mode</span><span className="text-foreground uppercase">{localInferenceRuntime.routing.activeMode.replaceAll("_", " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Routing mode</span><span className="text-foreground uppercase">{localInferenceRuntime.routing.activeMode.replace(/_/g, " ")}</span></div>
         </div>
 
         <div className="pt-1 border-t border-border/50">

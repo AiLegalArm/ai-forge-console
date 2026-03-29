@@ -219,7 +219,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
         <div className="mt-1.5 space-y-1 text-[10px]">
           {workspaceState.localShell.capabilities.map((gate) => (
             <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
-              <span>{gate.capability.replaceAll("_", " ")}</span>
+              <span>{gate.capability.replace(/_/g, " ")}</span>
               <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "approval" : "allowed"}</span>
             </div>
           ))}

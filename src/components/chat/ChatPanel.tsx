@@ -4,7 +4,8 @@ import {
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
   Loader2, CheckCircle, XCircle, Clock, Waypoints, Check,
 } from "lucide-react";
-import type { ChatTab } from "@/data/mock-chat";
+import type { ChatType } from "@/types/chat";
+type ChatTab = ChatType;
 import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
