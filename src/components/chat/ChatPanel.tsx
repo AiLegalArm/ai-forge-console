@@ -104,7 +104,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {activeTab === "audit" && (
           <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono text-warning">
-            Audit findings: {auditSummary.critical} critical • {auditSummary.high} high • score {auditSummary.score}
+            {t("chat.audit_findings" as never)} {auditSummary.critical} {t("chat.critical" as never)} • {auditSummary.high} {t("chat.high" as never)} • {t("chat.score" as never)} {auditSummary.score}
           </div>
         )}
         {activeTab === "review" && (
