@@ -110,10 +110,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Approvals</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.approvals" as never)}</span>
         <div className="mt-1.5 space-y-1">
           {workspaceState.pendingApprovals.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground font-mono">No pending approvals.</div>
+            <div className="text-[10px] text-muted-foreground font-mono">{t("rail.no_approvals" as never)}</div>
           ) : (
             workspaceState.pendingApprovals.map((approval: WorkflowApproval) => (
               <div key={approval.id} className="rounded border border-warning/30 bg-warning/5 p-1.5">
