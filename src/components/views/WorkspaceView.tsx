@@ -172,12 +172,12 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">Chat link</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.chat_link" as never)}</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">
-          <div className="flex justify-between text-muted-foreground"><span>Session</span><span className="text-foreground font-mono truncate max-w-[120px]">{activeSession?.title}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Task graph</span><span className="text-foreground font-mono">{linkedContext?.taskId ?? "—"}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Agent link</span><span className="text-foreground font-mono">{linkedContext?.agentName ?? "—"}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Audit link</span><span className="text-foreground font-mono">{linkedContext?.auditFindingId ?? "—"}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("rail.session" as never)}</span><span className="text-foreground font-mono truncate max-w-[120px]">{activeSession?.title}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("rail.task_graph" as never)}</span><span className="text-foreground font-mono">{linkedContext?.taskId ?? "—"}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("rail.agent_link" as never)}</span><span className="text-foreground font-mono">{linkedContext?.agentName ?? "—"}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{linkedContext?.auditFindingId ?? "—"}</span></div>
         </div>
       </div>
 
