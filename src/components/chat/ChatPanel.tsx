@@ -2,10 +2,11 @@ import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints,
+  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check,
 } from "lucide-react";
-import type { ChatTab, ChatMessage } from "@/data/mock-chat";
+import type { ChatTab } from "@/data/mock-chat";
 import { useI18n } from "@/lib/i18n";
+import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import { auditSummary } from "@/data/mock-audits";
 
@@ -18,37 +19,50 @@ const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactN
 
 const statusIcon: Record<string, React.ReactNode> = {
   completed: <CheckCircle className="h-3 w-3 text-success shrink-0" />,
-  running: <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />,
+  streaming: <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />,
   pending: <Clock className="h-3 w-3 text-muted-foreground shrink-0" />,
   failed: <XCircle className="h-3 w-3 text-destructive shrink-0" />,
+  needs_approval: <Clock className="h-3 w-3 text-warning shrink-0" />,
 };
 
 const roleStyles: Record<string, string> = {
   user: "bg-primary/10 border-primary/20 ml-4 sm:ml-8",
+  orchestrator: "bg-surface border-border mr-4 sm:mr-8",
   agent: "bg-surface border-border mr-4 sm:mr-8",
   system: "bg-muted/50 border-border mx-2 sm:mx-4 text-center",
   auditor: "bg-warning/5 border-warning/20 mr-4 sm:mr-8",
+  reviewer: "bg-info/5 border-info/20 mr-4 sm:mr-8",
 };
 
 interface ChatPanelProps {
   workspaceState: WorkspaceRuntimeState;
+  chatState: ChatState;
   chatContexts: ChatContextMap;
   onConversationTypeChange: (conversation: ChatTab) => void;
+  onDraftChange: (sessionId: string, value: string) => void;
+  onApprovalResolve: (sessionId: string) => void;
 }
 
-export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChange }: ChatPanelProps) {
+export function ChatPanel({ workspaceState, chatState, chatContexts, onConversationTypeChange, onDraftChange, onApprovalResolve }: ChatPanelProps) {
   const { t } = useI18n();
   const [composerMode, setComposerMode] = useState<string>("execute");
   const [showSlashMenu, setShowSlashMenu] = useState(false);
 
   const activeTab = workspaceState.currentConversationType;
   const messages = chatContexts[activeTab];
+  const sessionId = chatState.selectedSessionIdByType[activeTab];
+  const activeSession = chatState.sessions.find((session) => session.id === sessionId);
+  const activeDraft = chatState.draftInputBySessionId[sessionId] ?? "";
+  const activeApproval = chatState.approvalRequestBySessionId[sessionId];
+  const placeholders = chatState.attachmentPlaceholdersBySessionId[sessionId] ?? [];
 
-  const roleLabelMap: Record<string, { textKey: string; color: string }> = {
-    user: { textKey: "chat.you", color: "text-primary" },
-    agent: { textKey: "chat.agent_label", color: "text-accent" },
-    system: { textKey: "chat.system", color: "text-muted-foreground" },
-    auditor: { textKey: "chat.auditor_label", color: "text-warning" },
+  const roleLabelMap: Record<string, { label: string; color: string }> = {
+    user: { label: t("chat.you"), color: "text-primary" },
+    orchestrator: { label: "Orchestrator", color: "text-accent" },
+    agent: { label: t("chat.agent_label"), color: "text-accent" },
+    system: { label: t("chat.system"), color: "text-muted-foreground" },
+    auditor: { label: t("chat.auditor_label"), color: "text-warning" },
+    reviewer: { label: "Reviewer", color: "text-info" },
   };
 
   return (
@@ -56,10 +70,10 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
       <div className="flex items-center justify-between border-b border-border bg-card px-2 py-1">
         <div className="flex items-center gap-1 text-[10px] font-mono text-primary">
           <Waypoints className="h-3 w-3" />
-          <span>Orchestrator-first command surface</span>
+          <span>{activeSession?.title ?? "Orchestrator-first command surface"}</span>
         </div>
         <span className="text-[10px] text-muted-foreground hidden sm:inline">
-          {workspaceState.activeBackend} • {workspaceState.activeProvider}
+          {activeSession?.providerMeta.backend} • {activeSession?.providerMeta.provider}
         </span>
       </div>
 
@@ -75,8 +89,8 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
             }`}
           >
             {tab.icon}
-            <span className="hidden sm:inline">{t(tab.labelKey as any)}</span>
-            <span className="sm:hidden">{t(tab.shortKey as any)}</span>
+            <span className="hidden sm:inline">{t(tab.labelKey as never)}</span>
+            <span className="sm:hidden">{t(tab.shortKey as never)}</span>
           </button>
         ))}
       </div>
@@ -92,9 +106,16 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
           </div>
         )}
 
-        {activeTab === "review" && (
-          <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
-            Review sync: audit summary included before merge approvals.
+        {activeApproval && (
+          <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono">
+            <p className="text-warning">Approval requested: {activeApproval.title}</p>
+            <p className="text-muted-foreground mt-1">{activeApproval.description}</p>
+            <button
+              onClick={() => onApprovalResolve(sessionId)}
+              className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground"
+            >
+              <Check className="h-3 w-3" /> Mark approved
+            </button>
           </div>
         )}
 
@@ -103,11 +124,14 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
               <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
-                {msg.agentName || t(roleLabelMap[msg.role].textKey as any)}
+                {msg.authorLabel || roleLabelMap[msg.role].label}
               </span>
-              <span className="text-[9px] text-muted-foreground ml-auto">{msg.timestamp}</span>
+              <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
             </div>
             <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+            {msg.linked?.taskTitle && (
+              <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task ↔ {msg.linked.taskTitle}</p>
+            )}
           </div>
         ))}
       </div>
@@ -140,6 +164,12 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
           </button>
         </div>
 
+        {placeholders.length > 0 && (
+          <div className="px-1 text-[10px] font-mono text-muted-foreground">
+            Attachments staged: {placeholders.map((item) => item.name).join(", ")}
+          </div>
+        )}
+
         <div className="flex items-end gap-1">
           <div className="flex gap-0.5 shrink-0">
             <button onClick={() => setShowSlashMenu(!showSlashMenu)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors" title="Slash commands">
@@ -155,6 +185,8 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
           <div className="flex-1 min-w-0">
             <textarea
               rows={1}
+              value={activeDraft}
+              onChange={(event) => onDraftChange(sessionId, event.target.value)}
               placeholder={t("chat.placeholder")}
               className="w-full bg-input border border-border rounded-lg px-2 sm:px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-mono"
             />
@@ -182,7 +214,7 @@ export function ChatPanel({ workspaceState, chatContexts, onConversationTypeChan
                 className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-surface-hover rounded transition-colors"
               >
                 <span className="font-mono text-primary">{item.cmd}</span>
-                <span className="text-muted-foreground text-[10px] sm:text-xs">{t(item.descKey as any)}</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs">{t(item.descKey as never)}</span>
               </button>
             ))}
           </div>
@@ -202,4 +234,8 @@ function OrchestratorSummary({ currentTask }: { currentTask: string }) {
       <p className="text-[10px] text-muted-foreground mt-1 font-mono">Task: {currentTask}</p>
     </div>
   );
+}
+
+function formatTime(isoDate: string) {
+  return new Date(isoDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
