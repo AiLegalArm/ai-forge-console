@@ -1,4 +1,4 @@
-import type { LocalModelRegistryEntry, OllamaConnectionState } from "@/types/local-inference";
+import type { AgentRole, LocalModelRegistryEntry, ModelCapabilityTag, ModelPurposeTag, OllamaConnectionState } from "@/types/local-inference";
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 const DEFAULT_TIMEOUT_MS = 2500;
