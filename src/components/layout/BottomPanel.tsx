@@ -30,7 +30,7 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
   const latestTraces = useMemo(() => [...traces].sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso)).slice(0, 5), [traces]);
 
   return (
-    <div className={`${height} border-t border-border-subtle bg-background shrink-0 flex flex-col transition-all duration-150`}>
+    <div className={`${height} border-t border-border-subtle bg-background shrink-0 flex flex-col ui-transition`}>
       <Tabs className="px-1">
         {tabConfig.map((tab) => (
           <TabButton
@@ -58,7 +58,7 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
             ) : null}
             {terminal.output.map((line) => (
               <div key={line.id} className="flex gap-2">
-                <span className="text-muted-foreground shrink-0">{new Date(line.timestampIso).toLocaleTimeString()}</span>
+                <span className="text-muted-foreground shrink-0 tabular-nums">{new Date(line.timestampIso).toLocaleTimeString()}</span>
                 <span className={line.stream === "stderr" ? "text-warning" : line.stream === "system" ? "text-primary" : "text-foreground"}>{line.text}</span>
               </div>
             ))}

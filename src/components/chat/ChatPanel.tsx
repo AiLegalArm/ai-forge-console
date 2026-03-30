@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight, Radio,
+  CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight, Radio,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
@@ -23,7 +23,7 @@ const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactN
 
 const statusIcon: Record<string, React.ReactNode> = {
   completed: <CheckCircle className="h-3 w-3 text-success shrink-0" />,
-  streaming: <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />,
+  streaming: <span className="live-dot shrink-0" aria-hidden />,
   pending: <Clock className="h-3 w-3 text-muted-foreground shrink-0" />,
   failed: <XCircle className="h-3 w-3 text-destructive shrink-0" />,
   needs_approval: <Clock className="h-3 w-3 text-warning shrink-0" />,
@@ -464,25 +464,24 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
         {messages.map((msg: ChatMessage, idx: number) => (
           <div
             key={`${msg.id}-${idx}`}
-            className="py-1.5 border-b border-border-subtle/80 last:border-0 animate-fade-in"
-            style={{ animationDelay: `${idx * 30}ms`, animationFillMode: "backwards" }}
+            className="py-2 border-b border-border-subtle/80 last:border-0"
           >
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
               <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role]?.color ?? "text-muted-foreground"}`}>
                 {msg.authorLabel || roleLabelMap[msg.role]?.label || msg.role}
               </span>
               {msg.status === "streaming" && (
-                <span className="text-[10px] text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
+                <span className="text-[10px] text-primary font-mono">{t("chat.streaming" as never)}</span>
               )}
               <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.provider ?? activeSession?.providerMeta.provider ?? workspaceState.providerSource}</span>
               <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.model ?? activeSession?.providerMeta.model ?? workspaceState.activeModel}</span>
-              <span className="text-[10px] text-muted-foreground ml-auto font-mono">{formatTime(msg.createdAtIso)}</span>
+              <span className="text-[10px] text-muted-foreground ml-auto font-mono tabular-nums">{formatTime(msg.createdAtIso)}</span>
             </div>
             {msg.status === "streaming" ? (
               <StreamingText text={msg.content} />
             ) : (
-              <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             )}
             {msg.linked?.taskTitle && (
               <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>

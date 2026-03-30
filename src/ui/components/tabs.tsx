@@ -10,8 +10,8 @@ export function TabButton({ active, className, ...props }: React.ButtonHTMLAttri
     <button
       {...props}
       className={cn(
-        "h-8 px-3 text-[10px] font-mono uppercase tracking-wide border-b-2 transition-colors",
-        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+        "h-8 px-3 text-[10px] font-mono uppercase tracking-wide border-b-2 ui-transition ui-focus",
+        active ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface/70",
         className,
       )}
     />

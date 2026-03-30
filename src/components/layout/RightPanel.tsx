@@ -35,7 +35,7 @@ const toneClass: Record<Tone, string> = {
 const formatTime = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—");
 
 function StatusChip({ label, tone }: { label: string; tone: Tone }) {
-  return <span className={`border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide ${toneClass[tone]}`}>{label}</span>;
+  return <span className={`border rounded-sm px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide leading-none ${toneClass[tone]}`}>{label}</span>;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -49,7 +49,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border border-border-subtle bg-card p-2 space-y-1.5">
+    <section className="border border-border-subtle bg-card/90 rounded-sm p-2 space-y-1.5">
       <h4 className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">{title}</h4>
       {children}
     </section>
@@ -121,7 +121,7 @@ export function RightPanel({ activeTab, onTabChange, workspaceState, isMobile, o
       <div className="flex items-center border-b border-border-subtle overflow-x-auto bg-background">
         {tabs.map((tab) => (
           <button key={tab.id} onClick={() => onTabChange(tab.id)}
-            className={`flex items-center gap-1 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors border-b-2 shrink-0 ${activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-1 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wide ui-transition border-b-2 shrink-0 ${activeTab === tab.id ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface/70"}`}
           >
             <tab.icon className="h-3 w-3" />
             <span className="text-[10px] sm:text-xs">{tab.label}</span>
