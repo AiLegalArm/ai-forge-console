@@ -1,5 +1,6 @@
 import type { AuditorControlState } from "@/types/audits";
 import type { EvidenceFlowState } from "@/types/evidence";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import type { DeploymentRecord, ReleaseApprovalDetail, ReleaseControlState, ReleaseOperationsPanel } from "@/types/release";
 import type { WorkflowApproval, WorkflowState } from "@/types/workflow";
@@ -26,6 +27,23 @@ export function deriveReleaseControlState(
 
   const linkedDeployments = state.deployments.filter((deployment) => deployment.linkedReleaseCandidateId === activeCandidate.id);
   const linkedDomains = state.domains.filter((domain) => activeCandidate.linkedDomainIds.includes(domain.id));
+  const linkedTask = workflow.tasks.find((task) => task.id === activeCandidate.linkedTaskId);
+  const reviewContext = evaluatePullRequestReviewOperations({
+    task: linkedTask,
+    pullRequest: linkedTask?.github?.pullRequest,
+    workflow,
+    auditors,
+    evidenceFlow,
+    defaultBranch: workflow.github.repositories.find((repo) => repo.id === linkedTask?.github?.repositoryId)?.defaultBranch,
+    releaseGateBlocked: state.finalDecision.status === "blocked" || state.finalDecision.status === "no_go",
+  });
+  const normalizedReviewState = reviewContext?.reviewReadiness.state === "ready_to_merge"
+    ? "approved"
+    : reviewContext?.reviewReadiness.state === "blocked"
+      ? "blocked"
+      : reviewContext?.reviewReadiness.state === "in_review" || reviewContext?.reviewReadiness.state === "ready_for_review"
+        ? "in_review"
+        : "not_opened";
 
   const linkedApprovals: ReleaseApprovalDetail[] = workflow.approvals
     .filter((approval) => activeCandidate.linkedApprovalIds.includes(approval.id) || approval.taskId === activeCandidate.linkedTaskId)
@@ -52,7 +70,7 @@ export function deriveReleaseControlState(
   const finalDecision = evaluateGoNoGo({
     auditors: auditors.auditors.map((auditor) => auditor.verdict),
     releaseAuditorVerdict: auditors.auditors.find((auditor) => auditor.type === "release")?.verdict ?? "not_ready",
-    reviewState: activeCandidate.reviewState,
+    reviewState: normalizedReviewState,
     taskStatuses: workflow.tasks.filter((task) => task.id === activeCandidate.linkedTaskId).map((task) => task.status),
     subtaskStatuses: workflow.subtasks.filter((subtask) => subtask.taskId === activeCandidate.linkedTaskId).map((subtask) => subtask.status),
     auditBlockers: auditors.blockers,
@@ -71,6 +89,16 @@ export function deriveReleaseControlState(
   const operationsPanel: ReleaseOperationsPanel = {
     ...state.operationsPanel,
     generatedAtIso: new Date().toISOString(),
+    blockerSummary: {
+      ...state.operationsPanel.blockerSummary,
+      total: finalDecision.blockers.length + (reviewContext?.blockers.length ?? 0),
+      unresolved: [...(reviewContext?.blockers.map((blocker) => blocker.message) ?? []), ...finalDecision.blockers],
+    },
+    reviewReadiness: {
+      state: normalizedReviewState,
+      status: reviewContext?.reviewReadiness.state === "ready_to_merge" ? "ready" : reviewContext?.reviewReadiness.state === "blocked" ? "blocked" : "warning",
+      summary: reviewContext?.reviewReadiness.summary ?? "Review readiness is waiting for PR context.",
+    },
     approvalSummary: {
       required: linkedApprovals,
       completed: linkedApprovals.filter((approval) => approval.status === "approved"),
@@ -100,9 +128,16 @@ export function deriveReleaseControlState(
       ...state.operationsPanel.decisionSurface,
       status: finalDecision.status,
       summary: finalDecision.summary,
-      blockers: finalDecision.blockers,
+      blockers: [...(reviewContext?.blockers.map((blocker) => blocker.message) ?? []), ...finalDecision.blockers],
       warnings: finalDecision.warnings,
+      operatorOverrides: reviewContext?.releaseHandoff.state === "ready"
+        ? [...state.operationsPanel.decisionSurface.operatorOverrides, "Protected release handoff available after merge."]
+        : state.operationsPanel.decisionSurface.operatorOverrides,
     },
+    activityLinks: [
+      ...state.operationsPanel.activityLinks,
+      ...(reviewContext ? [`pr-review:${reviewContext.identity.pullRequestId}:${reviewContext.reviewReadiness.state}`] : []),
+    ].slice(0, 12),
   };
 
   return {
@@ -113,6 +148,8 @@ export function deriveReleaseControlState(
       candidate.id === activeCandidate.id
         ? {
             ...candidate,
+            linkedReviewId: reviewContext?.identity.pullRequestId ?? candidate.linkedReviewId,
+            reviewState: normalizedReviewState,
             deploymentState: linkedDeployments.find((deployment) => deployment.environment === "production")?.status ?? candidate.deploymentState,
             finalReadiness: finalDecision.readiness,
             updatedAtIso: new Date().toISOString(),
