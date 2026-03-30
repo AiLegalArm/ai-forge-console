@@ -2,6 +2,8 @@ import { FolderKanban, Clock3, Folder, Link2, CheckCircle2, PlusCircle, ArrowRig
 import { useI18n } from "@/lib/i18n";
 import { useState } from "react";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 interface ProjectsViewProps {
   workspaceState: WorkspaceRuntimeState;
@@ -18,6 +20,28 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
   const connectedRepoCount = workspaceState.projects.filter((project) => project.repository?.connected).length;
   const recentProjects = workspaceState.projects.slice(0, 5);
   const primaryCommands = workspaceState.projectCommandRegistry.commands.filter((command) => command.isPrimaryWorkflow).slice(0, 6);
+  const smartActions = getSmartActionSuggestions(workspaceState);
+  const emptyStateActions = [
+    !workspaceState.activeProjectId ? smartActions.find((action) => action.id === "resume_last_task") : undefined,
+    !workspaceState.repository.connected ? smartActions.find((action) => action.id === "reconnect_provider") : undefined,
+    workspaceState.providerSource === "ollama" && !workspaceState.localInference.ollama.connectionHealthy ? smartActions.find((action) => action.id === "switch_provider_fallback") : undefined,
+  ].filter(Boolean);
+
+  const handleSmartAction = (actionId: SmartActionId) => {
+    if (actionId === "run_tests") {
+      void onRunProjectCommandCategory("test").then((result) => setProjectFeedback(result.message));
+      return;
+    }
+    if (actionId === "run_dev_server") {
+      void onRunProjectCommandCategory("dev").then((result) => setProjectFeedback(result.message));
+      return;
+    }
+    if (actionId === "reconnect_provider") {
+      setProjectFeedback("Open Provider Hub to reconnect OpenRouter/Ollama.");
+      return;
+    }
+    void onAddLocalProject().then((result) => setProjectFeedback(result.message));
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -44,6 +68,9 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
       </div>
       {projectFeedback ? (
         <div className="text-[11px] font-mono text-muted-foreground">{projectFeedback}</div>
+      ) : null}
+      {emptyStateActions.length > 0 ? (
+        <SmartActionChips title="Smart empty-state guidance" suggestions={emptyStateActions} onAction={handleSmartAction} maxVisible={3} />
       ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
