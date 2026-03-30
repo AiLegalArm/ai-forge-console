@@ -451,58 +451,6 @@ export function useChatWorkspaceState() {
       activeReleaseCandidateId,
     ],
   );
-  const releaseControl = useMemo(() => {
-    const releaseAuditorVerdict = auditorControlState.auditors.find((auditor) => auditor.type === "release")?.verdict ?? "not_ready";
-    const finalDecision = evaluateGoNoGo({
-      auditors: auditorControlState.auditors.map((auditor) => auditor.verdict),
-      releaseAuditorVerdict,
-      reviewState: releaseControlState.releaseCandidates.find((candidate) => candidate.id === activeReleaseCandidateId)?.reviewState ?? "blocked",
-      taskStatuses: workflow.tasks.map((task) => task.status),
-      subtaskStatuses: workflow.subtasks.map((subtask) => subtask.status),
-      auditBlockers: auditorControlState.blockers,
-      agentOutcomeSignals: [
-        { source: "browser_agent", status: activeBrowserSession.resultState === "failed" ? "blocked" as const : "ready" as const, detail: `Browser state ${activeBrowserSession.resultState}` },
-        { source: "provider_routing", status: localInference.cloud.status === "connected" || localInference.ollama.connectionHealthy ? "ready" as const : "warning" as const, detail: "Provider/runtime health" },
-      ],
-      githubSyncStatus: workflow.github.repositories[0]?.state ?? "error",
-      browserEvidenceResolved: !activeEvidenceFlow.releaseReadinessBlockers.some((id) => activeEvidenceFlow.records.find((record) => record.id === id)?.source === "browser_agent"),
-      designEvidenceResolved: !activeEvidenceFlow.records.some((record) => record.source === "designer_agent" && record.blocking),
-      deploymentReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.deploymentState === "blocked") ? "blocked" : "ready",
-      domainReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.domainState === "blocked") ? "blocked" : "ready",
-      approvals: workflow.approvals,
-    });
-
-    return {
-      ...releaseControlState,
-      finalDecision,
-      operationsPanel: {
-        ...releaseControlState.operationsPanel,
-        generatedAtIso: new Date().toISOString(),
-        blockerSummary: {
-          ...releaseControlState.operationsPanel.blockerSummary,
-          total: auditorControlState.blockers.length,
-          critical: auditorControlState.blockers.filter((blocker) => blocker.blockingSeverity === "critical").length,
-          unresolved: auditorControlState.blockers.map((blocker) => blocker.id),
-        },
-        auditSummary: {
-          ...releaseControlState.operationsPanel.auditSummary,
-          verdict: releaseAuditorVerdict,
-          activeBlockers: auditorControlState.blockers.length,
-          unresolvedFindings: auditorControlState.findings.filter((finding) => finding.status === "open").length,
-          gateSummary: auditorControlState.gateDecisions.map((gate) => ({ stage: gate.stage, verdict: gate.verdict })),
-        },
-        decisionSurface: {
-          ...releaseControlState.operationsPanel.decisionSurface,
-          status: finalDecision.status,
-          blockerSeverity: auditorControlState.blockers.some((blocker) => blocker.blockingSeverity === "critical") ? "critical" : auditorControlState.blockers.length > 0 ? "warning" : "none",
-          summary: finalDecision.summary,
-          blockers: finalDecision.blockers,
-          warnings: finalDecision.warnings,
-        },
-      },
-    };
-  }, [auditorControlState, activeReleaseCandidateId, workflow, activeBrowserSession.resultState, activeEvidenceFlow, localInference.cloud.status, localInference.ollama.connectionHealthy]);
-
   const resolveTaskTypeForRouting = (chatType: ChatType, taskPhase?: WorkflowState["tasks"][number]["phase"]): TaskType => {
     if (chatType === "audit") return "audit";
     if (chatType === "review") return taskPhase === "release" ? "release" : "review";
