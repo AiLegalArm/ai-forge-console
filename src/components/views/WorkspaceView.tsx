@@ -1,6 +1,7 @@
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ChatContextBar } from "@/components/chat/ChatContextBar";
 import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
+import { useMemo, useState } from "react";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
@@ -93,6 +94,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
 
 function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void }) {
   const { t } = useI18n();
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const tasks = workspaceState.workflow.tasks;
   const subtasks = workspaceState.workflow.subtasks;
   const completed = tasks.filter((s) => s.status === "completed").length;
@@ -111,6 +113,11 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
   const criticalPath = workspaceState.workflow.tasks.filter((task) => task.status !== "completed" && task.phase !== "planning");
   const activeReleaseTask = workspaceState.workflow.tasks.find((task) => task.phase === "release");
   const operatorMode = mode === "operator";
+  const operatorDashboard = workspaceState.operatorDashboard;
+  const selectedDrillDown = useMemo(
+    () => operatorDashboard.executionDrillDowns.find((trace) => trace.traceId === selectedTraceId) ?? operatorDashboard.executionDrillDowns[0],
+    [operatorDashboard.executionDrillDowns, selectedTraceId],
+  );
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
@@ -128,6 +135,66 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
           <div className="flex justify-between"><span className="text-muted-foreground">degraded mode</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.operational.degradedMode ? "enabled" : "off"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">fallback activity</span><span className="font-mono text-info">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">operator dashboard</span>
+        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+          <div className="grid grid-cols-2 gap-1">
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">active tasks</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.activeTasks}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
+          </div>
+          <div className="text-muted-foreground">release blockers {operatorDashboard.globalSummary.releaseBlockers} • failures {operatorDashboard.globalSummary.executionFailures}</div>
+          <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>
+            provider/runtime {operatorDashboard.globalSummary.degradedProviderRuntime ? "degraded" : "healthy"}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">project summaries</span>
+        <div className="mt-1.5 space-y-1">
+          {operatorDashboard.projectSummaries.map((project) => (
+            <div key={project.projectId} className={`rounded border p-1.5 text-[10px] ${project.isActiveProject ? "border-primary/40 bg-primary/5" : "border-border"}`}>
+              <div className="font-mono text-foreground truncate">{project.projectName}</div>
+              <div className="text-muted-foreground">active {project.activeTaskCount} • blocked {project.blockedTaskCount} • subtasks {project.activeSubtaskCount}</div>
+              <div className="text-muted-foreground">agents {project.agentUtilization.active}/{project.agentUtilization.active + project.agentUtilization.idle} • {(project.agentUtilization.utilizationRatio * 100).toFixed(0)}%</div>
+              <div className="text-muted-foreground">{project.providerModelState.providerSource}/{project.providerModelState.model} • {project.providerModelState.routingProfile}</div>
+              <div className={`${project.releaseReadiness === "go" ? "text-success" : "text-warning"} font-mono uppercase`}>release {project.releaseReadiness}</div>
+              <div className="text-muted-foreground">audit sev c:{project.auditSeveritySummary.critical} h:{project.auditSeveritySummary.high} m:{project.auditSeveritySummary.medium}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">execution drill-down</span>
+        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+          <div className="flex flex-wrap gap-1">
+            {operatorDashboard.entryPoints.fromDashboardCards.slice(0, 4).map((traceId) => (
+              <button key={traceId} onClick={() => setSelectedTraceId(traceId)} className={`border rounded px-1 py-0.5 font-mono ${selectedDrillDown?.traceId === traceId ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>card:{traceId}</button>
+            ))}
+            {operatorDashboard.entryPoints.fromActivityStream.slice(0, 2).map((traceId) => (
+              <button key={`act-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">activity:{traceId}</button>
+            ))}
+            {operatorDashboard.entryPoints.fromTaskGraph.slice(0, 2).map((traceId) => (
+              <button key={`task-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">task:{traceId}</button>
+            ))}
+          </div>
+          {selectedDrillDown ? (
+            <div className="space-y-1">
+              <div className="font-mono text-foreground">{selectedDrillDown.traceId} • {selectedDrillDown.runId}</div>
+              <div className="text-muted-foreground">{selectedDrillDown.actor.role} {selectedDrillDown.actor.id ?? "system"} • task {selectedDrillDown.linked.taskId ?? "—"} / subtask {selectedDrillDown.linked.subtaskId ?? "—"}</div>
+              <div className="text-muted-foreground">provider/model {selectedDrillDown.providerModel.provider ?? "—"}/{selectedDrillDown.providerModel.model ?? "—"}</div>
+              <div className="text-muted-foreground">routing: {selectedDrillDown.routing.decision ?? "n/a"} • fallback {selectedDrillDown.routing.fallbackUsed ? "yes" : "no"} • degraded {selectedDrillDown.routing.degradedExecution ? "yes" : "no"}</div>
+              <div className="text-muted-foreground">cost control {selectedDrillDown.routing.costControlSignal} • outcome {selectedDrillDown.outcome}</div>
+              <div className="text-muted-foreground">approvals {selectedDrillDown.approvalInteractions.join(", ") || "none"} • blockers/findings {selectedDrillDown.findingsOrBlockers.join(", ") || "none"}</div>
+              <div className="text-muted-foreground">steps {selectedDrillDown.steps.length} • final status {selectedDrillDown.status}{selectedDrillDown.failureType ? ` • ${selectedDrillDown.failureType}` : ""}</div>
+            </div>
+          ) : <div className="text-muted-foreground">No execution traces available.</div>}
         </div>
       </div>
 
