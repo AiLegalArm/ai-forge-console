@@ -134,7 +134,9 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
           <div className="flex justify-between"><span className="text-muted-foreground">budget pressure</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.budgetPressure === "critical" ? "text-destructive" : workspaceState.localInference.operational.budgetPressure === "high" ? "text-warning" : "text-foreground"}`}>{workspaceState.localInference.operational.budgetPressure}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">degraded mode</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.operational.degradedMode ? "enabled" : "off"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">fallback activity</span><span className="font-mono text-info">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">missing approvals</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">rollback readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.readiness.rollback === "ready" ? "text-success" : "text-warning"}`}>{workspaceState.releaseControl.operations.readiness.rollback}</span></div>
         </div>
       </div>
 
@@ -147,7 +149,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
             <div className="rounded border border-border p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
             <div className="rounded border border-border p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
           </div>
-          <div className="text-muted-foreground">release blockers {operatorDashboard.globalSummary.releaseBlockers} • failures {operatorDashboard.globalSummary.executionFailures}</div>
+          <div className="text-muted-foreground">release blockers {workspaceState.releaseControl.operations.blockerSummary.total} • failures {workspaceState.releaseControl.operations.decisionFactors.unresolvedExecutionFailures}</div>
           <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>
             provider/runtime {operatorDashboard.globalSummary.degradedProviderRuntime ? "degraded" : "healthy"}
           </div>
@@ -369,10 +371,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Bot className="h-3 w-3 text-primary" /> release command layer</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">release candidate</span><span className="text-foreground font-mono">{activeReleaseTask?.linkedReleaseCandidateId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.finalDecision.blockers.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.warnings.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pending_approvals" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.approvalsPending.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.operations.blockerSummary.total}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.goNoGo.warnings.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pending_approvals" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
         </div>
       </div>
 
@@ -660,7 +662,7 @@ function GitView({
 
 function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
-  const { deployments, releaseCandidates, finalDecision } = workspaceState.releaseControl;
+  const { deployments, releaseCandidates, operations } = workspaceState.releaseControl;
   const activeReleaseCandidate = releaseCandidates.find((candidate) => candidate.id === workspaceState.releaseControl.activeCandidateId);
 
   return (
@@ -669,9 +671,15 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
       <div className="bg-card border border-border rounded-lg p-4 space-y-3 text-xs">
         <div className="flex items-center justify-between">
           <span className="font-mono text-muted-foreground">{t("deploy.go_nogo" as never)}</span>
-          <span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{finalDecision.status}</span>
+          <span className={`font-mono uppercase ${operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{operations.goNoGo.status}</span>
         </div>
-        <div className="text-muted-foreground">{finalDecision.summary}</div>
+        <div className="text-muted-foreground">{operations.goNoGo.summary}</div>
+        <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Preview readiness</span><span className="font-mono">{operations.deployReadiness.previewStatus}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Production readiness</span><span className="font-mono">{operations.deployReadiness.productionStatus}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Deploy blockers</span><span className="font-mono text-warning">{operations.deployReadiness.blockers.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Release dependencies</span><span className="font-mono">{operations.deployReadiness.dependencyState}</span></div>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -710,12 +718,13 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
 
 function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
-  const { domains, finalDecision } = workspaceState.releaseControl;
+  const { domains, operations } = workspaceState.releaseControl;
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Globe className="h-4 w-4 text-primary" /> {t("domains")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("domains.readiness" as never)}</span><span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-warning"}`}>{finalDecision.status}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("domains.readiness" as never)}</span><span className={`font-mono uppercase ${operations.readiness.domain === "ready" ? "text-success" : "text-warning"}`}>{operations.readiness.domain}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Rollback readiness</span><span className={`font-mono uppercase ${operations.readiness.rollback === "ready" ? "text-success" : "text-warning"}`}>{operations.readiness.rollback}</span></div>
       </div>
       <div className="space-y-2">
         {domains.map((domain) => (

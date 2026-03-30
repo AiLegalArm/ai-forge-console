@@ -1,4 +1,4 @@
-import type { ReleaseControlState, DeploymentRecord, DomainRecord, ReleaseCandidate } from "@/types/release";
+import type { ReleaseControlState, DeploymentRecord, DomainRecord, ReleaseCandidate, ReleaseApprovalStatus } from "@/types/release";
 import type { WorkflowApproval } from "@/types/workflow";
 import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import { workflowState } from "@/data/mock-workflow";
@@ -195,6 +195,52 @@ const finalDecision = evaluateGoNoGo({
   approvals: approvalOverrides,
 });
 
+const activeCandidate = releaseCandidates[0];
+const linkedApprovals = approvalOverrides.filter((approval) => activeCandidate.linkedApprovalIds.includes(approval.id));
+const approvalRequired: ReleaseApprovalStatus[] = linkedApprovals.map((approval) => ({
+  id: approval.id,
+  title: approval.title,
+  category: approval.category,
+  status: approval.status,
+  requestedBy: approval.requestedBy,
+  requestedAtIso: approval.requestedAtIso,
+  linkedTaskId: approval.taskId,
+}));
+const approvalCompleted = approvalRequired.filter((approval) => approval.status === "approved");
+const approvalMissing = approvalRequired.filter((approval) => approval.status === "pending");
+
+const candidateTaskIds = [activeCandidate.linkedTaskId].filter((taskId): taskId is string => Boolean(taskId));
+const candidateSubtaskIds = workflowState.subtasks
+  .filter((subtask) => candidateTaskIds.includes(subtask.taskId))
+  .map((subtask) => subtask.id);
+const candidateEvidence = evidenceFlowState.records.filter((record) => activeCandidate.linkedEvidenceIds.includes(record.id));
+const candidateTraces = workflowState.executionTraces.filter((trace) => (
+  trace.evidenceIds.some((evidenceId) => activeCandidate.linkedEvidenceIds.includes(evidenceId))
+  || (trace.taskId ? candidateTaskIds.includes(trace.taskId) : false)
+));
+const unresolvedExecutionFailures = candidateTraces.filter((trace) => trace.summary.outcome === "failed" || trace.summary.outcome === "blocked").length;
+
+const deploymentForCandidate = deployments.find((deployment) => deployment.id === activeCandidate.linkedDeploymentId);
+const previewForCandidate = deployments.find((deployment) => deployment.linkedReleaseCandidateId === activeCandidate.id && deployment.environment === "preview");
+const domainRecordsForCandidate = domains.filter((domain) => activeCandidate.linkedDomainIds.includes(domain.id));
+
+const releaseBlockers = [
+  ...finalDecision.blockers,
+  ...candidateEvidence.filter((record) => record.blocking).map((record) => record.title),
+];
+
+const deployBlockers = deployments
+  .filter((deployment) => deployment.linkedReleaseCandidateId === activeCandidate.id && deployment.status === "blocked")
+  .map((deployment) => deployment.blockedReason ?? `${deployment.environment} deployment is blocked`);
+
+const releaseDependencyState = deployBlockers.length > 0
+  ? "blocked"
+  : domainRecordsForCandidate.some((domain) => domain.errors.length > 0 || domain.assignmentState === "blocked")
+    ? "degraded"
+    : "healthy";
+
+const rollbackTarget = deployments.find((deployment) => deployment.linkedReleaseCandidateId !== activeCandidate.id && deployment.environment === "production");
+
 export const releaseControlState: ReleaseControlState = {
   deployments,
   domains,
@@ -202,4 +248,79 @@ export const releaseControlState: ReleaseControlState = {
   releaseHistoryIds: ["rc-2026-03-28-rbac", "rc-2026-03-29-rbac"],
   activeCandidateId: "rc-2026-03-29-rbac",
   finalDecision,
+  operations: {
+    currentReleaseCandidateId: activeCandidate.id,
+    blockerSummary: {
+      total: releaseBlockers.length,
+      critical: auditBlockers.filter((blocker) => blocker.blockingSeverity === "critical" && blocker.status === "active").length,
+      high: candidateEvidence.filter((record) => record.blocking && (record.severity === "critical" || record.severity === "high")).length,
+      mediumOrLower: candidateEvidence.filter((record) => record.blocking && ["medium", "low", "info"].includes(record.severity)).length,
+      unresolved: releaseBlockers,
+    },
+    approvalSummary: {
+      required: approvalRequired,
+      completed: approvalCompleted,
+      missing: approvalMissing,
+    },
+    auditSummary: {
+      verdict: activeCandidate.auditVerdict,
+      linkedAuditorTypes: activeCandidate.linkedAuditorTypes,
+      unresolvedBlockers: auditBlockers.filter((blocker) => blocker.status === "active"),
+      gateStates: auditors
+        .filter((auditor) => activeCandidate.linkedAuditorTypes.includes(auditor.type))
+        .map((auditor) => ({ auditorType: auditor.type, verdict: auditor.verdict })),
+    },
+    readiness: {
+      review: activeCandidate.reviewState === "approved" ? "ready" : activeCandidate.reviewState === "blocked" ? "blocked" : "warning",
+      deploy: deploymentReadiness,
+      domain: domainReadiness,
+      rollback: deploymentForCandidate?.rollbackAvailable ? "ready" : "warning",
+    },
+    deployReadiness: {
+      previewStatus: previewForCandidate?.status ?? "missing",
+      productionStatus: deploymentForCandidate?.status ?? "missing",
+      rolloutState: deploymentForCandidate?.status === "deployed" ? "ready" : deploymentForCandidate?.status === "blocked" ? "blocked" : "in_progress",
+      dependencyState: releaseDependencyState,
+      blockers: deployBlockers,
+    },
+    rollbackReadiness: {
+      rollbackAvailable: Boolean(deploymentForCandidate?.rollbackAvailable),
+      rollbackTarget: rollbackTarget?.id,
+      recommendedAction: deploymentForCandidate?.rollbackAvailable ? "safe_to_promote" : "fallback_plan_required",
+      notes: deploymentForCandidate?.rollbackAvailable
+        ? ["Latest production deployment has rollback artifact metadata."]
+        : ["No verified rollback artifact for active production deployment."],
+    },
+    inspections: {
+      [activeCandidate.id]: {
+        candidateId: activeCandidate.id,
+        linkedTaskIds: candidateTaskIds,
+        linkedSubtaskIds: candidateSubtaskIds,
+        unresolvedBlockers: releaseBlockers,
+        auditFindings: auditBlockers
+          .filter((blocker) => blocker.status === "active")
+          .map((blocker) => `${blocker.sourceAuditorType}: ${blocker.rationale}`),
+        reviewState: activeCandidate.reviewState,
+        executionTraceSummaries: candidateTraces.map((trace) => ({
+          traceId: trace.traceId,
+          outcome: trace.summary.outcome,
+          summary: trace.steps.at(-1)?.title ?? trace.summary.providerModelLabel ?? trace.summary.outcome,
+          updatedAtIso: trace.updatedAtIso,
+        })),
+        evidenceReferences: candidateEvidence.map((record) => record.id),
+      },
+    },
+    goNoGo: finalDecision,
+    decisionFactors: {
+      unresolvedExecutionFailures,
+      overrideApplied: false,
+    },
+    relatedChatSessions: {
+      reviewChatId: "review-session-1",
+      auditChatId: "audit-session-1",
+    },
+    relatedActivityEventIds: workflowState.activityEvents
+      .filter((event) => event.taskId === activeCandidate.linkedTaskId || event.chatId === "review-session-1")
+      .map((event) => event.id),
+  },
 };
