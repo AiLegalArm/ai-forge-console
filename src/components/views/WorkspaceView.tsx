@@ -394,9 +394,11 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("memory")}</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">
-          <div className="flex justify-between text-muted-foreground"><span>{t("snapshots")}</span><span className="text-foreground font-mono">7</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">48K tok</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>AGENTS.md</span><span className="text-success font-mono">{t("ctx.synced")}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("snapshots")}</span><span className="text-foreground font-mono">{workspaceState.memory.tasks.length}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">{workspaceState.contextEnvelope.decisions.length + workspaceState.contextEnvelope.chat.recentProjectActions.length} scoped</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>AGENTS.md</span><span className={`font-mono ${workspaceState.memory.project.discoveredInstructions.some((entry) => entry.toLowerCase().includes("agent")) ? "text-success" : "text-warning"}`}>{workspaceState.memory.project.discoveredInstructions.length > 0 ? t("ctx.synced") : t("rail.missing" as never)}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Provider defaults</span><span className="text-primary font-mono">{workspaceState.memory.providerPreferences.preferredProvider}/{workspaceState.memory.providerPreferences.preferredModelByProvider[workspaceState.memory.providerPreferences.preferredProvider]}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Task blockers</span><span className={`font-mono ${workspaceState.contextEnvelope.task?.blockerSummary.length ? "text-warning" : "text-success"}`}>{workspaceState.contextEnvelope.task?.blockerSummary.length ?? 0}</span></div>
         </div>
       </div>
     </div>

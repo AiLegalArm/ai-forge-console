@@ -26,20 +26,39 @@ const summarizeRecentMessages = (messages: string[]) => {
   return messages.slice(-3).join(" | ").slice(0, 280);
 };
 
+const dedupeBy = <T>(items: T[], keyFn: (item: T) => string): T[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = keyFn(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const buildTaskMemoryEntries = (workflow: WorkflowState, auditors: AuditorControlState): TaskMemoryEntry[] =>
   workflow.tasks
     .slice(0, MAX_TASK_MEMORY)
     .map((task) => {
       const blockers = auditors.blockers.filter((blocker) => blocker.entityId === task.id && blocker.status === "active");
       const approvals = workflow.approvals.filter((approval) => approval.taskId === task.id).slice(0, 8);
+      const deniedApprovals = approvals.filter((approval) => approval.status === "denied");
+      const subtaskSummary = task.subtasks.length > 0 ? `${task.subtasks.filter((s) => s.status === "completed").length}/${task.subtasks.length} subtasks complete` : "No subtasks";
 
       return {
         taskId: task.id,
         taskTitle: task.title,
         status: task.status,
         phase: task.phase,
+        taskSummary: `${task.phase} · ${task.status} · ${subtaskSummary}`,
         outcomeSummary: task.status === "completed" ? "Completed" : task.status === "failed" ? "Failed" : "In progress",
         blockerSummary: blockers.map((blocker) => blocker.rationale),
+        workflowState: {
+          lastKnownPhase: task.phase,
+          pendingApprovalCount: approvals.filter((approval) => approval.status === "pending").length,
+          deniedApprovalCount: deniedApprovals.length,
+          linkedBranch: task.branchName,
+        },
         approvals: approvals.map((approval) => ({
           id: approval.id,
           status: approval.status,
@@ -70,6 +89,8 @@ const deriveDecisionMemory = (
     decisionType: "routing",
     summary: `Routing phase is ${activePhase}.`,
     rationale: "Derived from workflow phase for orchestration context shaping.",
+    actor: "system",
+    impactScope: "task",
     linkedTaskId: currentTaskId,
     createdAtIso: nowIso(),
   };
@@ -79,6 +100,8 @@ const deriveDecisionMemory = (
     decisionType: "provider_model",
     summary: `Provider ${providerSource} using ${activeModel}.`,
     rationale: "Active provider/model selection in current workspace runtime.",
+    actor: "system",
+    impactScope: "chat",
     linkedTaskId: currentTaskId,
     createdAtIso: nowIso(),
   };
@@ -88,11 +111,55 @@ const deriveDecisionMemory = (
     decisionType: "release",
     summary: `Release decision: ${releaseControl.finalDecision.status}.`,
     rationale: releaseControl.finalDecision.summary,
+    actor: "release_flow",
+    impactScope: "release",
     linkedReleaseCandidateId: releaseControl.activeCandidateId,
     createdAtIso: nowIso(),
   };
 
-  return [routingDecision, providerDecision, releaseDecision].slice(0, MAX_DECISION_MEMORY);
+  const auditResolution: DecisionMemoryEntry[] = releaseControl.finalDecision.status === "go"
+    ? [
+        {
+          id: `decision-audit-resolution-${releaseControl.activeCandidateId}`,
+          decisionType: "audit_resolution",
+          summary: "Audit findings accepted for release.",
+          rationale: "Final release gate moved to GO.",
+          actor: "auditor",
+          impactScope: "release",
+          linkedReleaseCandidateId: releaseControl.activeCandidateId,
+          createdAtIso: nowIso(),
+        },
+      ]
+    : [];
+
+  return [routingDecision, providerDecision, releaseDecision, ...auditResolution].slice(0, MAX_DECISION_MEMORY);
+};
+
+const buildMemoryIndexes = (tasks: TaskMemoryEntry[], decisions: DecisionMemoryEntry[]) => {
+  const tasksById = tasks.reduce<Record<string, number>>((acc, task, index) => {
+    acc[task.taskId] = index;
+    return acc;
+  }, {});
+
+  const decisionsByTaskId = decisions.reduce<Record<string, string[]>>((acc, decision) => {
+    if (!decision.linkedTaskId) return acc;
+    acc[decision.linkedTaskId] = [...(acc[decision.linkedTaskId] ?? []), decision.id];
+    return acc;
+  }, {});
+
+  const decisionsByReleaseId = decisions.reduce<Record<string, string[]>>((acc, decision) => {
+    if (!decision.linkedReleaseCandidateId) return acc;
+    acc[decision.linkedReleaseCandidateId] = [...(acc[decision.linkedReleaseCandidateId] ?? []), decision.id];
+    return acc;
+  }, {});
+
+  const decisionsByChatId = decisions.reduce<Record<string, string[]>>((acc, decision) => {
+    if (!decision.linkedChatSessionId) return acc;
+    acc[decision.linkedChatSessionId] = [...(acc[decision.linkedChatSessionId] ?? []), decision.id];
+    return acc;
+  }, {});
+
+  return { tasksById, decisionsByTaskId, decisionsByReleaseId, decisionsByChatId };
 };
 
 export interface BuildMemorySnapshotInput {
@@ -125,6 +192,16 @@ export const buildWorkspaceMemorySnapshot = (input: BuildMemorySnapshotInput): W
   const linkedTask = input.workflow.tasks.find((task) => task.linkedChatSessionId === input.currentChatSessionId) ?? input.workflow.tasks[0];
   const activeSession = input.chatState.sessions.find((session) => session.id === input.currentChatSessionId);
 
+  const taskEntries = buildTaskMemoryEntries(input.workflow, input.auditors);
+  const decisionEntries = deriveDecisionMemory(
+    input.workflow,
+    input.releaseControl,
+    input.providerSource,
+    input.activeModel,
+    linkedTask?.phase ?? "planning",
+    linkedTask?.id,
+  );
+
   return {
     version: MEMORY_VERSION,
     project: {
@@ -147,15 +224,8 @@ export const buildWorkspaceMemorySnapshot = (input: BuildMemorySnapshotInput): W
       knownConventions: input.knownConventions,
       updatedAtIso: nowIso(),
     },
-    tasks: buildTaskMemoryEntries(input.workflow, input.auditors),
-    decisions: deriveDecisionMemory(
-      input.workflow,
-      input.releaseControl,
-      input.providerSource,
-      input.activeModel,
-      linkedTask?.phase ?? "planning",
-      linkedTask?.id,
-    ),
+    tasks: taskEntries,
+    decisions: decisionEntries,
     providerPreferences: {
       preferredProvider: input.providerSource,
       preferredModelByProvider: {
@@ -227,6 +297,7 @@ export const buildWorkspaceMemorySnapshot = (input: BuildMemorySnapshotInput): W
       recentProjectActions: input.workflow.activityEvents.slice(0, 5).map((event) => `${event.title}: ${event.details ?? "n/a"}`),
       updatedAtIso: nowIso(),
     },
+    indexes: buildMemoryIndexes(taskEntries, decisionEntries),
   };
 };
 
@@ -263,31 +334,74 @@ export const mergeWorkspaceMemory = (previous: WorkspaceMemoryState | null, next
       releaseDecisions: [...next.auditRelease.releaseDecisions, ...previous.auditRelease.releaseDecisions].slice(0, 10),
       incidents: Array.from(new Set([...next.auditRelease.incidents, ...previous.auditRelease.incidents])).slice(0, 10),
     },
+    indexes: buildMemoryIndexes(mergedTasks, mergedDecisions),
   };
 };
 
 export const retrieveMemoryContext = (memory: WorkspaceMemoryState, request: MemoryRetrieveRequest): MemoryContextEnvelope => {
-  const task = request.taskId ? memory.tasks.find((entry) => entry.taskId === request.taskId) : memory.tasks[0];
+  const task =
+    (request.taskId ? memory.tasks[memory.indexes.tasksById[request.taskId] ?? -1] : undefined) ??
+    (request.chatSessionId ? memory.tasks.find((entry) => entry.linkedChatSessionId === request.chatSessionId) : undefined) ??
+    memory.tasks[0];
 
-  const decisions = memory.decisions.filter((entry) => {
+  const audienceDecisions = memory.decisions.filter((entry) => {
     if (request.audience === "release") return entry.decisionType === "release" || entry.decisionType === "audit_resolution";
     if (request.audience === "auditor") return entry.decisionType === "audit_resolution" || entry.decisionType === "routing";
     if (request.audience === "agent") return entry.decisionType === "routing" || entry.decisionType === "provider_model";
     return true;
   });
+  const decisions = dedupeBy(
+    audienceDecisions
+      .filter((entry) => (request.releaseCandidateId ? entry.linkedReleaseCandidateId === request.releaseCandidateId : true))
+      .filter((entry) => (request.chatSessionId ? entry.linkedChatSessionId === request.chatSessionId || !entry.linkedChatSessionId : true))
+      .filter((entry) => (task?.taskId ? entry.linkedTaskId === task.taskId || !entry.linkedTaskId : true)),
+    (entry) => entry.id,
+  ).slice(0, 6);
 
   return {
-    project: memory.project,
-    task,
+    project: {
+      activeProjectId: memory.project.activeProjectId,
+      projectName: memory.project.projectName,
+      projectPath: memory.project.projectPath,
+      repoStateSummary: memory.project.repoStateSummary,
+      knownConventions: memory.project.knownConventions,
+      discoveredInstructions: memory.project.discoveredInstructions,
+    },
+    task: task
+      ? {
+          taskId: task.taskId,
+          taskTitle: task.taskTitle,
+          status: task.status,
+          phase: task.phase,
+          taskSummary: task.taskSummary,
+          outcomeSummary: task.outcomeSummary,
+          blockerSummary: task.blockerSummary,
+          workflowState: task.workflowState,
+          branchName: task.branchName,
+        }
+      : undefined,
     decisions,
-    provider: memory.providerPreferences,
+    provider: {
+      preferredProvider: memory.providerPreferences.preferredProvider,
+      preferredModelByProvider: memory.providerPreferences.preferredModelByProvider,
+      activeProviderContext: memory.providerPreferences.activeProviderContext,
+      updatedAtIso: memory.providerPreferences.updatedAtIso,
+    },
     auditRelease: {
       recurringBlockers: memory.auditRelease.recurringBlockers,
       resolvedFindings: memory.auditRelease.resolvedFindings,
       releaseDecisions: memory.auditRelease.releaseDecisions,
       incidents: memory.auditRelease.incidents,
     },
-    chat: memory.chatSession,
+    chat: {
+      activeChatSessionId: memory.chatSession.activeChatSessionId,
+      activeChatType: memory.chatSession.activeChatType,
+      recentConversationSummaries: memory.chatSession.recentConversationSummaries.slice(0, 4),
+      linkedTaskContext: memory.chatSession.linkedTaskContext,
+      linkedAgentContext: memory.chatSession.linkedAgentContext,
+      activeProviderModelContext: memory.chatSession.activeProviderModelContext,
+      recentProjectActions: memory.chatSession.recentProjectActions.slice(0, 4),
+    },
   };
 };
 
