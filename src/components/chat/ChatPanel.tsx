@@ -11,6 +11,8 @@ import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
 import { Badge } from "@/components/ui/badge";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactNode }[] = [
   { id: "main", labelKey: "chat.main", shortKey: "chat.main.short", icon: <MessageSquare className="h-3 w-3" /> },
@@ -116,6 +118,55 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
     auditor: { label: t("chat.auditor_label"), color: "text-warning" },
     reviewer: { label: t("chat.reviewer" as never), color: "text-info" },
   };
+  const smartActions = getSmartActionSuggestions(workspaceState);
+
+  const handleSmartAction = (actionId: SmartActionId) => {
+    switch (actionId) {
+      case "switch_to_local_mode":
+        onDeploymentModeChange("local");
+        return;
+      case "reconnect_provider":
+        onProviderSourceChange(workspaceState.providerSource === "ollama" ? "openrouter" : "ollama");
+        return;
+      case "switch_provider_fallback":
+        onRoutingProfileChange("cheap_fast");
+        return;
+      case "open_review":
+      case "open_diff_review":
+        onConversationTypeChange("review");
+        return;
+      case "run_audit":
+        onConversationTypeChange("audit");
+        onDraftChange(sessionId, "/audit run current task");
+        return;
+      case "resume_last_task":
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `Resume task ${workspaceState.currentTask} from latest state.`);
+        return;
+      case "plan_subtasks":
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `Plan subtasks for ${workspaceState.currentTask}.`);
+        return;
+      case "retry_failed_run":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, `Retry failed execution for ${workspaceState.currentTask} and summarize blockers.`);
+        return;
+      case "approve_push":
+        if (workspaceState.pendingApprovals[0]) onWorkflowApprovalResolve?.(workspaceState.pendingApprovals[0].id);
+        return;
+      case "run_tests":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, "Run tests and report failures only.");
+        return;
+      case "open_terminal_output":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, "Inspect terminal output and propose recovery actions.");
+        return;
+      default:
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `${smartActions.find((action) => action.id === actionId)?.label}: proceed with operator-safe defaults.`);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -156,6 +207,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             </div>
           </div>
         </div>
+        <SmartActionChips title="Contextual assists" suggestions={smartActions} onAction={handleSmartAction} />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-[10px] font-mono">
           <label className="space-y-1">
             <span className="text-muted-foreground">Provider</span>

@@ -29,6 +29,8 @@ import {
   Bot,
   Flag,
 } from "lucide-react";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
   proposed: <Clock className="h-3 w-3 text-muted-foreground" />,
@@ -121,6 +123,21 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
     () => operatorDashboard.executionDrillDowns.find((trace) => trace.traceId === selectedTraceId) ?? operatorDashboard.executionDrillDowns[0],
     [operatorDashboard.executionDrillDowns, selectedTraceId],
   );
+  const operatorActions = getSmartActionSuggestions(workspaceState);
+  const handleOperatorAction = (actionId: SmartActionId) => {
+    const activeTaskId = activeTask?.id ?? workspaceState.currentTask;
+    if (actionId === "approve_push" && workspaceState.pendingApprovals[0]) {
+      void onWorkflowApprovalResolve(workspaceState.pendingApprovals[0].id);
+      return;
+    }
+    if (actionId === "retry_failed_run" || actionId === "resume_last_task" || actionId === "plan_subtasks") {
+      if (activeTaskId) onLaunchTask(activeTaskId);
+      return;
+    }
+    if (actionId === "review_blockers" || actionId === "inspect_release_blockers") {
+      if (activeTaskId) onFocusTask(activeTaskId);
+    }
+  };
 
   return (
     <div className="p-2 space-y-2 text-[11px]">
@@ -158,6 +175,14 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
           </div>
         </div>
       </div>
+      {operatorMode ? (
+        <SmartActionChips
+          title="Operator interventions"
+          suggestions={operatorActions}
+          maxVisible={3}
+          onAction={handleOperatorAction}
+        />
+      ) : null}
 
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">project summaries</span>

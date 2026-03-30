@@ -5,6 +5,8 @@ import type { WorkspaceRuntimeState } from "@/types/workspace";
 import { listAgentBackendSummaries } from "@/lib/agent-backends/provider-hub";
 import type { AgentBackendStatus, AgentBackendSummary } from "@/types/agent-backends";
 import { useEffect, useMemo, useState } from "react";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 interface ProviderHubViewProps {
   workspaceState: WorkspaceRuntimeState;
@@ -81,6 +83,14 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
       avgLatency: 0,
     },
   ];
+  const recoveryActions = getSmartActionSuggestions(workspaceState).filter((action) => (
+    ["reconnect_provider", "switch_provider_fallback", "switch_to_local_mode", "open_terminal_output"].includes(action.id)
+  ));
+  const handleRecoveryAction = (actionId: SmartActionId) => {
+    if (actionId === "reconnect_provider" || actionId === "switch_provider_fallback") {
+      void onRefreshLocalInference();
+    }
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -116,6 +126,7 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
         <div><span className="text-muted-foreground block">fallback events</span><span className="text-info">{localInferenceRuntime.operational.fallbackEvents.length}</span></div>
         <div><span className="text-muted-foreground block">blocked expensive runs</span><span className="text-warning">{localInferenceRuntime.operational.blockedExpensiveRuns}</span></div>
       </div>
+      <SmartActionChips title="Failure recovery suggestions" suggestions={recoveryActions} onAction={handleRecoveryAction} maxVisible={3} />
       <div className="flex gap-2 flex-wrap">
         {providerCategories.map((c) => (
           <span key={c.label} className="px-2 py-0.5 text-[10px] font-mono bg-secondary text-secondary-foreground rounded">{c.label} ({c.count})</span>
