@@ -1,4 +1,5 @@
 import type { ChatType } from "@/types/chat";
+import type { ContextInjectionPacket } from "@/types/context";
 import type { AgentRuntimeState } from "@/types/workspace";
 import type { AgentActivityEvent, TaskPhase, TaskPriority, TaskStatus, WorkflowDelegation, WorkflowState, WorkflowSubtask, WorkflowTask, WorkflowTaskGraph } from "@/types/workflow";
 
@@ -9,6 +10,7 @@ interface OrchestratorInput {
   workflow: WorkflowState;
   agents: AgentRuntimeState[];
   nowIso: string;
+  contextPacket?: ContextInjectionPacket;
 }
 
 export interface AgentCommandTrigger {
@@ -176,6 +178,7 @@ export function runMainChatOrchestrator(input: OrchestratorInput): OrchestratorR
   };
 
   const existingBlockers = input.workflow.tasks.filter((task) => task.status === "blocked" && (task.phase === "audit" || task.phase === "review"));
+  const contextualBlockers = input.contextPacket?.blockers ?? [];
 
   const events: AgentActivityEvent[] = [
     createActivityEvent("task_received", "Main Chat task accepted", input.nowIso, taskId, input.chatId, input.message, owner?.id),
@@ -239,6 +242,7 @@ export function runMainChatOrchestrator(input: OrchestratorInput): OrchestratorR
       (existingBlockers.length > 0
         ? `Blockers detected from current audits/reviews: ${existingBlockers.length}. Workflow remains controlled and gated.\n\n`
         : "No active audit/review blockers detected.\n\n") +
+      (contextualBlockers.length > 0 ? `Context blockers: ${contextualBlockers.join("; ")}.\n\n` : "") +
       `Next actions queued: implementation command proposal + audit command proposal.`,
     triggers,
   };

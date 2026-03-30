@@ -19,6 +19,7 @@ import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
+import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
@@ -28,6 +29,7 @@ import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
+import type { ContextInjectionPacket } from "@/types/context";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -403,7 +405,7 @@ export function useChatWorkspaceState() {
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
 
-  const workspaceState: WorkspaceRuntimeState = {
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets"> = {
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
@@ -451,6 +453,24 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+  };
+
+  const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
+    const mainChat = assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "main_chat", chatType: "main" });
+    return {
+      mainChat,
+      agentChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "agent_chat", chatType: "agent", agentId: workspaceStateBase.activeAgentId }),
+      auditChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "audit_chat", chatType: "audit", agentId: workspaceStateBase.activeAgentId }),
+      reviewChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "review_chat", chatType: "review", agentId: workspaceStateBase.activeAgentId }),
+      workerAgent: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "worker_agent", agentId: workspaceStateBase.activeAgentId }),
+      auditor: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "auditor", agentId: workspaceStateBase.activeAgentId }),
+      releaseFlow: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "release_flow" }),
+    };
+  }, [workspaceStateBase]);
+
+  const workspaceState: WorkspaceRuntimeState = {
+    ...workspaceStateBase,
+    contextPackets,
   };
 
   useEffect(() => {
@@ -1599,6 +1619,14 @@ export function useChatWorkspaceState() {
 
       const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
       const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const chatContextPacket: ContextInjectionPacket =
+        chatType === "main"
+          ? workspaceState.contextPackets.mainChat
+          : chatType === "agent"
+            ? workspaceState.contextPackets.agentChat
+            : chatType === "audit"
+              ? workspaceState.contextPackets.auditChat
+              : workspaceState.contextPackets.reviewChat;
       const turnIndex = (currentChat.messagesBySessionId[sessionId] ?? []).length;
       const mockResponse = createMockAssistantMessage({
         chatType,
@@ -1613,6 +1641,7 @@ export function useChatWorkspaceState() {
         activeAgent,
         linkedContext: activeSession?.linked,
         turnIndex,
+        contextPacket: chatContextPacket,
       });
 
       const pendingResponse = {
@@ -1665,6 +1694,7 @@ export function useChatWorkspaceState() {
           workflow: workflowRef.current,
           agents: workspaceState.activeAgents,
           nowIso: new Date().toISOString(),
+          contextPacket: workspaceState.contextPackets.mainChat,
         });
 
         if (orchestration.handled) {
@@ -1737,13 +1767,16 @@ export function useChatWorkspaceState() {
               role: message.role === "user" ? "user" : "assistant",
               content: message.content,
             })) as Array<{ role: "user" | "assistant"; content: string }>;
+          const contextSystemPrompt = buildContextPrompt(workspaceState.contextPackets.mainChat);
 
           setProviderExecutionState("waiting");
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
             model: activeModel,
             userInput: draft,
             contextMessages: recentMessages,
-            systemPrompt: `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.`,
+            systemPrompt:
+              `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.\n` +
+              `${contextSystemPrompt}`,
           });
 
           const latestChat = chatStateRef.current;
@@ -1867,7 +1900,7 @@ export function useChatWorkspaceState() {
         void proposeAgentCommand(
           chatType,
           sessionId,
-          `Requested from ${chatType} chat to support task execution and validation context.`,
+          `Requested from ${chatType} chat to support task execution and validation context. ${chatContextPacket.summary}`,
           activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId,
         );
       }

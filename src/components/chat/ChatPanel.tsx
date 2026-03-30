@@ -332,6 +332,21 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><GitBranchPlus className="h-3 w-3" />{workspaceState.repository.branch ?? "no-branch"}</span>
               <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><RefreshCw className="h-3 w-3" />{workspaceState.repository.syncStatus ?? "idle"}</span>
             </div>
+            <div className="rounded border border-border/60 bg-panel px-2 py-1.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Injected context</span>
+                <span className="text-primary uppercase">{workspaceState.currentConversationType}</span>
+              </div>
+              <p className="text-muted-foreground">{(
+                workspaceState.currentConversationType === "main"
+                  ? workspaceState.contextPackets.mainChat
+                  : workspaceState.currentConversationType === "agent"
+                    ? workspaceState.contextPackets.agentChat
+                    : workspaceState.currentConversationType === "audit"
+                      ? workspaceState.contextPackets.auditChat
+                      : workspaceState.contextPackets.reviewChat
+              ).summary}</p>
+            </div>
             {workspaceState.repository.connected ? (
               <div className="rounded border border-primary/20 bg-primary/5 p-2 space-y-1">
                 <div className="text-primary">Sync status card</div>

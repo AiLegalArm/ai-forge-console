@@ -31,6 +31,14 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
     (blocker) => blocker.status === "active" && (blocker.entityId === activeTask?.id || blocker.entityType === "subtask"),
   );
   const ollamaState = workspaceState.localInference.ollama.serviceState;
+  const activeContextPacket =
+    workspaceState.currentConversationType === "main"
+      ? workspaceState.contextPackets.mainChat
+      : workspaceState.currentConversationType === "agent"
+        ? workspaceState.contextPackets.agentChat
+        : workspaceState.currentConversationType === "audit"
+          ? workspaceState.contextPackets.auditChat
+          : workspaceState.contextPackets.reviewChat;
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
@@ -92,6 +100,12 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="text-destructive hidden md:inline">{activeTaskBlockers.length} blockers</span>
       <span className={`hidden md:inline ${noGoGates > 0 ? "text-destructive" : "text-success"}`}>
         {noGoGates > 0 ? `${noGoGates} no-go gates` : "all gates go"}
+      </span>
+      <span className="text-border hidden lg:inline">|</span>
+      <span className="hidden lg:inline text-muted-foreground">ctx</span>
+      <span className="hidden lg:inline text-foreground truncate max-w-[360px]">{activeContextPacket.summary}</span>
+      <span className={`hidden lg:inline ${activeContextPacket.blockers.length > 0 ? "text-warning" : "text-success"}`}>
+        {activeContextPacket.blockers.length > 0 ? `${activeContextPacket.blockers.length} scoped blockers` : "no scoped blockers"}
       </span>
 
       <div className="ml-auto hidden lg:flex items-center gap-1.5">
