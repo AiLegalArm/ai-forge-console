@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
-import {
-  auditFindings,
-  auditGateDecisions,
-  auditRuns,
-  auditSummary,
-  auditors,
-  findingSeverityOrder,
-} from "@/data/mock-audits";
 import { ShieldCheck, AlertTriangle, AlertCircle, Info, CheckCircle2, Filter, FileText } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { FindingSeverity } from "@/types/audits";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { findingSeverityOrder } from "@/data/mock-audits";
 
 const severityStyles: Record<FindingSeverity, { bg: string; text: string; icon: React.ReactNode }> = {
   critical: { bg: "bg-destructive/10 border-destructive/20", text: "text-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
@@ -29,6 +22,15 @@ const statusBadge: Record<string, string> = {
 
 export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const auditFindings = workspaceState.auditors.findings;
+  const auditGateDecisions = workspaceState.auditors.gateDecisions;
+  const auditRuns = workspaceState.auditors.runs;
+  const auditors = workspaceState.auditors.auditors;
+  const auditSummary = {
+    overall: auditGateDecisions.some((gate) => gate.verdict === "no_go") ? "no_go" : "go",
+    score: Math.max(0, 100 - (auditFindings.filter((finding) => finding.blocking).length * 8)),
+    resolved: auditFindings.filter((finding) => finding.status === "resolved").length,
+  };
   const [activeSeverity, setActiveSeverity] = useState<FindingSeverity | "all">("all");
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(auditFindings[0]?.id ?? null);
 

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { AgentActivityEventType, ActivitySeverity } from "@/types/workflow";
-import { auditorControlState } from "@/data/mock-audits";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
 import { localInferenceRuntime } from "@/data/mock-local-inference";
@@ -26,6 +25,8 @@ import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-pol
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
 import { buildOperatorDashboard, type OperatorDashboardWorkspaceInput, type OperatorProjectSnapshot } from "@/lib/operator-dashboard";
+import { buildAuditorControlStateFromSignals } from "@/lib/auditor-execution-engine";
+import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -413,6 +414,85 @@ export function useChatWorkspaceState() {
     const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
     return approval.status === "pending" && (inSession || inTask);
   });
+  const auditorControlState = useMemo(
+    () =>
+      buildAuditorControlStateFromSignals({
+        workflow,
+        localShell,
+        localInference,
+        browserSession: activeBrowserSession,
+        evidenceFlow: activeEvidenceFlow,
+        releaseControl: releaseControlState,
+        repository,
+        currentTaskId: activeWorkflowTask?.id,
+        currentChatSessionId,
+        currentReviewId: activeReviewId,
+        currentReleaseCandidateId: activeReleaseCandidateId,
+      }),
+    [
+      workflow,
+      localShell,
+      localInference,
+      activeBrowserSession,
+      activeEvidenceFlow,
+      repository,
+      activeWorkflowTask?.id,
+      currentChatSessionId,
+      activeReviewId,
+      activeReleaseCandidateId,
+    ],
+  );
+  const releaseControl = useMemo(() => {
+    const releaseAuditorVerdict = auditorControlState.auditors.find((auditor) => auditor.type === "release")?.verdict ?? "not_ready";
+    const finalDecision = evaluateGoNoGo({
+      auditors: auditorControlState.auditors.map((auditor) => auditor.verdict),
+      releaseAuditorVerdict,
+      reviewState: releaseControlState.releaseCandidates.find((candidate) => candidate.id === activeReleaseCandidateId)?.reviewState ?? "blocked",
+      taskStatuses: workflow.tasks.map((task) => task.status),
+      subtaskStatuses: workflow.subtasks.map((subtask) => subtask.status),
+      auditBlockers: auditorControlState.blockers,
+      agentOutcomeSignals: [
+        { source: "browser_agent", status: activeBrowserSession.resultState === "failed" ? "blocked" as const : "ready" as const, detail: `Browser state ${activeBrowserSession.resultState}` },
+        { source: "provider_routing", status: localInference.cloud.status === "connected" || localInference.ollama.connectionHealthy ? "ready" as const : "warning" as const, detail: "Provider/runtime health" },
+      ],
+      githubSyncStatus: workflow.github.repositories[0]?.state ?? "error",
+      browserEvidenceResolved: !activeEvidenceFlow.releaseReadinessBlockers.some((id) => activeEvidenceFlow.records.find((record) => record.id === id)?.source === "browser_agent"),
+      designEvidenceResolved: !activeEvidenceFlow.records.some((record) => record.source === "designer_agent" && record.blocking),
+      deploymentReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.deploymentState === "blocked") ? "blocked" : "ready",
+      domainReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.domainState === "blocked") ? "blocked" : "ready",
+      approvals: workflow.approvals,
+    });
+
+    return {
+      ...releaseControlState,
+      finalDecision,
+      operationsPanel: {
+        ...releaseControlState.operationsPanel,
+        generatedAtIso: new Date().toISOString(),
+        blockerSummary: {
+          ...releaseControlState.operationsPanel.blockerSummary,
+          total: auditorControlState.blockers.length,
+          critical: auditorControlState.blockers.filter((blocker) => blocker.blockingSeverity === "critical").length,
+          unresolved: auditorControlState.blockers.map((blocker) => blocker.id),
+        },
+        auditSummary: {
+          ...releaseControlState.operationsPanel.auditSummary,
+          verdict: releaseAuditorVerdict,
+          activeBlockers: auditorControlState.blockers.length,
+          unresolvedFindings: auditorControlState.findings.filter((finding) => finding.status === "open").length,
+          gateSummary: auditorControlState.gateDecisions.map((gate) => ({ stage: gate.stage, verdict: gate.verdict })),
+        },
+        decisionSurface: {
+          ...releaseControlState.operationsPanel.decisionSurface,
+          status: finalDecision.status,
+          blockerSeverity: auditorControlState.blockers.some((blocker) => blocker.blockingSeverity === "critical") ? "critical" : auditorControlState.blockers.length > 0 ? "warning" : "none",
+          summary: finalDecision.summary,
+          blockers: finalDecision.blockers,
+          warnings: finalDecision.warnings,
+        },
+      },
+    };
+  }, [auditorControlState, activeReleaseCandidateId, workflow, activeBrowserSession.resultState, activeEvidenceFlow, localInference.cloud.status, localInference.ollama.connectionHealthy]);
 
   const resolveTaskTypeForRouting = (chatType: ChatType, taskPhase?: WorkflowState["tasks"][number]["phase"]): TaskType => {
     if (chatType === "audit") return "audit";
@@ -619,7 +699,7 @@ export function useChatWorkspaceState() {
         ],
         workflow,
         auditors: auditorControlState,
-        releaseControl: releaseControlState,
+        releaseControl,
         chatState,
         currentChatType,
         currentChatSessionId,
@@ -720,7 +800,7 @@ export function useChatWorkspaceState() {
       hasAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active"),
       hasCriticalAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active" && blocker.blockingSeverity === "critical"),
       releaseState:
-        releaseControlState.finalDecision.status === "go" ? "go" : releaseControlState.finalDecision.status === "blocked" || releaseControlState.finalDecision.status === "no_go" ? "blocked" : "warning",
+        releaseControl.finalDecision.status === "go" ? "go" : releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go" ? "blocked" : "warning",
       commandSafetyLevel: action.commandSafetyLevel ?? "safe",
       repoConnected: repository.connected,
       repoClean: repository.clean ?? true,
@@ -767,14 +847,14 @@ export function useChatWorkspaceState() {
     currentReviewId: activeReviewId,
     currentReleaseCandidateId: activeReleaseCandidateId,
     auditGateVerdict: activeAuditGate?.verdict,
-    releaseReadinessStatus: releaseControlState.finalDecision.status,
+    releaseReadinessStatus: releaseControl.finalDecision.status,
     pendingApprovals,
     workflow,
     auditors: auditorControlState,
     designSession,
     browserSession: activeBrowserSession,
     evidenceFlow: activeEvidenceFlow,
-    releaseControl: releaseControlState,
+    releaseControl,
     localInference,
     localShell,
     projects,
@@ -855,12 +935,12 @@ export function useChatWorkspaceState() {
   const operatorDashboardInput = useMemo<OperatorDashboardWorkspaceInput>(() => ({
     workflow,
     auditors: auditorControlState,
-    releaseControl: releaseControlState,
+    releaseControl,
     pendingApprovals,
     localInference,
     activeAgents,
     activeProjectId,
-    releaseReadinessStatus: releaseControlState.finalDecision.status,
+    releaseReadinessStatus: releaseControl.finalDecision.status,
   }), [workflow, pendingApprovals, localInference, activeProjectId]);
 
   const operatorDashboard = useMemo(() => buildOperatorDashboard(operatorDashboardInput, operatorProjectSnapshots), [operatorDashboardInput, operatorProjectSnapshots]);
@@ -2791,45 +2871,12 @@ export function useChatWorkspaceState() {
                       lastMessageAtIso: completionIso,
                       unreadCount: 0,
                     }
-                  : message,
+                  : session,
               ),
             },
-            sessions: latestChat.sessions.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    lastMessageAtIso: runOutput.run.endedAtIso,
-                    unreadCount: 0,
-                  }
-                : session,
-            ),
-          },
-        });
-        dispatch({
-          type: "set_workflow",
-          workflow: {
-            ...workflowRef.current,
-            executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
-            activityEvents: [
-              {
-                id: `activity-${runOutput.run.id}-failed`,
-                type: "failed",
-                title: `${activeAgent?.name ?? "Agent"} execution failed`,
-                details: `${runOutput.run.error?.code ?? "execution_error"}: ${runOutput.run.error?.message ?? "unknown"}`,
-                taskId: runOutput.run.taskId,
-                chatId: runOutput.run.chatSessionId,
-                agentId: runOutput.run.agentId,
-                agentRole: runOutput.run.agentRole,
-                provider: usedProvider,
-                backend: runOutput.run.backend,
-                severity: "critical",
-                createdAtIso: runOutput.run.endedAtIso,
-              },
-              ...workflowRef.current.activityEvents,
-            ],
-          },
-        });
-        setProviderExecutionState("failed");
+          });
+          setProviderExecutionState("completed");
+        }, 600);
       };
 
       void executeProviderRequest();

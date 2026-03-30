@@ -9,7 +9,6 @@ type ChatTab = ChatType;
 import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
-import { auditSummary } from "@/data/mock-audits";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
 
 const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactNode }[] = [
@@ -103,6 +102,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const completedChecklistItems = firstRunChecklist.filter((step) => step.done).length;
   const onboardingComplete = completedChecklistItems === firstRunChecklist.length;
   const sendDisabled = !hasConnectedProvider;
+  const auditSummary = {
+    critical: workspaceState.auditors.findings.filter((finding) => finding.severity === "critical").length,
+    high: workspaceState.auditors.findings.filter((finding) => finding.severity === "high").length,
+    score: Math.max(0, 100 - (workspaceState.auditors.findings.filter((finding) => finding.blocking).length * 8)),
+  };
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
