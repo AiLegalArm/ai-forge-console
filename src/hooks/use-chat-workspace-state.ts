@@ -18,6 +18,14 @@ import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
+import {
+  buildWorkspaceMemorySnapshot,
+  getMemoryStorageKey,
+  loadWorkspaceMemory,
+  mergeWorkspaceMemory,
+  persistWorkspaceMemory,
+  retrieveMemoryContext,
+} from "@/lib/workspace-memory-service";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
@@ -27,6 +35,7 @@ import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
+import type { WorkspaceMemoryState } from "@/types/memory";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -401,6 +410,103 @@ export function useChatWorkspaceState() {
   };
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const memoryStorageKey = useMemo(
+    () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
+    [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
+  );
+  const [persistedMemory, setPersistedMemory] = useState<WorkspaceMemoryState | null>(null);
+
+  useEffect(() => {
+    setPersistedMemory(loadWorkspaceMemory(memoryStorageKey));
+  }, [memoryStorageKey]);
+
+  const workspaceMemorySnapshot = useMemo(
+    () =>
+      buildWorkspaceMemorySnapshot({
+        projectId: activeProject?.id ?? activeProjectId,
+        projectName: activeProject?.name ?? localShell.project.workspaceName,
+        projectPath: activeProject?.projectRoot ?? localShell.project.activeProjectRoot,
+        repositorySummary: repository.connected
+          ? `${repository.name ?? "repo"} @ ${repository.branch ?? "unknown"} (${repository.syncStatus ?? "idle"})`
+          : "Repository disconnected",
+        discoveredInstructions: localShell.project.instructionSources,
+        commandRegistry: projectCommandRegistry,
+        providerSource,
+        activeModel,
+        deploymentMode,
+        localCloudPreference: deploymentMode === "local" ? "local" : deploymentMode === "cloud" ? "cloud" : "hybrid",
+        knownConventions: [
+          ...(projectCommandRegistry.diagnostics.agentsFileFound ? ["AGENTS.md instructions present"] : []),
+          ...(projectCommandRegistry.diagnostics.packageJsonFound ? ["package.json scripts workflow"] : []),
+          ...(projectCommandRegistry.diagnostics.makefileFound ? ["Makefile targets available"] : []),
+        ],
+        workflow,
+        auditors: auditorControlState,
+        releaseControl: releaseControlState,
+        chatState,
+        currentChatType,
+        currentChatSessionId,
+        activeAgentId: activeWorkflowTask?.ownerAgentId ?? currentSession?.linked.agentId,
+      }),
+    [
+      activeModel,
+      activeProject?.id,
+      activeProject?.name,
+      activeProject?.projectRoot,
+      activeProjectId,
+      chatState,
+      currentChatSessionId,
+      currentChatType,
+      currentSession?.linked.agentId,
+      deploymentMode,
+      localShell.project.activeProjectRoot,
+      localShell.project.instructionSources,
+      localShell.project.workspaceName,
+      projectCommandRegistry,
+      providerSource,
+      repository.branch,
+      repository.connected,
+      repository.name,
+      repository.syncStatus,
+      workflow,
+      activeWorkflowTask?.ownerAgentId,
+    ],
+  );
+  const workspaceMemory = useMemo(
+    () => mergeWorkspaceMemory(persistedMemory, workspaceMemorySnapshot),
+    [persistedMemory, workspaceMemorySnapshot],
+  );
+
+  useEffect(() => {
+    persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
+  }, [memoryStorageKey, workspaceMemory]);
+
+  const contextEnvelope = useMemo(
+    () =>
+      retrieveMemoryContext(workspaceMemory, {
+        projectId: activeProject?.id ?? activeProjectId,
+        taskId: activeWorkflowTask?.id,
+        chatSessionId: currentChatSessionId,
+        releaseCandidateId: activeWorkflowTask?.linkedReleaseCandidateId,
+        agentRole: activeWorkflowTask?.ownerAgentId,
+        audience:
+          currentChatType === "agent"
+            ? "agent"
+            : currentChatType === "audit" || currentChatType === "review"
+              ? "auditor"
+              : "main_chat",
+      }),
+    [
+      workspaceMemory,
+      activeProject?.id,
+      activeProjectId,
+      activeWorkflowTask?.id,
+      activeWorkflowTask?.linkedReleaseCandidateId,
+      activeWorkflowTask?.ownerAgentId,
+      currentChatSessionId,
+      currentChatType,
+    ],
+  );
 
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
@@ -450,6 +556,8 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+    memory: workspaceMemory,
+    contextEnvelope,
   };
 
   useEffect(() => {
