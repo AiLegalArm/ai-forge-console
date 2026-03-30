@@ -42,6 +42,10 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
         : workspaceState.currentConversationType === "audit"
           ? workspaceState.contextPackets.auditChat
           : workspaceState.contextPackets.reviewChat;
+  const runtimeRouteDecision =
+    workspaceState.localInference.routing.runtimeDecisionsBySurface?.[
+      `${workspaceState.currentConversationType}:${workspaceState.currentChatSessionId}`
+    ];
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
@@ -81,6 +85,15 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className={`hidden md:inline ${ollamaState === "available" ? "text-success" : "text-warning"}`}>
         {ollamaState}
       </span>
+      {runtimeRouteDecision ? (
+        <>
+          <span className="hidden md:inline text-muted-foreground">•</span>
+          <span className={`hidden md:inline ${runtimeRouteDecision.deploymentTarget === "local" ? "text-success" : "text-primary"}`}>
+            {runtimeRouteDecision.deploymentTarget}
+          </span>
+          {runtimeRouteDecision.usedFallback ? <span className="hidden md:inline text-warning">fallback</span> : null}
+        </>
+      ) : null}
       <span className="text-border hidden md:inline">|</span>
 
       <Shield className={`h-3 w-3 shrink-0 ${isPrivate ? "text-success" : "text-warning"}`} />

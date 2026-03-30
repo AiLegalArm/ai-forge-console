@@ -36,7 +36,7 @@ import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
-import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
+import type { AgentRole, AppRoutingModeProfile, RoutingDecision, RoutingMode, TaskType } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
@@ -268,6 +268,7 @@ export function useChatWorkspaceState() {
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
   const currentSession = chatState.sessions.find((session) => session.id === currentChatSessionId);
   const currentSessionRoutingMode = localInference.routing.conversationOverrides[currentChatSessionId] ?? localInference.routing.activeMode;
+  const [routingDecisionsBySession, setRoutingDecisionsBySession] = useState<Record<string, RoutingDecision>>({});
 
   const mapProfileToRoutingMode = (profile: AppRoutingModeProfile): RoutingMode => {
     switch (profile) {
@@ -322,6 +323,46 @@ export function useChatWorkspaceState() {
     const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
     return approval.status === "pending" && (inSession || inTask);
   });
+
+  const resolveTaskTypeForRouting = (chatType: ChatType, taskPhase?: WorkflowState["tasks"][number]["phase"]): TaskType => {
+    if (chatType === "audit") return "audit";
+    if (chatType === "review") return taskPhase === "release" ? "release" : "review";
+    if (taskPhase === "release") return "release";
+    if (taskPhase === "audit") return "audit";
+    if (taskPhase === "review") return "review";
+    return "coding";
+  };
+
+  const resolveAgentRoleForRouting = (chatType: ChatType, agentId?: string): AgentRole => {
+    const linkedAgent = agentId ? activeAgents.find((agent) => agent.id === agentId) : undefined;
+    const role = linkedAgent?.role;
+    if (role) return role;
+    if (chatType === "audit") return "code_auditor";
+    if (chatType === "review") return "reviewer";
+    if (chatType === "main") return "planner";
+    return "worker";
+  };
+
+  const buildRuntimeRoutingDecision = (chatType: ChatType, sessionId: string, agentId?: string) =>
+    modelRoutingEngine.chooseModel(
+      {
+        agentRole: resolveAgentRoleForRouting(chatType, agentId ?? activeWorkflowTask?.ownerAgentId),
+        taskType: resolveTaskTypeForRouting(chatType, activeWorkflowTask?.phase),
+        chatType,
+        appModeProfile: routingProfile,
+        routingMode: currentSessionRoutingMode,
+        privacyMode: currentSessionRoutingMode === "sensitive_local_only" || currentSessionRoutingMode === "local_only" ? "strict_local" : "standard",
+        preferredBackend: providerSource === "openrouter" ? "cloud" : "ollama",
+        preferredProvider: providerSource,
+        preferredModelId: activeModel,
+        openRouterAvailable: localInference.cloud.status === "connected",
+        ollamaAvailable: localInference.ollama.runtimeAvailable,
+        localOnly: deploymentMode === "local",
+        releaseCritical: Boolean(activeWorkflowTask?.phase === "release" || activeWorkflowTask?.github?.pullRequest?.auditGate?.verdict === "no_go"),
+        fallbackRequired: true,
+      },
+      localInference.hybridModelRegistry,
+    );
 
   const chatContexts = useMemo<ChatContextMap>(() => {
     const contextMap = {
@@ -401,6 +442,7 @@ export function useChatWorkspaceState() {
           ...currentLocalInference.routing,
           activeMode: nextRoutingMode,
           agentAssignments: nextAgentAssignments,
+          runtimeDecisionsBySurface: currentLocalInference.routing.runtimeDecisionsBySurface ?? {},
         },
         resources: {
           ...currentLocalInference.resources,
@@ -637,8 +679,8 @@ export function useChatWorkspaceState() {
     return decision;
   };
 
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets"> = {
   const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope"> = {
+    // runtime-selected route is reflected in chat/session metadata and surfaced here for badges
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
@@ -649,8 +691,11 @@ export function useChatWorkspaceState() {
       activeRepository?.defaultBranch ??
       "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
-    activeProvider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
-    activeModel,
+    activeProvider:
+      (routingDecisionsBySession[currentChatSessionId]?.selectedProvider ?? providerSource) === "ollama" ? "Ollama" : "OpenRouter",
+    activeModel:
+      localInference.hybridModelRegistry.find((entry) => entry.id === routingDecisionsBySession[currentChatSessionId]?.selectedModelId)?.providerModelId ??
+      activeModel,
     lastUsedModel: lastUsedModelByProvider[providerSource],
     availableModels: resolveModelOptions(providerSource),
     providerSource,
@@ -1904,6 +1949,24 @@ export function useChatWorkspaceState() {
 
       const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
       const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const routingDecision = buildRuntimeRoutingDecision(chatType, sessionId, activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId);
+      const selectedProviderLabel = routingDecision.selectedProvider === "openrouter" ? "OpenRouter" : "Ollama";
+      const selectedProviderModel =
+        localInference.hybridModelRegistry.find((entry) => entry.id === routingDecision.selectedModelId)?.providerModelId ?? activeModel;
+      setRoutingDecisionsBySession((prev) => ({ ...prev, [sessionId]: routingDecision }));
+      dispatch({
+        type: "set_local_inference",
+        localInference: {
+          ...localInferenceRef.current,
+          routing: {
+            ...localInferenceRef.current.routing,
+            runtimeDecisionsBySurface: {
+              ...(localInferenceRef.current.routing.runtimeDecisionsBySurface ?? {}),
+              [`${chatType}:${sessionId}`]: routingDecision,
+            },
+          },
+        },
+      });
       const chatContextPacket: ContextInjectionPacket =
         chatType === "main"
           ? workspaceState.contextPackets.mainChat
@@ -1918,10 +1981,10 @@ export function useChatWorkspaceState() {
         prompt: draft,
         currentProject: workspaceState.currentProject,
         currentTask: workspaceState.currentTask,
-        activeProvider: workspaceState.activeProvider,
-        activeModel,
+        activeProvider: selectedProviderLabel,
+        activeModel: selectedProviderModel,
         routingMode: workspaceState.routingMode,
-        routingProfile,
+        routingProfile: routingDecision.profile,
         deploymentMode,
         activeAgent,
         linkedContext: activeSession?.linked,
@@ -1934,11 +1997,22 @@ export function useChatWorkspaceState() {
         sessionId,
         role: mockResponse.role,
         authorLabel: mockResponse.authorLabel,
-        content: providerSource === "openrouter" && chatType === "main" ? "Sending request to OpenRouter…" : "Working on it…",
+        content:
+          routingDecision.selectedProvider === "openrouter" && chatType === "main"
+            ? "Sending request to OpenRouter…"
+            : routingDecision.selectedProvider === "ollama"
+              ? "Routing to local model…"
+              : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
         status: "pending" as const,
         linked: mockResponse.linked,
-        providerMeta: mockResponse.providerMeta,
+        providerMeta: {
+          ...mockResponse.providerMeta,
+          provider: selectedProviderLabel,
+          model: selectedProviderModel,
+          backend: routingDecision.deploymentTarget,
+          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
+        },
       };
 
       dispatch({
@@ -2042,7 +2116,7 @@ export function useChatWorkspaceState() {
       }
 
       const executeProviderRequest = async () => {
-        if (providerSource === "openrouter" && chatType === "main") {
+        if (routingDecision.selectedProvider === "openrouter" && chatType === "main") {
           setProviderExecutionState("sending");
 
           const recentMessages = (currentChat.messagesBySessionId[sessionId] ?? [])
@@ -2056,11 +2130,11 @@ export function useChatWorkspaceState() {
 
           setProviderExecutionState("waiting");
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
-            model: activeModel,
+            model: selectedProviderModel,
             userInput: draft,
             contextMessages: recentMessages,
             systemPrompt:
-              `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.\n` +
+              `You are assisting in a chat-first software workspace. Routing profile: ${routingDecision.profile}. Routing mode: ${workspaceState.routingMode}. Route reason: ${routingDecision.reason}.\n` +
               `${contextSystemPrompt}`,
           });
 
@@ -2086,7 +2160,7 @@ export function useChatWorkspaceState() {
                             provider: "OpenRouter",
                             model: openRouterResult.model,
                             backend: "cloud",
-                            routingKey: routingProfile,
+                            routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                           },
                         }
                       : message,
@@ -2102,7 +2176,7 @@ export function useChatWorkspaceState() {
                           provider: "OpenRouter",
                           model: openRouterResult.model,
                           backend: "cloud",
-                          routingKey: routingProfile,
+                          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                         },
                       }
                     : session,
