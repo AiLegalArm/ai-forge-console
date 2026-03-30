@@ -77,6 +77,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const activeSession = chatState.sessions.find((session) => session.id === sessionId);
   const activeDraft = chatState.draftInputBySessionId[sessionId] ?? "";
   const activeApproval = chatState.approvalRequestBySessionId[sessionId];
+  const agentCommandRequests = workspaceState.workflow.agentCommandRequests.filter((request) => request.linkedChatId === sessionId).slice(0, 4);
   const placeholders = chatState.attachmentPlaceholdersBySessionId[sessionId] ?? [];
   const hasConnectedRepo = workspaceState.repository.connected;
   const hasProviderConnection = workspaceState.providerSource === "openrouter"
@@ -388,6 +389,34 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 >
                   {t("chat.approve" as never)}
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {agentCommandRequests.length > 0 && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 text-xs font-mono space-y-1.5">
+            <p className="text-primary">Agent command requests</p>
+            {agentCommandRequests.map((request) => (
+              <div key={request.id} className="rounded border border-border bg-background/70 p-1.5 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground truncate">{request.rawCommand}</span>
+                  <span className="text-[10px] text-muted-foreground">{request.origin.replace(/_/g, " ")}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">{request.reason}</p>
+                <div className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className="text-muted-foreground">
+                    {request.safetyLevel} • {request.executionState} • {request.resultState}
+                  </span>
+                  {request.linkedApprovalId ? (
+                    <button
+                      onClick={() => onWorkflowApprovalResolve?.(request.linkedApprovalId!)}
+                      className="rounded bg-primary px-1.5 py-0.5 text-primary-foreground"
+                    >
+                      {t("chat.approve" as never)}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>

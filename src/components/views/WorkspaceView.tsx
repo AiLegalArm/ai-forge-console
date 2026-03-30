@@ -140,6 +140,18 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">agent commands</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.agentCommandRequests.slice(0, 3).map((request) => (
+            <div key={request.id} className="rounded border border-border p-1.5 text-[10px]">
+              <div className="text-foreground font-mono truncate">{request.rawCommand}</div>
+              <div className="text-muted-foreground">{request.origin.replace(/_/g, " ")} • {request.executionState}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.github_flow" as never)}</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.branch" as never)}</span><span className="text-foreground font-mono truncate max-w-[130px]">{activeTask?.github?.branch?.localBranchName ?? "—"}</span></div>

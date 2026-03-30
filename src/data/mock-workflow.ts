@@ -4,6 +4,7 @@ import type {
   WorkflowApproval,
   AgentActivityEvent,
   GitHubRepositoryConnection,
+  AgentCommandRequest,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
 
@@ -312,6 +313,7 @@ const approvals: WorkflowApproval[] = [
     requestedBy: "git-agent",
     requestedAtIso: "2026-03-29T10:46:30.000Z",
     expiresAtIso: "2026-03-29T12:46:30.000Z",
+    linkedAgentCommandRequestId: "acr-backend-tests-1",
   },
   {
     id: "approval-deploy-1",
@@ -358,6 +360,49 @@ const approvals: WorkflowApproval[] = [
     agentId: "agent-auditor",
     requestedBy: "security-auditor",
     requestedAtIso: "2026-03-29T10:41:00.000Z",
+  },
+];
+
+
+const agentCommandRequests: AgentCommandRequest[] = [
+  {
+    id: "acr-frontend-dev-1",
+    origin: "agent_suggested_command",
+    linkedAgentId: "agent-frontend",
+    linkedTaskId: "task-rbac-exec",
+    linkedChatId: "agent-session-1",
+    commandId: "pkg:dev",
+    rawCommand: "npm run dev",
+    commandSource: "package.json",
+    reason: "Frontend Agent wants to verify invite modal interactions in local dev.",
+    intent: "run_dev_server",
+    safetyLevel: "safe",
+    approvalRequirement: "not_required",
+    executionState: "executed",
+    resultState: "success",
+    linkedTerminalCommandId: "cmd_frontend_dev_1",
+    requestedAtIso: "2026-03-29T10:45:30.000Z",
+    updatedAtIso: "2026-03-29T10:45:50.000Z",
+    executedAtIso: "2026-03-29T10:45:50.000Z",
+  },
+  {
+    id: "acr-backend-tests-1",
+    origin: "agent_suggested_command",
+    linkedAgentId: "agent-backend",
+    linkedTaskId: "task-rbac-exec",
+    linkedChatId: "agent-session-1",
+    commandId: "pkg:test",
+    rawCommand: "npm run test",
+    commandSource: "package.json",
+    reason: "Backend Agent requests test verification after permission scope changes.",
+    intent: "verify_backend_changes",
+    safetyLevel: "caution",
+    approvalRequirement: "required",
+    executionState: "awaiting_approval",
+    resultState: "none",
+    linkedApprovalId: "approval-git-push-1",
+    requestedAtIso: "2026-03-29T10:46:20.000Z",
+    updatedAtIso: "2026-03-29T10:46:30.000Z",
   },
 ];
 
@@ -470,6 +515,7 @@ const activityEvents: AgentActivityEvent[] = [
 export const workflowState: WorkflowState = {
   tasks,
   approvals,
+  agentCommandRequests,
   activityEvents,
   github: {
     activeRepositoryId: "repo-saas-dashboard",

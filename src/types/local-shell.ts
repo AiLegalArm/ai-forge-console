@@ -67,6 +67,8 @@ export interface TerminalOutputLine {
   commandId?: string;
 }
 
+export type TerminalCommandOrigin = "user" | "agent_suggested" | "agent_approved" | "blocked";
+
 export interface TerminalCommand {
   id: string;
   command: string;
@@ -84,6 +86,11 @@ export interface TerminalCommand {
   startedAtIso?: string;
   completedAtIso?: string;
   updatedAtIso: string;
+  origin?: TerminalCommandOrigin;
+  linkedAgentId?: string;
+  linkedAgentCommandRequestId?: string;
+  commandSource?: string;
+  originReason?: string;
 }
 
 export type TerminalCommandHistoryEntry = TerminalCommand;

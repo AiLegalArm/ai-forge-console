@@ -8,6 +8,7 @@ import type {
   TerminalSession,
   TerminalSessionExecutionState,
   TerminalSessionState,
+  TerminalCommandOrigin,
 } from "@/types/local-shell";
 
 interface CommandRuntime {
@@ -28,6 +29,11 @@ interface ExecuteCommandInput {
   linkedChatSessionId?: string;
   timeoutMs?: number;
   approved?: boolean;
+  origin?: TerminalCommandOrigin;
+  linkedAgentId?: string;
+  linkedAgentCommandRequestId?: string;
+  commandSource?: string;
+  originReason?: string;
 }
 
 export interface ExecuteCommandResult {
@@ -262,6 +268,11 @@ export class LocalTerminalExecutionService {
       approvalState,
       createdAtIso: nowIso(),
       updatedAtIso: nowIso(),
+      origin: input.origin,
+      linkedAgentId: input.linkedAgentId,
+      linkedAgentCommandRequestId: input.linkedAgentCommandRequestId,
+      commandSource: input.commandSource,
+      originReason: input.originReason,
     };
 
     session.commandHistory = [command, ...session.commandHistory].slice(0, 100);
