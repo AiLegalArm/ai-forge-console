@@ -57,6 +57,23 @@ describe("BrowserAutomationService", () => {
     expect(output.session.resultState).toBe("failed");
     expect(output.session.failureState.state).toBe("failed");
     expect(output.evidence.some((item) => item.kind === "screenshot")).toBe(true);
+    expect(output.evidence.some((item) => item.kind === "step_failure")).toBe(true);
     expect(output.events.some((event) => event.status === "step_failed")).toBe(true);
+    expect(output.events.some((event) => event.status === "evidence_captured")).toBe(true);
+  });
+
+  it("marks timed out steps as scenario timeout failures", async () => {
+    const service = new BrowserAutomationService(
+      makeAdapter(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 35));
+        return { status: "passed" };
+      }),
+    );
+
+    const output = await service.executeScenario({ scenario: baseScenario, timeoutMs: 10 });
+
+    expect(output.session.resultState).toBe("error");
+    expect(output.session.failureState.reason).toBe("scenario_timeout");
+    expect(output.events.some((event) => event.status === "session_failed")).toBe(true);
   });
 });

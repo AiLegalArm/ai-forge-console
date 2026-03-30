@@ -7,6 +7,8 @@ import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
+import { createDeployProviderClientFromEnv, RealDeployIntegrationService } from "@/lib/deploy-integration-service";
+import { upsertApproval, upsertDeployment } from "@/lib/release-control-state";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalGitHubService } from "@/lib/local-github-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
@@ -336,6 +338,11 @@ export function useChatWorkspaceState() {
     Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>
   >({});
   const [policyState, setPolicyState] = useState<ExecutionPolicyState>({ recentDecisions: [] });
+  const [baseReleaseControl, setBaseReleaseControl] = useState(releaseControlState);
+  const deployIntegrationService = useMemo(
+    () => new RealDeployIntegrationService(createDeployProviderClientFromEnv()),
+    [],
+  );
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -422,7 +429,7 @@ export function useChatWorkspaceState() {
         localInference,
         browserSession: activeBrowserSession,
         evidenceFlow: activeEvidenceFlow,
-        releaseControl: releaseControlState,
+        releaseControl: baseReleaseControl,
         repository,
         currentTaskId: activeWorkflowTask?.id,
         currentChatSessionId,
@@ -435,6 +442,7 @@ export function useChatWorkspaceState() {
       localInference,
       activeBrowserSession,
       activeEvidenceFlow,
+      baseReleaseControl,
       repository,
       activeWorkflowTask?.id,
       currentChatSessionId,
@@ -447,7 +455,7 @@ export function useChatWorkspaceState() {
     const finalDecision = evaluateGoNoGo({
       auditors: auditorControlState.auditors.map((auditor) => auditor.verdict),
       releaseAuditorVerdict,
-      reviewState: releaseControlState.releaseCandidates.find((candidate) => candidate.id === activeReleaseCandidateId)?.reviewState ?? "blocked",
+      reviewState: baseReleaseControl.releaseCandidates.find((candidate) => candidate.id === activeReleaseCandidateId)?.reviewState ?? "blocked",
       taskStatuses: workflow.tasks.map((task) => task.status),
       subtaskStatuses: workflow.subtasks.map((subtask) => subtask.status),
       auditBlockers: auditorControlState.blockers,
@@ -458,32 +466,32 @@ export function useChatWorkspaceState() {
       githubSyncStatus: workflow.github.repositories[0]?.state ?? "error",
       browserEvidenceResolved: !activeEvidenceFlow.releaseReadinessBlockers.some((id) => activeEvidenceFlow.records.find((record) => record.id === id)?.source === "browser_agent"),
       designEvidenceResolved: !activeEvidenceFlow.records.some((record) => record.source === "designer_agent" && record.blocking),
-      deploymentReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.deploymentState === "blocked") ? "blocked" : "ready",
-      domainReadiness: releaseControlState.releaseCandidates.some((candidate) => candidate.domainState === "blocked") ? "blocked" : "ready",
+      deploymentReadiness: baseReleaseControl.releaseCandidates.some((candidate) => candidate.deploymentState === "blocked") ? "blocked" : "ready",
+      domainReadiness: baseReleaseControl.releaseCandidates.some((candidate) => candidate.domainState === "blocked") ? "blocked" : "ready",
       approvals: workflow.approvals,
     });
 
     return {
-      ...releaseControlState,
+      ...baseReleaseControl,
       finalDecision,
       operationsPanel: {
-        ...releaseControlState.operationsPanel,
+        ...baseReleaseControl.operationsPanel,
         generatedAtIso: new Date().toISOString(),
         blockerSummary: {
-          ...releaseControlState.operationsPanel.blockerSummary,
+          ...baseReleaseControl.operationsPanel.blockerSummary,
           total: auditorControlState.blockers.length,
           critical: auditorControlState.blockers.filter((blocker) => blocker.blockingSeverity === "critical").length,
           unresolved: auditorControlState.blockers.map((blocker) => blocker.id),
         },
         auditSummary: {
-          ...releaseControlState.operationsPanel.auditSummary,
+          ...baseReleaseControl.operationsPanel.auditSummary,
           verdict: releaseAuditorVerdict,
           activeBlockers: auditorControlState.blockers.length,
           unresolvedFindings: auditorControlState.findings.filter((finding) => finding.status === "open").length,
           gateSummary: auditorControlState.gateDecisions.map((gate) => ({ stage: gate.stage, verdict: gate.verdict })),
         },
         decisionSurface: {
-          ...releaseControlState.operationsPanel.decisionSurface,
+          ...baseReleaseControl.operationsPanel.decisionSurface,
           status: finalDecision.status,
           blockerSeverity: auditorControlState.blockers.some((blocker) => blocker.blockingSeverity === "critical") ? "critical" : auditorControlState.blockers.length > 0 ? "warning" : "none",
           summary: finalDecision.summary,
@@ -492,7 +500,7 @@ export function useChatWorkspaceState() {
         },
       },
     };
-  }, [auditorControlState, activeReleaseCandidateId, workflow, activeBrowserSession.resultState, activeEvidenceFlow, localInference.cloud.status, localInference.ollama.connectionHealthy]);
+  }, [auditorControlState, activeReleaseCandidateId, workflow, activeBrowserSession.resultState, activeEvidenceFlow, localInference.cloud.status, localInference.ollama.connectionHealthy, baseReleaseControl]);
 
   const resolveTaskTypeForRouting = (chatType: ChatType, taskPhase?: WorkflowState["tasks"][number]["phase"]): TaskType => {
     if (chatType === "audit") return "audit";
@@ -3077,6 +3085,96 @@ export function useChatWorkspaceState() {
         chatType: targetSession.type,
         sessionId: targetSession.id,
       });
+    },
+    triggerDeploy: async (environment: "preview" | "production") => {
+      const activeCandidate = releaseControl.releaseCandidates.find((candidate) => candidate.id === releaseControl.activeCandidateId);
+      const branch = activeCandidate?.linkedBranch ?? repository.branch ?? "main";
+      const taskId = activeCandidate?.linkedTaskId;
+      const policyDecision = evaluatePolicy({
+        actionType: "deploy_action",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "release_action", id: activeCandidate?.id, label: `deploy:${environment}` },
+      });
+      if (policyDecision.blocked) {
+        return { ok: false, message: policyDecision.rationale };
+      }
+      if (policyDecision.requiresApproval && environment === "production") {
+        const approval = deployIntegrationService.buildDeployApproval(taskId, currentChatSessionId, environment);
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            approvals: upsertApproval(workflow.approvals, approval),
+            activityEvents: [
+              {
+                id: `activity-${approval.id}`,
+                type: "waiting_for_approval",
+                title: "Production deploy awaiting approval",
+                details: approval.reason,
+                taskId,
+                chatId: currentChatSessionId,
+                severity: "warning",
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        return { ok: false, message: "Approval required", approvalId: approval.id };
+      }
+
+      const result = await deployIntegrationService.triggerDeploy({
+        releaseControl,
+        projectId: activeProjectId,
+        repository: repository.name ?? localShell.project.repositoryName ?? activeProject?.name ?? "workspace",
+        branch,
+        taskId,
+        chatId: currentChatSessionId,
+        releaseCandidateId: activeCandidate?.id,
+        environment,
+        approvals: workflow.approvals,
+        releaseState: releaseControl.finalDecision.status === "go" ? "go" : releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go" ? "blocked" : "warning",
+      });
+
+      if (!result.ok || !result.deployment) {
+        return result;
+      }
+
+      setBaseReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...workflow,
+          activityEvents: [
+            {
+              id: `activity-deploy-${result.deployment.id}`,
+              type: "deploy_triggered",
+              title: `${environment} deploy triggered`,
+              details: `${result.deployment.id} (${result.deployment.status})`,
+              taskId,
+              chatId: currentChatSessionId,
+              severity: "info",
+              createdAtIso: new Date().toISOString(),
+            },
+            ...workflow.activityEvents,
+          ],
+        },
+      });
+      return result;
+    },
+    refreshDeployStatus: async (deploymentId: string) => {
+      const deployment = releaseControl.deployments.find((entry) => entry.id === deploymentId);
+      if (!deployment) return { ok: false, message: "Deployment not found." };
+      const result = await deployIntegrationService.refreshDeploymentStatus(deployment);
+      if (!result.ok || !result.deployment) return result;
+      setBaseReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      return result;
     },
     refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => {

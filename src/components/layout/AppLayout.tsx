@@ -50,6 +50,8 @@ export default function AppLayout() {
     runProjectCommandCategory,
     focusTask,
     launchTask,
+    triggerDeploy,
+    refreshDeployStatus,
   } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
@@ -111,6 +113,8 @@ export default function AppLayout() {
               onRunProjectCommandCategory={runProjectCommandCategory}
               onFocusTask={focusTask}
               onLaunchTask={launchTask}
+              onTriggerDeploy={triggerDeploy}
+              onRefreshDeployStatus={refreshDeployStatus}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel

@@ -40,9 +40,11 @@ interface CenterPanelProps {
   onRunProjectCommandCategory: (category: "dev" | "build" | "test" | "lint" | "typecheck") => Promise<{ ok: boolean; message: string; code?: string }>;
   onFocusTask: (taskId: string) => void;
   onLaunchTask: (taskId: string) => void;
+  onTriggerDeploy: (environment: "preview" | "production") => Promise<{ ok: boolean; message: string; approvalId?: string }>;
+  onRefreshDeployStatus: (deploymentId: string) => Promise<{ ok: boolean; message: string }>;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory, onFocusTask, onLaunchTask }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory, onFocusTask, onLaunchTask, onTriggerDeploy, onRefreshDeployStatus }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -72,6 +74,8 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onActiveProjectChange={onActiveProjectChange}
           onFocusTask={onFocusTask}
           onLaunchTask={onLaunchTask}
+          onTriggerDeploy={onTriggerDeploy}
+          onRefreshDeployStatus={onRefreshDeployStatus}
         />
       </div>
     );

@@ -66,12 +66,14 @@ interface WorkspaceViewProps {
   onActiveProjectChange: (projectId: string) => void;
   onFocusTask: (taskId: string) => void;
   onLaunchTask: (taskId: string) => void;
+  onTriggerDeploy: (environment: "preview" | "production") => Promise<{ ok: boolean; message: string }>;
+  onRefreshDeployStatus: (deploymentId: string) => Promise<{ ok: boolean; message: string }>;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask, onTriggerDeploy, onRefreshDeployStatus }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
-  if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
+  if (section === "deploy") return <DeployView workspaceState={workspaceState} onTriggerDeploy={onTriggerDeploy} onRefreshDeployStatus={onRefreshDeployStatus} />;
   if (section === "domains") return <DomainsView workspaceState={workspaceState} />;
   if (section === "design") return <DesignView workspaceState={workspaceState} />;
   if (section === "browser") return <BrowserView workspaceState={workspaceState} onRunBrowserScenario={onRunBrowserScenario} />;
@@ -666,7 +668,11 @@ function GitView({
   );
 }
 
-function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+function DeployView({ workspaceState, onTriggerDeploy, onRefreshDeployStatus }: {
+  workspaceState: WorkspaceRuntimeState;
+  onTriggerDeploy: (environment: "preview" | "production") => Promise<{ ok: boolean; message: string }>;
+  onRefreshDeployStatus: (deploymentId: string) => Promise<{ ok: boolean; message: string }>;
+}) {
   const { t } = useI18n();
   const { deployments, releaseCandidates, operations } = workspaceState.releaseControl;
   const activeReleaseCandidate = releaseCandidates.find((candidate) => candidate.id === workspaceState.releaseControl.activeCandidateId);
@@ -718,6 +724,19 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review" as never)}</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedReviewId ?? "—"}</span></div>
         </div>
       ) : null}
+      <div className="flex gap-2">
+        <button onClick={() => void onTriggerDeploy("preview")} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">
+          Trigger Preview Deploy
+        </button>
+        <button onClick={() => void onTriggerDeploy("production")} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">
+          Trigger Production Deploy
+        </button>
+        {deployments[0] ? (
+          <button onClick={() => void onRefreshDeployStatus(deployments[0].id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">
+            Refresh Latest Status
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
