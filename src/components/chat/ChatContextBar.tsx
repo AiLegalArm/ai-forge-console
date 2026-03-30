@@ -31,6 +31,9 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
     (blocker) => blocker.status === "active" && (blocker.entityId === activeTask?.id || blocker.entityType === "subtask"),
   );
   const ollamaState = workspaceState.localInference.ollama.serviceState;
+  const rememberedBlockers = workspaceState.memory.auditRelease.recurringBlockers.length;
+  const rememberedDecisions = workspaceState.memory.decisions.length;
+  const releaseHistory = workspaceState.memory.auditRelease.releaseDecisions.length;
   const activeContextPacket =
     workspaceState.currentConversationType === "main"
       ? workspaceState.contextPackets.mainChat
@@ -107,6 +110,9 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className={`hidden lg:inline ${activeContextPacket.blockers.length > 0 ? "text-warning" : "text-success"}`}>
         {activeContextPacket.blockers.length > 0 ? `${activeContextPacket.blockers.length} scoped blockers` : "no scoped blockers"}
       </span>
+      <span className="hidden lg:inline text-muted-foreground">mem:blockers {rememberedBlockers}</span>
+      <span className="hidden lg:inline text-muted-foreground">mem:decisions {rememberedDecisions}</span>
+      <span className="hidden lg:inline text-muted-foreground">mem:releases {releaseHistory}</span>
 
       <div className="ml-auto hidden lg:flex items-center gap-1.5">
         <Bot className="h-3 w-3 text-muted-foreground" />
