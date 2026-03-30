@@ -1,14 +1,6 @@
 import { useMemo } from "react";
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandShortcut,
-} from "@/components/ui/command";
 import type { LucideIcon } from "lucide-react";
+import { CommandPalette } from "@/ui/components/command-palette";
 
 export type CommandCategory =
   | "navigation"
@@ -61,35 +53,6 @@ export function GlobalCommandPalette({ open, onOpenChange, commands }: GlobalCom
     return groups;
   }, [commands]);
 
-  return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search…" autoFocus />
-      <CommandList>
-        <CommandEmpty>No matching commands.</CommandEmpty>
-        {Array.from(groupedCommands.entries()).map(([category, items]) => (
-          <CommandGroup key={category} heading={CATEGORY_LABELS[category]}>
-            {items.map((command) => {
-              const Icon = command.icon;
-              const value = [command.label, command.id, ...(command.keywords ?? [])].join(" ");
-
-              return (
-                <CommandItem
-                  key={command.id}
-                  value={value}
-                  onSelect={() => {
-                    void command.handler();
-                    onOpenChange(false);
-                  }}
-                >
-                  {Icon ? <Icon className="mr-2 h-4 w-4" /> : null}
-                  <span>{command.label}</span>
-                  {command.shortcut ? <CommandShortcut>{command.shortcut}</CommandShortcut> : null}
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
-        ))}
-      </CommandList>
-    </CommandDialog>
-  );
+  const groups = Array.from(groupedCommands.entries()).map(([category, items]) => [CATEGORY_LABELS[category], items] as [string, KeyboardCommand[]]);
+  return <CommandPalette open={open} onOpenChange={onOpenChange} groups={groups} />;
 }
