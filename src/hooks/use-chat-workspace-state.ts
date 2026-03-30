@@ -413,7 +413,6 @@ export function useChatWorkspaceState() {
   };
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
-
   const memoryStorageKey = useMemo(
     () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
     [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
@@ -560,6 +559,8 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+    memory: workspaceMemory,
+    contextEnvelope,
   };
 
   const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
