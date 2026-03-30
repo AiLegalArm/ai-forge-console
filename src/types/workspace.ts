@@ -11,6 +11,7 @@ import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
 import type { AuditorVerdict } from "@/types/audits";
 import type { ContextInjectionPacket } from "@/types/context";
+import type { ExecutionPolicyState } from "@/types/execution-policy";
 
 export type PrivacyMode = "private" | "team";
 export interface AgentRuntimeState {
@@ -106,6 +107,7 @@ export interface WorkspaceRuntimeState {
   terminalCommandRegistryReady: boolean;
   agentCommandRegistryReady: boolean;
   providerExecutionState: OpenRouterExecutionState;
+  policyState: ExecutionPolicyState;
   contextPackets: {
     mainChat: ContextInjectionPacket;
     agentChat: ContextInjectionPacket;

@@ -355,9 +355,28 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
           {workspaceState.localShell.capabilities.map((gate) => (
             <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
               <span>{gate.capability.replace(/_/g, " ")}</span>
-              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? t("rail.approval" as never) : t("rail.allowed" as never)}</span>
+              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "require_approval" : "allow"}</span>
             </div>
           ))}
+          {workspaceState.policyState.lastDecision ? (
+            <div className="mt-2 rounded border border-warning/30 bg-warning/5 p-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-warning font-mono uppercase">policy</span>
+                <span
+                  className={`font-mono ${
+                    workspaceState.policyState.lastDecision.blocked
+                      ? "text-destructive"
+                      : workspaceState.policyState.lastDecision.requiresApproval
+                        ? "text-warning"
+                        : "text-success"
+                  }`}
+                >
+                  {workspaceState.policyState.lastDecision.outcome}
+                </span>
+              </div>
+              <div className="text-muted-foreground">{workspaceState.policyState.lastDecision.rationale}</div>
+            </div>
+          ) : null}
         </div>
       </div>
       <div>
