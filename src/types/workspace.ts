@@ -3,6 +3,7 @@ import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
+import type { ProjectCommandRegistry } from "@/types/project-commands";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { SyncStatus } from "@/types/contracts";
 import type { EvidenceFlowState } from "@/types/evidence";
@@ -100,6 +101,9 @@ export interface WorkspaceRuntimeState {
   projects: WorkspaceProjectEntry[];
   activeProjectId: string;
   repository: WorkspaceRepositoryState;
+  projectCommandRegistry: ProjectCommandRegistry;
+  terminalCommandRegistryReady: boolean;
+  agentCommandRegistryReady: boolean;
   providerExecutionState: OpenRouterExecutionState;
 }
 
