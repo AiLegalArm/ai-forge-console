@@ -20,6 +20,7 @@ import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/bro
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
 import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
+import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -39,6 +40,7 @@ import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
+import type { ExecutionPolicyAction, ExecutionPolicyContext, ExecutionPolicyState } from "@/types/execution-policy";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -242,6 +244,7 @@ export function useChatWorkspaceState() {
   const [pendingCommandLaunchByApprovalId, setPendingCommandLaunchByApprovalId] = useState<
     Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>
   >({});
+  const [policyState, setPolicyState] = useState<ExecutionPolicyState>({ recentDecisions: [] });
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -609,6 +612,32 @@ export function useChatWorkspaceState() {
     ],
   );
 
+  const evaluatePolicy = (action: ExecutionPolicyAction, contextOverride?: Partial<ExecutionPolicyContext>) => {
+    const context: ExecutionPolicyContext = {
+      activeProjectId,
+      activeProjectName: activeProject?.name ?? localShell.project.workspaceName,
+      activeTaskId: activeWorkflowTask?.id,
+      activeTaskStatus: activeWorkflowTask?.status,
+      providerSource,
+      activeModel,
+      deploymentMode,
+      localCloudMode: deploymentMode,
+      hasAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active"),
+      hasCriticalAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active" && blocker.blockingSeverity === "critical"),
+      releaseState:
+        releaseControlState.finalDecision.status === "go" ? "go" : releaseControlState.finalDecision.status === "blocked" || releaseControlState.finalDecision.status === "no_go" ? "blocked" : "warning",
+      commandSafetyLevel: action.commandSafetyLevel ?? "safe",
+      repoConnected: repository.connected,
+      repoClean: repository.clean ?? true,
+      ...contextOverride,
+    };
+
+    const decision = evaluateExecutionPolicy(action, context);
+    setPolicyState((prev) => pushPolicyDecision(prev, decision));
+    return decision;
+  };
+
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets"> = {
   const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope"> = {
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
@@ -654,6 +683,7 @@ export function useChatWorkspaceState() {
     activeProjectId,
     repository,
     projectCommandRegistry,
+    policyState,
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
@@ -862,7 +892,15 @@ export function useChatWorkspaceState() {
 
     const requestId = `acr-${Date.now().toString(36)}`;
     const nowIso = new Date().toISOString();
-    const requiresApproval = suggestion.runSafety !== "safe";
+    const policyDecision = evaluatePolicy({
+      actionType: "agent_triggered_command_execution",
+      subject: { type: "agent", id: agentId ?? activeWorkflowTask.ownerAgentId ?? "agent-system" },
+      target: { type: "command", id: suggestion.id, label: suggestion.displayName },
+      commandSafetyLevel: suggestion.runSafety,
+      metadata: { category: suggestion.category },
+    });
+    if (policyDecision.blocked) return;
+    const requiresApproval = policyDecision.requiresApproval;
     const approvalId = requiresApproval ? `approval-agent-command-${requestId}` : undefined;
 
     const nextRequest: AgentCommandRequest = {
@@ -1197,7 +1235,17 @@ export function useChatWorkspaceState() {
       terminalService.selectSession(activeTerminal.id);
       terminalService.setWorkingDirectory(activeTerminal.id, cwd);
 
-      const requiresApproval = commandEntry.runSafety !== "safe";
+      const policyDecision = evaluatePolicy({
+        actionType: commandEntry.runSafety === "safe" ? "safe_command_execution" : "risky_command_execution",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "command", id: commandEntry.id, label: commandEntry.displayName },
+        commandSafetyLevel: commandEntry.runSafety,
+        metadata: { category: commandEntry.category },
+      });
+      if (policyDecision.blocked) {
+        return { ok: false, code: "policy_blocked", message: policyDecision.rationale };
+      }
+      const requiresApproval = policyDecision.requiresApproval;
       if (requiresApproval) {
         const approvalId = `approval-project-command-${commandEntry.id}-${Date.now()}`;
         setPendingCommandLaunchByApprovalId((prev) => ({
@@ -1232,9 +1280,9 @@ export function useChatWorkspaceState() {
               ...latestWorkflow.approvals,
               {
                 id: approvalId,
-                category: commandEntry.category === "release" ? "production_deploy_approval" : "destructive_file_operations",
+                category: policyDecision.linkedApprovalRequirement?.approvalCategory ?? (commandEntry.category === "release" ? "production_deploy_approval" : "destructive_file_operations"),
                 title: `Approve ${commandEntry.displayName} command`,
-                reason: `Project command requires approval: ${commandEntry.rawCommand}`,
+                reason: policyDecision.rationale,
                 status: "pending",
                 taskId: linkedTaskId,
                 chatId: linkedChatSessionId,
@@ -1353,7 +1401,17 @@ export function useChatWorkspaceState() {
       terminalService.selectSession(activeTerminal.id);
       terminalService.setWorkingDirectory(activeTerminal.id, cwd);
 
-      const requiresApproval = preferred.runSafety !== "safe";
+      const policyDecision = evaluatePolicy({
+        actionType: preferred.runSafety === "safe" ? "safe_command_execution" : "risky_command_execution",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "command", id: preferred.id, label: preferred.displayName },
+        commandSafetyLevel: preferred.runSafety,
+        metadata: { category: preferred.category },
+      });
+      if (policyDecision.blocked) {
+        return { ok: false, code: "policy_blocked", message: policyDecision.rationale };
+      }
+      const requiresApproval = policyDecision.requiresApproval;
       if (requiresApproval) {
         const approvalId = `approval-project-command-${preferred.id}-${Date.now()}`;
         setPendingCommandLaunchByApprovalId((prev) => ({
@@ -1382,9 +1440,9 @@ export function useChatWorkspaceState() {
               ...latestWorkflow.approvals,
               {
                 id: approvalId,
-                category: preferred.category === "release" ? "production_deploy_approval" : "destructive_file_operations",
+                category: policyDecision.linkedApprovalRequirement?.approvalCategory ?? (preferred.category === "release" ? "production_deploy_approval" : "destructive_file_operations"),
                 title: `Approve ${preferred.displayName} command`,
-                reason: `Project command requires approval: ${preferred.rawCommand}`,
+                reason: policyDecision.rationale,
                 status: "pending",
                 taskId: linkedTaskId,
                 chatId: linkedChatSessionId,
@@ -1453,6 +1511,13 @@ export function useChatWorkspaceState() {
       };
     },
     setProviderSource: (nextSource: "openrouter" | "ollama") => {
+      const providerDecision = evaluatePolicy({
+        actionType: "provider_model_switch",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "provider", id: nextSource, label: nextSource },
+        metadata: { nextProvider: nextSource },
+      });
+      if (providerDecision.blocked) return;
       setProviderSource(nextSource);
       const nextModel = lastUsedModelByProvider[nextSource];
       setActiveModel(nextModel);
@@ -1493,6 +1558,12 @@ export function useChatWorkspaceState() {
       });
     },
     setActiveModel: (nextModel: string) => {
+      const modelDecision = evaluatePolicy({
+        actionType: providerSource === "openrouter" ? "cloud_execution" : "local_only_execution",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "provider", id: nextModel, label: nextModel },
+      });
+      if (modelDecision.blocked) return;
       setActiveModel(nextModel);
       setLastUsedModelByProvider((prev) => ({
         ...prev,
@@ -1517,6 +1588,12 @@ export function useChatWorkspaceState() {
       });
     },
     setDeploymentMode: (nextMode: "local" | "cloud" | "hybrid") => {
+      const modeDecision = evaluatePolicy({
+        actionType: nextMode === "local" ? "local_only_execution" : "cloud_execution",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "provider", id: nextMode, label: nextMode },
+      });
+      if (modeDecision.blocked) return;
       setDeploymentMode(nextMode);
       dispatch({
         type: "set_chat",
@@ -2306,6 +2383,13 @@ export function useChatWorkspaceState() {
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
       if (!task?.github) return;
+      const gitPolicyDecision = evaluatePolicy({
+        actionType: action === "push" ? "git_push" : action === "commit" ? "risky_command_execution" : "safe_command_execution",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "repo", id: task.github.repositoryId, label: action },
+        commandSafetyLevel: action === "push" || action === "commit" ? "caution" : "safe",
+      });
+      if (gitPolicyDecision.blocked) return;
       const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
         workingDirectory: localShell.project.activeProjectRoot,
         linkedTaskId: task.id,
@@ -2320,7 +2404,7 @@ export function useChatWorkspaceState() {
         (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "approved",
       );
 
-      if (action === "push" && task.github.pushWorkflow.requiresApproval && !pushApproved) {
+      if (action === "push" && (task.github.pushWorkflow.requiresApproval || gitPolicyDecision.requiresApproval) && !pushApproved) {
         const approvalId = pendingPushApproval?.id ?? `approval-push-${task.id}`;
         const nextApprovals = pendingPushApproval
           ? workflow.approvals
@@ -2330,7 +2414,7 @@ export function useChatWorkspaceState() {
                 id: approvalId,
                 category: "push_approval" as const,
                 title: `Approve push for ${task.title}`,
-                reason: `Push to ${task.github.branch?.localBranchName ?? task.branchName ?? "task branch"} requires explicit approval.`,
+                reason: gitPolicyDecision.rationale,
                 status: "pending" as const,
                 taskId: task.id,
                 chatId: task.linkedChatSessionId,
