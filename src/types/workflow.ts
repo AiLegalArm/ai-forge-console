@@ -44,6 +44,8 @@ export interface AgentActivityEvent {
   type: AgentActivityEventType;
   title: string;
   details?: string;
+  traceId?: string;
+  runId?: string;
   taskId?: string;
   chatId?: string;
   auditId?: string;
@@ -390,31 +392,106 @@ export interface WorkflowTaskGraph {
   };
 }
 
-export interface AgentExecutionRun {
+export type ExecutionTraceEventType =
+  | "run_created"
+  | "context_built"
+  | "routing_selected"
+  | "provider_called"
+  | "provider_failed"
+  | "fallback_selected"
+  | "fallback_called"
+  | "result_received"
+  | "audit_generated"
+  | "run_completed"
+  | "run_failed";
+
+export type ExecutionTraceStatus =
+  | "queued"
+  | "in_progress"
+  | "waiting_provider"
+  | "fallback_in_progress"
+  | "awaiting_approval"
+  | "completed"
+  | "failed"
+  | "interrupted";
+
+export type ExecutionFailureType =
+  | "provider_failure"
+  | "timeout"
+  | "malformed_response"
+  | "routing_failure"
+  | "fallback_failure"
+  | "approval_block"
+  | "runtime_interruption";
+
+export interface ExecutionUsageMetadata {
+  estimatedCostUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  executionLocation: "local" | "cloud" | "hybrid";
+  executionWeight: "light" | "standard" | "heavy";
+}
+
+export interface ExecutionStatusTransition {
+  from: ExecutionTraceStatus;
+  to: ExecutionTraceStatus;
+  atIso: string;
+  reason?: string;
+}
+
+export interface ExecutionTraceStep {
   id: string;
-  agentId?: string;
-  agentRole: "worker" | "auditor" | "orchestrator";
+  type: ExecutionTraceEventType;
+  title: string;
+  details?: string;
+  status: ExecutionTraceStatus;
+  provider?: string;
+  model?: string;
+  failureType?: ExecutionFailureType;
+  createdAtIso: string;
+}
+
+export interface ExecutionTraceSummary {
+  totalDurationMs?: number;
+  providerModelLabel?: string;
+  fallbackUsed: boolean;
+  failurePoint?: ExecutionTraceEventType;
+  outcome: "success" | "failed" | "blocked" | "interrupted";
+  linkedBlockerIds: string[];
+  linkedFindingIds: string[];
+}
+
+export interface ExecutionTrace {
+  traceId: string;
+  runId: string;
   taskId?: string;
   subtaskId?: string;
-  chatSessionId: string;
-  chatType: ChatType;
-  provider: ModelProvider;
-  backend: RuntimeProviderBackend;
-  modelId: string;
-  providerModelId: string;
-  routingDecision: RoutingDecision;
-  status: "completed" | "failed";
-  usedFallback: boolean;
-  fallbackFromRunId?: string;
-  responsePayload?: {
-    text: string;
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
+  chatId?: string;
+  agentId?: string;
+  auditorId?: string;
+  approvalId?: string;
+  releaseDecisionId?: string;
+  evidenceIds: string[];
+  provider?: string;
+  model?: string;
+  routingDecision?: string;
+  fallbackUsed: boolean;
+  status: ExecutionTraceStatus;
+  finalResultState: "success" | "failed" | "blocked" | "interrupted";
   startedAtIso: string;
-  endedAtIso: string;
+  updatedAtIso: string;
+  completedAtIso?: string;
+  statusTransitions: ExecutionStatusTransition[];
+  steps: ExecutionTraceStep[];
+  error?: {
+    type: ExecutionFailureType;
+    message: string;
+    failedStepId?: string;
+    atIso: string;
+  };
+  usage: ExecutionUsageMetadata;
+  summary: ExecutionTraceSummary;
 }
 
 export interface WorkflowState {
@@ -423,6 +500,7 @@ export interface WorkflowState {
   delegations: WorkflowDelegation[];
   taskGraphs: WorkflowTaskGraph[];
   activityEvents: AgentActivityEvent[];
+  executionTraces: ExecutionTrace[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];
   executionRuns: AgentExecutionRun[];

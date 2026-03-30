@@ -1,5 +1,6 @@
 import type { ChatType } from "@/types/chat";
 import type { ContextInjectionPacket, ContextSnippet, ContextTarget } from "@/types/context";
+import type { MemoryContextEnvelope } from "@/types/memory";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 interface ContextAssemblyInput {
@@ -7,6 +8,7 @@ interface ContextAssemblyInput {
   chatType?: ChatType;
   target: ContextTarget;
   agentId?: string;
+  memoryContext?: MemoryContextEnvelope;
 }
 
 const MAX_ACTIVITY_ITEMS = 4;
@@ -32,7 +34,7 @@ const pickRoleLabel = (agentId?: string) => {
 };
 
 export function assembleContextPacket(input: ContextAssemblyInput): ContextInjectionPacket {
-  const { workspace, target, chatType, agentId } = input;
+  const { workspace, target, chatType, agentId, memoryContext } = input;
   const activeTask =
     workspace.workflow.tasks.find((task) => task.linkedChatSessionId === workspace.currentChatSessionId || task.title === workspace.currentTask) ??
     workspace.workflow.tasks[0];
@@ -65,6 +67,12 @@ export function assembleContextPacket(input: ContextAssemblyInput): ContextInjec
       ),
     );
   }
+  if (memoryContext?.task?.taskSummary) {
+    baseSnippets.push(formatSnippet("task_memory", memoryContext.task.taskSummary));
+  }
+  if (memoryContext?.project.knownConventions.length) {
+    baseSnippets.push(formatSnippet("project_conventions", memoryContext.project.knownConventions.slice(0, 2).join(" • ")));
+  }
 
   if (target === "worker_agent" || target === "agent_chat") {
     baseSnippets.push(formatSnippet("agent_role", pickRoleLabel(agentId), "high"));
@@ -83,11 +91,17 @@ export function assembleContextPacket(input: ContextAssemblyInput): ContextInjec
     if (openFindings.length > 0) {
       baseSnippets.push(formatSnippet("risk_focus", openFindings.map((finding) => `${finding.auditorType}:${finding.severity}`).join(" • ")));
     }
+    if (memoryContext?.auditRelease.resolvedFindings.length) {
+      baseSnippets.push(formatSnippet("resolved_history", `${memoryContext.auditRelease.resolvedFindings.length} resolved findings`));
+    }
   }
 
   if (target === "review_chat" || target === "release_flow") {
     baseSnippets.push(formatSnippet("release_status", workspace.releaseReadinessStatus, "high"));
     baseSnippets.push(formatSnippet("pending_approvals", `${workspace.pendingApprovals.length}`));
+    if (memoryContext?.auditRelease.releaseDecisions.length) {
+      baseSnippets.push(formatSnippet("release_history", `${memoryContext.auditRelease.releaseDecisions.length} prior decisions`));
+    }
   }
 
   const filteredSnippets = baseSnippets

@@ -22,6 +22,9 @@ import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
 import { routedAgentExecutionService } from "@/lib/routed-agent-execution-service";
 import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
+import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
+import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
+import { buildOperatorDashboard, type OperatorDashboardWorkspaceInput, type OperatorProjectSnapshot } from "@/lib/operator-dashboard";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -37,12 +40,14 @@ import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, Rout
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
+import type { AgentRole, AppRoutingModeProfile, RoutingDecision, RoutingMode, TaskType } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
 import type { ExecutionPolicyAction, ExecutionPolicyContext, ExecutionPolicyState } from "@/types/execution-policy";
 
 type Action =
+  | { type: "set_all_state"; payload: WorkspaceReducerState }
   | { type: "set_active_chat_type"; chatType: ChatType }
   | { type: "select_session"; chatType: ChatType; sessionId: string }
   | { type: "update_draft"; sessionId: string; value: string }
@@ -64,8 +69,33 @@ interface WorkspaceReducerState {
   evidenceFlow: EvidenceFlowState;
 }
 
+interface ProjectScopedWorkspaceState {
+  chat: ChatState;
+  workflow: WorkflowState;
+  localInference: LocalInferenceRuntimeState;
+  localShell: LocalShellWorkspaceState;
+  browserSession: BrowserSession;
+  evidenceFlow: EvidenceFlowState;
+  providerSource: "openrouter" | "ollama";
+  deploymentMode: "local" | "cloud" | "hybrid";
+  activeModel: string;
+  routingProfile: AppRoutingModeProfile;
+  repository: WorkspaceRepositoryState;
+  projectCommandRegistry: ProjectCommandRegistry;
+  pendingCommandLaunchByApprovalId: Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>;
+  policyState: ExecutionPolicyState;
+  routingDecisionsBySession: Record<string, RoutingDecision>;
+  lastUsedModelByProvider: Record<"openrouter" | "ollama", string>;
+}
+
+const cloneSnapshot = <T,>(value: T): T =>
+  typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)) as T;
+
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
   switch (action.type) {
+    case "set_all_state": {
+      return action.payload;
+    }
     case "set_active_chat_type": {
       return { ...state, chat: { ...state.chat, activeChatType: action.chatType } };
     }
@@ -158,6 +188,58 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
 }
 
 export function useChatWorkspaceState() {
+  const buildProjectScopedState = (
+    _projectId: string,
+    projectName: string,
+    projectRoot: string,
+    provider: "openrouter" | "ollama" = "ollama",
+  ): ProjectScopedWorkspaceState => ({
+    chat: cloneSnapshot(initialChatState),
+    workflow: cloneSnapshot(initialWorkflowState),
+    localInference: cloneSnapshot(localInferenceRuntime),
+    localShell: {
+      ...cloneSnapshot(localShellState),
+      project: {
+        ...cloneSnapshot(localShellState.project),
+        workspaceName: projectName,
+        activeProjectRoot: projectRoot,
+      },
+    },
+    browserSession: cloneSnapshot(browserSession),
+    evidenceFlow: cloneSnapshot(evidenceFlowState),
+    providerSource: provider,
+    deploymentMode: "hybrid",
+    activeModel: provider === "openrouter" ? "openai/gpt-4.1" : "qwen3-coder:14b",
+    routingProfile: "balanced",
+    repository: {
+      connected: false,
+      syncStatus: "idle",
+      connectionState: "disconnected",
+    },
+    projectCommandRegistry: {
+      projectRoot,
+      generatedAtIso: new Date().toISOString(),
+      commands: [],
+      primaryCommandIds: [],
+      diagnostics: {
+        agentsFileFound: false,
+        agentsCommandsExtracted: 0,
+        packageJsonFound: false,
+        packageScriptsExtracted: 0,
+        makefileFound: false,
+        makeTargetsExtracted: 0,
+        warnings: ["Command registry not loaded yet."],
+      },
+    },
+    pendingCommandLaunchByApprovalId: {},
+    policyState: { recentDecisions: [] },
+    routingDecisionsBySession: {},
+    lastUsedModelByProvider: {
+      openrouter: "openai/gpt-4.1",
+      ollama: "qwen3-coder:14b",
+    },
+  });
+
   const [state, dispatch] = useReducer(reducer, {
     chat: initialChatState,
     workflow: initialWorkflowState,
@@ -190,6 +272,12 @@ export function useChatWorkspaceState() {
     () => new BrowserAutomationService(new RuntimeBridgeBrowserAdapter()),
     [],
   );
+  const defaultProjectId = "project-local-1";
+  const defaultProjectRoot = localShell.project.activeProjectRoot;
+  const defaultProjectName = localShell.project.workspaceName;
+  const [projectScopedStateById, setProjectScopedStateById] = useState<Record<string, ProjectScopedWorkspaceState>>({
+    [defaultProjectId]: buildProjectScopedState(defaultProjectId, defaultProjectName, defaultProjectRoot),
+  });
   const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
   const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
   const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
@@ -220,7 +308,7 @@ export function useChatWorkspaceState() {
       },
     },
   ]);
-  const [activeProjectId, setActiveProjectId] = useState("project-local-1");
+  const [activeProjectId, setActiveProjectId] = useState(defaultProjectId);
   const [repository, setRepository] = useState<WorkspaceRepositoryState>({
     connected: false,
     syncStatus: "idle",
@@ -268,6 +356,7 @@ export function useChatWorkspaceState() {
   const currentChatSessionId = chatState.selectedSessionIdByType[currentChatType];
   const currentSession = chatState.sessions.find((session) => session.id === currentChatSessionId);
   const currentSessionRoutingMode = localInference.routing.conversationOverrides[currentChatSessionId] ?? localInference.routing.activeMode;
+  const [routingDecisionsBySession, setRoutingDecisionsBySession] = useState<Record<string, RoutingDecision>>({});
 
   const mapProfileToRoutingMode = (profile: AppRoutingModeProfile): RoutingMode => {
     switch (profile) {
@@ -322,6 +411,49 @@ export function useChatWorkspaceState() {
     const inTask = activeWorkflowTask ? approval.taskId === activeWorkflowTask.id : false;
     return approval.status === "pending" && (inSession || inTask);
   });
+
+  const resolveTaskTypeForRouting = (chatType: ChatType, taskPhase?: WorkflowState["tasks"][number]["phase"]): TaskType => {
+    if (chatType === "audit") return "audit";
+    if (chatType === "review") return taskPhase === "release" ? "release" : "review";
+    if (taskPhase === "release") return "release";
+    if (taskPhase === "audit") return "audit";
+    if (taskPhase === "review") return "review";
+    return "coding";
+  };
+
+  const resolveAgentRoleForRouting = (chatType: ChatType, agentId?: string): AgentRole => {
+    const linkedAgent = agentId ? activeAgents.find((agent) => agent.id === agentId) : undefined;
+    const role = linkedAgent?.role;
+    if (role) return role;
+    if (chatType === "audit") return "code_auditor";
+    if (chatType === "review") return "reviewer";
+    if (chatType === "main") return "planner";
+    return "worker";
+  };
+
+  const buildRuntimeRoutingDecision = (chatType: ChatType, sessionId: string, agentId?: string) =>
+    modelRoutingEngine.chooseModel(
+      {
+        agentRole: resolveAgentRoleForRouting(chatType, agentId ?? activeWorkflowTask?.ownerAgentId),
+        taskType: resolveTaskTypeForRouting(chatType, activeWorkflowTask?.phase),
+        chatType,
+        appModeProfile: routingProfile,
+        routingMode: currentSessionRoutingMode,
+        privacyMode: currentSessionRoutingMode === "sensitive_local_only" || currentSessionRoutingMode === "local_only" ? "strict_local" : "standard",
+        preferredBackend: providerSource === "openrouter" ? "cloud" : "ollama",
+        preferredProvider: providerSource,
+        preferredModelId: activeModel,
+        openRouterAvailable: localInference.cloud.status === "connected",
+        ollamaAvailable: localInference.ollama.runtimeAvailable,
+        localOnly: deploymentMode === "local",
+        releaseCritical: Boolean(activeWorkflowTask?.phase === "release" || activeWorkflowTask?.github?.pullRequest?.auditGate?.verdict === "no_go"),
+        budgetPressure: localInference.operational.budgetPressure,
+        degradedMode: localInference.operational.degradedMode,
+        blockWeakFallbackForRelease: true,
+        fallbackRequired: true,
+      },
+      localInference.hybridModelRegistry,
+    );
 
   const chatContexts = useMemo<ChatContextMap>(() => {
     const contextMap = {
@@ -401,11 +533,24 @@ export function useChatWorkspaceState() {
           ...currentLocalInference.routing,
           activeMode: nextRoutingMode,
           agentAssignments: nextAgentAssignments,
+          runtimeDecisionsBySurface: currentLocalInference.routing.runtimeDecisionsBySurface ?? {},
         },
         resources: {
           ...currentLocalInference.resources,
           autoFallbackReady: !snapshot.connection.runtimeAvailable || currentLocalInference.resources.autoFallbackReady,
           degradedMode: snapshot.connection.serviceState === "degraded" || snapshot.connection.serviceState === "error",
+        },
+        operational: {
+          ...currentLocalInference.operational,
+          degradedMode:
+            currentLocalInference.operational.degradedMode ||
+            snapshot.connection.serviceState === "degraded" ||
+            snapshot.connection.serviceState === "error",
+          providerHealth: {
+            ...currentLocalInference.operational.providerHealth,
+            ollama: snapshot.connection.runtimeAvailable ? "healthy" : "degraded",
+            openrouter: openRouterSnapshot.config.status === "connected" ? "healthy" : "pressured",
+          },
         },
         scenarioLog: [
           `${new Date().toISOString()}: Ollama ${snapshot.connection.serviceState} (${snapshot.connection.offlineReason ?? "runtime healthy"}).`,
@@ -416,6 +561,30 @@ export function useChatWorkspaceState() {
   };
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const syncProjectScopedSnapshot = (projectId: string) => {
+    setProjectScopedStateById((prev) => ({
+      ...prev,
+      [projectId]: {
+        ...(prev[projectId] ?? buildProjectScopedState(projectId, activeProject?.name ?? localShell.project.workspaceName, activeProject?.projectRoot ?? localShell.project.activeProjectRoot, providerSource)),
+        chat: cloneSnapshot(chatStateRef.current),
+        workflow: cloneSnapshot(workflowRef.current),
+        localInference: cloneSnapshot(localInferenceRef.current),
+        localShell: cloneSnapshot(localShellRef.current),
+        browserSession: cloneSnapshot(state.browserSession),
+        evidenceFlow: cloneSnapshot(state.evidenceFlow),
+        providerSource,
+        deploymentMode,
+        activeModel,
+        routingProfile,
+        repository: cloneSnapshot(repository),
+        projectCommandRegistry: cloneSnapshot(projectCommandRegistry),
+        pendingCommandLaunchByApprovalId: cloneSnapshot(pendingCommandLaunchByApprovalId),
+        policyState: cloneSnapshot(policyState),
+        routingDecisionsBySession: cloneSnapshot(routingDecisionsBySession),
+        lastUsedModelByProvider: cloneSnapshot(lastUsedModelByProvider),
+      },
+    }));
+  };
   const memoryStorageKey = useMemo(
     () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
     [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
@@ -484,102 +653,26 @@ export function useChatWorkspaceState() {
   );
 
   useEffect(() => {
-    persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
-  }, [memoryStorageKey, workspaceMemory]);
-
-  const contextEnvelope = useMemo(
-    () =>
-      retrieveMemoryContext(workspaceMemory, {
-        projectId: activeProject?.id ?? activeProjectId,
-        taskId: activeWorkflowTask?.id,
-        chatSessionId: currentChatSessionId,
-        releaseCandidateId: activeWorkflowTask?.linkedReleaseCandidateId,
-        agentRole: activeWorkflowTask?.ownerAgentId,
-        audience:
-          currentChatType === "agent"
-            ? "agent"
-            : currentChatType === "audit" || currentChatType === "review"
-              ? "auditor"
-              : "main_chat",
-      }),
-    [
-      workspaceMemory,
-      activeProject?.id,
-      activeProjectId,
-      activeWorkflowTask?.id,
-      activeWorkflowTask?.linkedReleaseCandidateId,
-      activeWorkflowTask?.ownerAgentId,
-      currentChatSessionId,
-      currentChatType,
-    ],
-  );
-
-  const memoryStorageKey = useMemo(
-    () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
-    [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
-  );
-  const [persistedMemory, setPersistedMemory] = useState<WorkspaceMemoryState | null>(null);
-
-  useEffect(() => {
-    setPersistedMemory(loadWorkspaceMemory(memoryStorageKey));
-  }, [memoryStorageKey]);
-
-  const workspaceMemorySnapshot = useMemo(
-    () =>
-      buildWorkspaceMemorySnapshot({
-        projectId: activeProject?.id ?? activeProjectId,
-        projectName: activeProject?.name ?? localShell.project.workspaceName,
-        projectPath: activeProject?.projectRoot ?? localShell.project.activeProjectRoot,
-        repositorySummary: repository.connected
-          ? `${repository.name ?? "repo"} @ ${repository.branch ?? "unknown"} (${repository.syncStatus ?? "idle"})`
-          : "Repository disconnected",
-        discoveredInstructions: localShell.project.instructionSources,
-        commandRegistry: projectCommandRegistry,
-        providerSource,
-        activeModel,
-        deploymentMode,
-        localCloudPreference: deploymentMode === "local" ? "local" : deploymentMode === "cloud" ? "cloud" : "hybrid",
-        knownConventions: [
-          ...(projectCommandRegistry.diagnostics.agentsFileFound ? ["AGENTS.md instructions present"] : []),
-          ...(projectCommandRegistry.diagnostics.packageJsonFound ? ["package.json scripts workflow"] : []),
-          ...(projectCommandRegistry.diagnostics.makefileFound ? ["Makefile targets available"] : []),
-        ],
-        workflow,
-        auditors: auditorControlState,
-        releaseControl: releaseControlState,
-        chatState,
-        currentChatType,
-        currentChatSessionId,
-        activeAgentId: activeWorkflowTask?.ownerAgentId ?? currentSession?.linked.agentId,
-      }),
-    [
-      activeModel,
-      activeProject?.id,
-      activeProject?.name,
-      activeProject?.projectRoot,
-      activeProjectId,
-      chatState,
-      currentChatSessionId,
-      currentChatType,
-      currentSession?.linked.agentId,
-      deploymentMode,
-      localShell.project.activeProjectRoot,
-      localShell.project.instructionSources,
-      localShell.project.workspaceName,
-      projectCommandRegistry,
-      providerSource,
-      repository.branch,
-      repository.connected,
-      repository.name,
-      repository.syncStatus,
-      workflow,
-      activeWorkflowTask?.ownerAgentId,
-    ],
-  );
-  const workspaceMemory = useMemo(
-    () => mergeWorkspaceMemory(persistedMemory, workspaceMemorySnapshot),
-    [persistedMemory, workspaceMemorySnapshot],
-  );
+    syncProjectScopedSnapshot(activeProjectId);
+  }, [
+    activeProjectId,
+    activeModel,
+    deploymentMode,
+    pendingCommandLaunchByApprovalId,
+    policyState,
+    projectCommandRegistry,
+    repository,
+    routingDecisionsBySession,
+    routingProfile,
+    providerSource,
+    lastUsedModelByProvider,
+    state.browserSession,
+    state.chat,
+    state.evidenceFlow,
+    state.localInference,
+    state.localShell,
+    state.workflow,
+  ]);
 
   useEffect(() => {
     persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
@@ -637,8 +730,8 @@ export function useChatWorkspaceState() {
     return decision;
   };
 
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets"> = {
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope"> = {
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope" | "operatorDashboard"> = {
+    // runtime-selected route is reflected in chat/session metadata and surfaced here for badges
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
@@ -649,8 +742,11 @@ export function useChatWorkspaceState() {
       activeRepository?.defaultBranch ??
       "main",
     currentTask: activeWorkflowTask?.title ?? currentSession?.linked.taskTitle ?? "Build user management module",
-    activeProvider: providerSource === "ollama" ? "Ollama" : "OpenRouter",
-    activeModel,
+    activeProvider:
+      (routingDecisionsBySession[currentChatSessionId]?.selectedProvider ?? providerSource) === "ollama" ? "Ollama" : "OpenRouter",
+    activeModel:
+      localInference.hybridModelRegistry.find((entry) => entry.id === routingDecisionsBySession[currentChatSessionId]?.selectedModelId)?.providerModelId ??
+      activeModel,
     lastUsedModel: lastUsedModelByProvider[providerSource],
     availableModels: resolveModelOptions(providerSource),
     providerSource,
@@ -692,23 +788,87 @@ export function useChatWorkspaceState() {
   };
 
   const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
-    const mainChat = assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "main_chat", chatType: "main" });
+    const mainChat = assembleContextPacket({
+      workspace: workspaceStateBase as WorkspaceRuntimeState,
+      target: "main_chat",
+      chatType: "main",
+      memoryContext: contextEnvelope,
+    });
     return {
       mainChat,
-      agentChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "agent_chat", chatType: "agent", agentId: workspaceStateBase.activeAgentId }),
-      auditChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "audit_chat", chatType: "audit", agentId: workspaceStateBase.activeAgentId }),
-      reviewChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "review_chat", chatType: "review", agentId: workspaceStateBase.activeAgentId }),
-      workerAgent: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "worker_agent", agentId: workspaceStateBase.activeAgentId }),
-      auditor: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "auditor", agentId: workspaceStateBase.activeAgentId }),
-      releaseFlow: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "release_flow" }),
+      agentChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "agent_chat",
+        chatType: "agent",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      auditChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "audit_chat",
+        chatType: "audit",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      reviewChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "review_chat",
+        chatType: "review",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      workerAgent: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "worker_agent",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      auditor: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "auditor",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      releaseFlow: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "release_flow",
+        memoryContext: contextEnvelope,
+      }),
     };
-  }, [workspaceStateBase]);
+  }, [contextEnvelope, workspaceStateBase]);
+
+  const operatorProjectSnapshots = useMemo<OperatorProjectSnapshot[]>(() => projects.map((project) => {
+    const scoped = projectScopedStateById[project.id];
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      providerSource: scoped?.providerSource ?? providerSource,
+      activeModel: scoped?.activeModel ?? activeModel,
+      routingProfile: scoped?.routingProfile ?? routingProfile,
+      workflow: scoped?.workflow ?? workflow,
+      localInference: scoped?.localInference ?? localInference,
+    };
+  }), [projects, projectScopedStateById, providerSource, activeModel, routingProfile, workflow, localInference]);
+
+  const operatorDashboardInput = useMemo<OperatorDashboardWorkspaceInput>(() => ({
+    workflow,
+    auditors: auditorControlState,
+    releaseControl: releaseControlState,
+    pendingApprovals,
+    localInference,
+    activeAgents,
+    activeProjectId,
+    releaseReadinessStatus: releaseControlState.finalDecision.status,
+  }), [workflow, pendingApprovals, localInference, activeProjectId]);
+
+  const operatorDashboard = useMemo(() => buildOperatorDashboard(operatorDashboardInput, operatorProjectSnapshots), [operatorDashboardInput, operatorProjectSnapshots]);
 
   const workspaceState: WorkspaceRuntimeState = {
     ...workspaceStateBase,
     contextPackets,
     memory: workspaceMemory,
     contextEnvelope,
+    operatorDashboard,
   };
 
   useEffect(() => {
@@ -1704,6 +1864,10 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [id]: buildProjectScopedState(id, nextName, payload?.projectRoot || normalizedPath, providerSource),
+      }));
       dispatch({
         type: "set_local_shell",
         localShell: {
@@ -1755,6 +1919,10 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [id]: buildProjectScopedState(id, payload.name, `manual://${id}`, providerSource),
+      }));
     },
     connectRepository: async (payload: { pathOrUrl: string; name?: string; branch?: string }) => {
       const activeProject = projects.find((project) => project.id === activeProjectId);
@@ -1848,9 +2016,37 @@ export function useChatWorkspaceState() {
       );
     },
     setActiveProject: (projectId: string) => {
+      syncProjectScopedSnapshot(activeProjectId);
+      const selectedProject = projects.find((project) => project.id === projectId);
+      const projectRoot = selectedProject?.localPath || selectedProject?.projectRoot || localShellRef.current.project.activeProjectRoot;
+      const scopedState =
+        projectScopedStateById[projectId] ??
+        buildProjectScopedState(projectId, selectedProject?.name ?? "Project", projectRoot, selectedProject?.provider?.source ?? "ollama");
+
+      dispatch({
+        type: "set_all_state",
+        payload: {
+          chat: cloneSnapshot(scopedState.chat),
+          workflow: cloneSnapshot(scopedState.workflow),
+          localInference: cloneSnapshot(scopedState.localInference),
+          localShell: cloneSnapshot(scopedState.localShell),
+          browserSession: cloneSnapshot(scopedState.browserSession),
+          evidenceFlow: cloneSnapshot(scopedState.evidenceFlow),
+        },
+      });
+      setProviderSource(scopedState.providerSource);
+      setDeploymentMode(scopedState.deploymentMode);
+      setActiveModel(scopedState.activeModel);
+      setRoutingProfile(scopedState.routingProfile);
+      setRepository(cloneSnapshot(scopedState.repository));
+      setProjectCommandRegistry(cloneSnapshot(scopedState.projectCommandRegistry));
+      setPendingCommandLaunchByApprovalId(cloneSnapshot(scopedState.pendingCommandLaunchByApprovalId));
+      setPolicyState(cloneSnapshot(scopedState.policyState));
+      setRoutingDecisionsBySession(cloneSnapshot(scopedState.routingDecisionsBySession));
+      setLastUsedModelByProvider(cloneSnapshot(scopedState.lastUsedModelByProvider));
+
       setActiveProjectId(projectId);
       setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
-      const selectedProject = projects.find((project) => project.id === projectId);
       if (selectedProject?.source === "local" && (selectedProject.localPath || selectedProject.projectRoot)) {
         const nextPath = selectedProject.localPath || selectedProject.projectRoot || localShellRef.current.project.activeProjectRoot;
         dispatch({
@@ -1867,22 +2063,10 @@ export function useChatWorkspaceState() {
           },
         });
       }
-      if (selectedProject?.repository?.connected) {
-        setRepository({
-          connected: true,
-          name: selectedProject.repository.name,
-          url: selectedProject.repository.url,
-          rootPath: selectedProject.projectRoot ?? selectedProject.localPath,
-          branch: selectedProject.repository.branch,
-          syncStatus: selectedProject.repository.syncStatus,
-          connectionState: "connected",
-          relationToProject: "bound",
-          readyForGitWorkflow: true,
-          source: selectedProject.source === "git" ? "project_bound" : "local_path",
-        });
-      } else {
-        setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
-      }
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [projectId]: scopedState,
+      }));
     },
     sendMessage: (chatType: ChatType) => {
       const currentChat = chatStateRef.current;
@@ -1904,6 +2088,78 @@ export function useChatWorkspaceState() {
 
       const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
       const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const linkedTask =
+        workflowRef.current.tasks.find((task) => task.linkedChatSessionId === sessionId) ??
+        workflowRef.current.tasks.find((task) => task.id === activeSession?.linked.taskId) ??
+        workflowRef.current.tasks[0];
+      const releaseCritical = Boolean(linkedTask?.phase === "release" || linkedTask?.github?.pullRequest?.releaseGateReadiness === "blocked");
+      const budgetDecision = evaluateBudgetGuardrails({
+        runEstimateUsd: routingProfile === "quality_first" ? 0.12 : 0.04,
+        modeProfile: routingProfile,
+        releaseCritical,
+        buckets: [
+          { scope: "run", scopeId: sessionId, spentUsd: 0, guardrails: { softLimitUsd: 0.5, hardLimitUsd: 1.2, warnBeforeRunUsd: 0.35, stopOrFallbackUsd: 0.8 } },
+          { scope: "task", scopeId: linkedTask?.id ?? "unknown-task", spentUsd: 0.72, guardrails: { softLimitUsd: 2.5, hardLimitUsd: 4, warnBeforeRunUsd: 2, stopOrFallbackUsd: 3 } },
+          { scope: "project", scopeId: activeProjectId, spentUsd: 6.4, guardrails: { softLimitUsd: 14, hardLimitUsd: 20, warnBeforeRunUsd: 12, stopOrFallbackUsd: 16 } },
+        ],
+      });
+
+      if (!budgetDecision.allowRun) {
+        const blockedMessage = {
+          id: responseId,
+          sessionId,
+          role: "system" as const,
+          authorLabel: "Operator Guardrail",
+          content: budgetDecision.blockReason ?? "Execution blocked by guardrails.",
+          createdAtIso: nowIso,
+          status: "failed" as const,
+        };
+        dispatch({
+          type: "set_chat",
+          chat: {
+            ...currentChat,
+            messagesBySessionId: {
+              ...currentChat.messagesBySessionId,
+              [sessionId]: [...(currentChat.messagesBySessionId[sessionId] ?? []), userMessage, blockedMessage],
+            },
+            draftInputBySessionId: {
+              ...currentChat.draftInputBySessionId,
+              [sessionId]: "",
+            },
+          },
+        });
+        dispatch({
+          type: "set_local_inference",
+          localInference: {
+            ...localInferenceRef.current,
+            operational: {
+              ...localInferenceRef.current.operational,
+              blockedExpensiveRuns: localInferenceRef.current.operational.blockedExpensiveRuns + 1,
+              budgetPressure: budgetDecision.pressure,
+            },
+          },
+        });
+        return;
+      }
+
+      const routingDecision = buildRuntimeRoutingDecision(chatType, sessionId, activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId);
+      const selectedProviderLabel = routingDecision.selectedProvider === "openrouter" ? "OpenRouter" : "Ollama";
+      const selectedProviderModel =
+        localInference.hybridModelRegistry.find((entry) => entry.id === routingDecision.selectedModelId)?.providerModelId ?? activeModel;
+      setRoutingDecisionsBySession((prev) => ({ ...prev, [sessionId]: routingDecision }));
+      dispatch({
+        type: "set_local_inference",
+        localInference: {
+          ...localInferenceRef.current,
+          routing: {
+            ...localInferenceRef.current.routing,
+            runtimeDecisionsBySurface: {
+              ...(localInferenceRef.current.routing.runtimeDecisionsBySurface ?? {}),
+              [`${chatType}:${sessionId}`]: routingDecision,
+            },
+          },
+        },
+      });
       const chatContextPacket: ContextInjectionPacket =
         chatType === "main"
           ? workspaceState.contextPackets.mainChat
@@ -1918,10 +2174,10 @@ export function useChatWorkspaceState() {
         prompt: draft,
         currentProject: workspaceState.currentProject,
         currentTask: workspaceState.currentTask,
-        activeProvider: workspaceState.activeProvider,
-        activeModel,
+        activeProvider: selectedProviderLabel,
+        activeModel: selectedProviderModel,
         routingMode: workspaceState.routingMode,
-        routingProfile,
+        routingProfile: routingDecision.profile,
         deploymentMode,
         activeAgent,
         linkedContext: activeSession?.linked,
@@ -1934,11 +2190,22 @@ export function useChatWorkspaceState() {
         sessionId,
         role: mockResponse.role,
         authorLabel: mockResponse.authorLabel,
-        content: providerSource === "openrouter" && chatType === "main" ? "Sending request to OpenRouter…" : "Working on it…",
+        content:
+          routingDecision.selectedProvider === "openrouter" && chatType === "main"
+            ? "Sending request to OpenRouter…"
+            : routingDecision.selectedProvider === "ollama"
+              ? "Routing to local model…"
+              : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
         status: "pending" as const,
         linked: mockResponse.linked,
-        providerMeta: mockResponse.providerMeta,
+        providerMeta: {
+          ...mockResponse.providerMeta,
+          provider: selectedProviderLabel,
+          model: selectedProviderModel,
+          backend: routingDecision.deploymentTarget,
+          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
+        },
       };
 
       dispatch({
@@ -1970,6 +2237,57 @@ export function useChatWorkspaceState() {
           },
         },
       });
+      dispatch({
+        type: "set_local_inference",
+        localInference: {
+          ...localInferenceRef.current,
+          operational: {
+            ...localInferenceRef.current.operational,
+            budgetPressure: budgetDecision.pressure,
+            degradedMode: localInferenceRef.current.operational.degradedMode || budgetDecision.pressure === "critical",
+          },
+        },
+      });
+      const runId = `run-${sessionId}-${now}`;
+      const trace = createExecutionTrace({
+        runId,
+        nowIso,
+        taskId: linkedTask?.id,
+        chatId: sessionId,
+        agentId: activeSession?.linked.agentId ?? linkedTask?.ownerAgentId,
+        provider: selectedProviderLabel,
+        model: selectedProviderModel,
+        routingDecision,
+        evidenceIds: linkedTask?.linkedEvidenceIds ?? [],
+      });
+      const traceId = trace.traceId;
+      const tracedWorkflow = appendExecutionTraceStep(
+        {
+          ...workflowRef.current,
+          executionTraces: [trace, ...workflowRef.current.executionTraces],
+        },
+        {
+          traceId,
+          nowIso,
+          type: "context_built",
+          title: "Context built",
+          details: budgetDecision.warning ? `${chatContextPacket.summary} • ${budgetDecision.warning}` : chatContextPacket.summary,
+          nextStatus: "in_progress",
+        },
+      );
+      dispatch({
+        type: "set_workflow",
+        workflow: appendExecutionTraceStep(tracedWorkflow, {
+          traceId,
+          nowIso: new Date().toISOString(),
+          type: "routing_selected",
+          title: "Routing selected",
+          details: `${routingDecision.reason} • budget:${budgetDecision.pressure} • degraded:${localInference.operational.degradedMode ? "yes" : "no"}`,
+          provider: selectedProviderLabel,
+          model: selectedProviderModel,
+          nextStatus: "waiting_provider",
+        }),
+      });
 
       if (chatType === "main") {
         const orchestration = runMainChatOrchestrator({
@@ -1983,9 +2301,30 @@ export function useChatWorkspaceState() {
         });
 
         if (orchestration.handled) {
+          const completionIso = new Date().toISOString();
           dispatch({
             type: "set_workflow",
-            workflow: orchestration.updatedWorkflow,
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(orchestration.updatedWorkflow, {
+                traceId,
+                nowIso: completionIso,
+                type: "run_completed",
+                title: "Orchestration completed",
+                details: "Main orchestrator handled request and updated workflow graph.",
+                provider: selectedProviderLabel,
+                model: selectedProviderModel,
+                nextStatus: "completed",
+              }),
+              traceId,
+              {
+                nowIso: completionIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: "hybrid",
+                  executionWeight: "standard",
+                },
+              },
+            ),
           });
 
           const latestChat = chatStateRef.current;
@@ -2042,58 +2381,280 @@ export function useChatWorkspaceState() {
       }
 
       const executeProviderRequest = async () => {
-        const resolveRoutingTaskType = (): TaskType => {
-          if (chatType === "audit") return "audit";
-          if (chatType === "review") return "review";
-          if (chatType === "main") return "planning";
-          if (activeAgent?.role === "frontend") return "frontend";
-          if (activeAgent?.role === "backend") return "backend";
-          if (activeAgent?.id?.includes("architect")) return "architecture";
-          return "coding";
-        };
+        if (routingDecision.selectedProvider === "openrouter" && chatType === "main") {
+          setProviderExecutionState("sending");
 
-        const routingTaskType = resolveRoutingTaskType();
-        const routingAgentRole = (activeAgent?.role ??
-          (chatType === "audit" ? "code_auditor" : chatType === "review" ? "reviewer" : "planner")) as AgentRole;
-        const contextSystemPrompt = buildContextPrompt(chatContextPacket);
+          const recentMessages = (currentChat.messagesBySessionId[sessionId] ?? [])
+            .filter((message) => message.role === "user" || message.role === "orchestrator" || message.role === "agent")
+            .slice(-8)
+            .map((message) => ({
+              role: message.role === "user" ? "user" : "assistant",
+              content: message.content,
+            })) as Array<{ role: "user" | "assistant"; content: string }>;
+          const contextSystemPrompt = buildContextPrompt(workspaceState.contextPackets.mainChat);
 
-        setProviderExecutionState("sending");
-        setProviderExecutionState("waiting");
+          setProviderExecutionState("waiting");
+          dispatch({
+            type: "set_workflow",
+            workflow: appendExecutionTraceStep(workflowRef.current, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "provider_called",
+              title: "Primary provider called",
+              provider: "OpenRouter",
+              model: selectedProviderModel,
+              nextStatus: "waiting_provider",
+            }),
+          });
+          const openRouterResult = await openRouterProviderService.executeChatCompletion({
+            model: selectedProviderModel,
+            userInput: draft,
+            contextMessages: recentMessages,
+            systemPrompt:
+              `You are assisting in a chat-first software workspace. Routing profile: ${routingDecision.profile}. Routing mode: ${workspaceState.routingMode}. Route reason: ${routingDecision.reason}.\n` +
+              `${contextSystemPrompt}`,
+          });
 
-        const runOutput = await routedAgentExecutionService.execute({
-          prompt: draft,
-          systemPrompt:
-            `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}. ` +
-            `Agent: ${activeAgent?.name ?? "system"}. Task type: ${routingTaskType}. Follow approval and safety context when provided.
-${contextSystemPrompt}`,
-          routingInput: {
-            agentRole: routingAgentRole,
-            taskType: routingTaskType,
-            privacyMode:
-              workspaceState.routingMode === "local_only" || workspaceState.routingMode === "sensitive_local_only"
-                ? "strict_local"
-                : "standard",
-            preferredBackend: workspaceState.activeBackend,
-            fallbackRequired: true,
-          },
-          localInference: localInferenceRef.current,
-          linked: {
-            agentId: activeSession?.linked.agentId ?? activeAgent?.id,
-            taskId: activeSession?.linked.taskId ?? activeWorkflowTask?.id,
-            subtaskId: activeSession?.linked.subtaskId,
-            chatSessionId: sessionId,
-            chatType,
-          },
-          contextPacket: chatContextPacket,
-          taskType: routingTaskType,
-        });
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
 
-        const latestChat = chatStateRef.current;
-        const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
-        const usedProvider = runOutput.run.provider === "openrouter" ? "OpenRouter" : "Ollama";
+          if (openRouterResult.executionState === "completed") {
+            setProviderExecutionState("streaming_ready");
+            dispatch({
+              type: "set_workflow",
+              workflow: completeExecutionTrace(
+                appendExecutionTraceStep(workflowRef.current, {
+                  traceId,
+                  nowIso: openRouterResult.receivedAtIso,
+                  type: "result_received",
+                  title: "Provider result received",
+                  details: "Primary provider returned output.",
+                  provider: "OpenRouter",
+                  model: openRouterResult.model,
+                  nextStatus: "completed",
+                }),
+                traceId,
+                {
+                  nowIso: openRouterResult.receivedAtIso,
+                  outcome: "success",
+                  usage: {
+                    executionLocation: "cloud",
+                    executionWeight: "standard",
+                  },
+                },
+              ),
+            });
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: openRouterResult.outputText,
+                          status: "completed" as const,
+                          createdAtIso: openRouterResult.receivedAtIso,
+                          providerMeta: {
+                            provider: "OpenRouter",
+                            model: openRouterResult.model,
+                            backend: "cloud",
+                            routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
+                          },
+                        }
+                      : message,
+                  ),
+                },
+                sessions: latestChat.sessions.map((session) =>
+                  session.id === sessionId
+                    ? {
+                        ...session,
+                        lastMessageAtIso: openRouterResult.receivedAtIso,
+                        unreadCount: 0,
+                        providerMeta: {
+                          provider: "OpenRouter",
+                          model: openRouterResult.model,
+                          backend: "cloud",
+                          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
+                        },
+                      }
+                    : session,
+                ),
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
 
-        if (runOutput.run.status === "completed" && runOutput.outputText) {
-          setProviderExecutionState("streaming_ready");
+          const failureIso = openRouterResult.receivedAtIso;
+          const fallbackAllowed = routingDecision.fallbackProvider === "ollama" && (!releaseCritical || Boolean(routingDecision.fallbackModelId));
+          const fallbackReason = openRouterResult.errorCode === "rate_limited" ? "provider_rate_limited" : "provider_unavailable";
+          if (fallbackAllowed) {
+            const fallbackIso = new Date().toISOString();
+            const fallbackText = `Primary provider unavailable (${openRouterResult.errorCode}). Switched to local fallback (${routingDecision.fallbackModelId ?? "auto"}).\\n\\n${mockResponse.content}`;
+            const fallbackWorkflow = completeExecutionTrace(
+              appendExecutionTraceStep(
+                appendExecutionTraceStep(
+                  appendExecutionTraceStep(workflowRef.current, {
+                    traceId,
+                    nowIso: failureIso,
+                    type: "provider_failed",
+                    title: "Primary provider failed",
+                    details: openRouterResult.errorMessage,
+                    failureType: openRouterResult.errorCode === "rate_limited" ? "timeout" : "provider_failure",
+                    provider: "OpenRouter",
+                    model: selectedProviderModel,
+                    nextStatus: "fallback_in_progress",
+                  }),
+                  {
+                    traceId,
+                    nowIso: fallbackIso,
+                    type: "fallback_selected",
+                    title: "Fallback selected",
+                    details: `Fallback executed due to ${fallbackReason}.`,
+                    provider: "Ollama",
+                    model: routingDecision.fallbackModelId ?? undefined,
+                    nextStatus: "fallback_in_progress",
+                  },
+                ),
+                {
+                  traceId,
+                  nowIso: fallbackIso,
+                  type: "result_received",
+                  title: "Fallback result received",
+                  details: "Local fallback completed successfully.",
+                  provider: "Ollama",
+                  model: routingDecision.fallbackModelId ?? undefined,
+                  nextStatus: "completed",
+                },
+              ),
+              traceId,
+              {
+                nowIso: fallbackIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: "hybrid",
+                  executionWeight: "light",
+                },
+              },
+            );
+
+            dispatch({ type: "set_workflow", workflow: fallbackWorkflow });
+            dispatch({
+              type: "set_local_inference",
+              localInference: {
+                ...localInferenceRef.current,
+                operational: {
+                  ...localInferenceRef.current.operational,
+                  degradedMode: shouldEnterDegradedMode([
+                    { provider: "openrouter", consecutiveFailures: 2, consecutiveRateLimits: openRouterResult.errorCode === "rate_limited" ? 2 : 0 },
+                    { provider: "ollama", consecutiveFailures: 0, consecutiveRateLimits: 0 },
+                  ]),
+                  providerHealth: {
+                    ...localInferenceRef.current.operational.providerHealth,
+                    openrouter: openRouterResult.errorCode === "rate_limited" ? "degraded" : "pressured",
+                    ollama: "healthy",
+                  },
+                  fallbackEvents: [
+                    {
+                      atIso: fallbackIso,
+                      reason: fallbackReason,
+                      from: "openrouter",
+                      to: "ollama",
+                      runId,
+                    },
+                    ...localInferenceRef.current.operational.fallbackEvents,
+                  ].slice(0, 20),
+                },
+              },
+            });
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: fallbackText,
+                          status: "completed" as const,
+                          createdAtIso: fallbackIso,
+                        }
+                      : message,
+                  ),
+                },
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
+
+          let failedWorkflow = appendExecutionTraceStep(workflowRef.current, {
+            traceId,
+            nowIso: failureIso,
+            type: "provider_failed",
+            title: "Primary provider failed",
+            details: openRouterResult.errorMessage,
+            failureType: "provider_failure",
+            provider: "OpenRouter",
+            model: selectedProviderModel,
+            nextStatus: "fallback_in_progress",
+          });
+          if (routingDecision.usedFallback) {
+            failedWorkflow = appendExecutionTraceStep(failedWorkflow, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "fallback_selected",
+              title: "Fallback selected",
+              details: `Fallback provider ${routingDecision.fallbackProvider} selected by routing.`,
+              provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
+              model: routingDecision.fallbackModelId ?? undefined,
+              nextStatus: "fallback_in_progress",
+            });
+            failedWorkflow = appendExecutionTraceStep(failedWorkflow, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "fallback_called",
+              title: "Fallback invoked",
+              details: "Fallback execution attempted after primary provider failure.",
+              provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
+              model: routingDecision.fallbackModelId ?? undefined,
+              nextStatus: "fallback_in_progress",
+            });
+          }
+          dispatch({
+            type: "set_workflow",
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(failedWorkflow, {
+                traceId,
+                nowIso: failureIso,
+                type: "run_failed",
+                title: "Run failed",
+                details: openRouterResult.errorMessage,
+                failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
+                nextStatus: "failed",
+              }),
+              traceId,
+              {
+                nowIso: failureIso,
+                outcome: "failed",
+                failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
+                failureMessage: openRouterResult.errorMessage,
+                failurePoint: "run_failed",
+                linkedFindingIds: linkedTask?.linkedAuditId ? [linkedTask.linkedAuditId] : [],
+                linkedBlockerIds: linkedTask?.blockedByTaskIds ?? [],
+                usage: {
+                  executionLocation: routingDecision.usedFallback ? "hybrid" : "cloud",
+                  executionWeight: "standard",
+                },
+              },
+            ),
+          });
+
           dispatch({
             type: "set_chat",
             chat: {
@@ -2175,19 +2736,58 @@ ${contextSystemPrompt}`,
           return;
         }
 
-        dispatch({
-          type: "set_chat",
-          chat: {
-            ...latestChat,
-            messagesBySessionId: {
-              ...latestChat.messagesBySessionId,
-              [sessionId]: sessionMessages.map((message) =>
-                message.id === responseId
+        setTimeout(() => {
+          const completionIso = new Date(Date.now()).toISOString();
+          dispatch({
+            type: "set_workflow",
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(workflowRef.current, {
+                traceId,
+                nowIso: completionIso,
+                type: "result_received",
+                title: "Result received",
+                details: "Local/mock execution completed.",
+                provider: selectedProviderLabel,
+                model: selectedProviderModel,
+                nextStatus: "completed",
+              }),
+              traceId,
+              {
+                nowIso: completionIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
+                  executionWeight: "light",
+                },
+              },
+            ),
+          });
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        content: mockResponse.content,
+                        status: "completed" as const,
+                        createdAtIso: completionIso,
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
                   ? {
-                      ...message,
-                      content: `Execution failed (${usedProvider}/${runOutput.run.providerModelId}): ${runOutput.run.error?.message ?? "Unknown error"}`,
-                      status: "failed" as const,
-                      createdAtIso: runOutput.run.endedAtIso,
+                      ...session,
+                      lastMessageAtIso: completionIso,
+                      unreadCount: 0,
                     }
                   : message,
               ),

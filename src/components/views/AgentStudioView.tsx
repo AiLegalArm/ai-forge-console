@@ -41,6 +41,9 @@ export function AgentStudioView({ workspaceState }: { workspaceState: WorkspaceR
         <div className="text-muted-foreground">active provider <span className="font-mono text-foreground">{workspaceState.activeProvider}</span></div>
         <div className="text-muted-foreground">active model <span className="font-mono text-foreground">{workspaceState.activeModel}</span></div>
         <div className="text-muted-foreground">task context <span className="font-mono text-foreground">{workspaceState.currentTask}</span></div>
+        <div className="text-muted-foreground">budget pressure <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.budgetPressure}</span></div>
+        <div className="text-muted-foreground">provider pressure <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.providerHealth.openrouter}</span></div>
+        <div className="text-muted-foreground">fallback activity <span className="font-mono text-foreground">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
       </div>
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">

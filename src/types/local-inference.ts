@@ -167,11 +167,32 @@ export interface HybridModelRegistryEntry {
 export interface RoutingInput {
   agentRole: AgentRole;
   taskType: TaskType;
+  chatType?: "main" | "agent" | "audit" | "review";
   privacyMode: PrivacyRoutingMode;
+  appModeProfile?: AppRoutingModeProfile;
+  routingMode?: RoutingMode;
   preferredBackend?: ProviderBackend;
+  preferredProvider?: ModelProvider;
+  preferredModelId?: string;
+  fallbackProvider?: ModelProvider;
+  fallbackModelId?: string;
+  openRouterAvailable?: boolean;
+  ollamaAvailable?: boolean;
+  localOnly?: boolean;
+  releaseCritical?: boolean;
+  auditorType?: "code" | "security" | "ai" | "prompt" | "tool" | "git" | "test" | "release";
+  operatorOverride?: {
+    provider?: ModelProvider;
+    modelId?: string;
+    allowFallback?: boolean;
+  };
   fallbackRequired?: boolean;
   maxCostTier?: ModelTier;
   latencyPriority?: "low" | "medium" | "high";
+  budgetPressure?: "low" | "medium" | "high" | "critical";
+  degradedMode?: boolean;
+  fallbackDepth?: number;
+  blockWeakFallbackForRelease?: boolean;
 }
 
 export interface RoutingDecision {
@@ -180,7 +201,18 @@ export interface RoutingDecision {
   selectedModelId: string | null;
   fallbackProvider: ModelProvider;
   fallbackModelId: string | null;
+  usedFallback: boolean;
+  deploymentTarget: "local" | "cloud";
+  privacyAffected: boolean;
+  costAffected: boolean;
+  qualityAffected: boolean;
+  overrideApplied: boolean;
+  resolution: "resolved" | "error";
+  errorCode?: "no_available_provider" | "no_available_model";
   reason: string;
+  degradedMode?: boolean;
+  budgetPressure?: "low" | "medium" | "high" | "critical";
+  stopReason?: "budget_hard_limit" | "provider_unavailable";
 }
 
 export interface RoutingRule {
@@ -247,6 +279,7 @@ export interface BackendRoutingState {
     release: RoutingPresetId;
     cloudAllowed: boolean;
   }>;
+  runtimeDecisionsBySurface?: Record<string, RoutingDecision>;
 }
 
 export interface LocalInferenceRuntimeState {
@@ -256,5 +289,12 @@ export interface LocalInferenceRuntimeState {
   modelRegistry: LocalModelRegistryEntry[];
   routing: BackendRoutingState;
   resources: LocalResourceState;
+  operational: {
+    degradedMode: boolean;
+    budgetPressure: "low" | "medium" | "high" | "critical";
+    blockedExpensiveRuns: number;
+    fallbackEvents: Array<{ atIso: string; reason: string; from: ModelProvider; to: ModelProvider; runId: string }>;
+    providerHealth: Record<ModelProvider, "healthy" | "pressured" | "degraded">;
+  };
   scenarioLog: string[];
 }

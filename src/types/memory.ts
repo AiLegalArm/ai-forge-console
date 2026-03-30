@@ -1,5 +1,5 @@
 import type { ChatType } from "@/types/chat";
-import type { AuditorVerdict, FindingSeverity } from "@/types/audits";
+import type { FindingSeverity } from "@/types/audits";
 import type { WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { GoNoGoStatus } from "@/types/release";
 
@@ -38,7 +38,14 @@ export interface TaskMemoryEntry {
   status: WorkflowTask["status"];
   phase: WorkflowTask["phase"];
   outcomeSummary: string;
+  taskSummary: string;
   blockerSummary: string[];
+  workflowState: {
+    lastKnownPhase: WorkflowTask["phase"];
+    pendingApprovalCount: number;
+    deniedApprovalCount: number;
+    linkedBranch?: string;
+  };
   approvals: Array<Pick<WorkflowApproval, "id" | "status" | "category" | "requestedAtIso">>;
   branchName?: string;
   linkedChatSessionId?: string;
@@ -55,6 +62,8 @@ export interface DecisionMemoryEntry {
   decisionType: "architecture" | "routing" | "provider_model" | "operator_override" | "release" | "audit_resolution";
   summary: string;
   rationale: string;
+  actor: "system" | "operator" | "auditor" | "release_flow";
+  impactScope: "project" | "task" | "chat" | "release";
   linkedTaskId?: string;
   linkedChatSessionId?: string;
   linkedReleaseCandidateId?: string;
@@ -133,6 +142,12 @@ export interface WorkspaceMemoryState {
   providerPreferences: ProviderPreferenceMemory;
   auditRelease: AuditReleaseMemory;
   chatSession: ChatSessionMemory;
+  indexes: {
+    tasksById: Record<string, number>;
+    decisionsByTaskId: Record<string, string[]>;
+    decisionsByReleaseId: Record<string, string[]>;
+    decisionsByChatId: Record<string, string[]>;
+  };
 }
 
 export interface MemoryRetrieveRequest {
@@ -145,11 +160,16 @@ export interface MemoryRetrieveRequest {
 }
 
 export interface MemoryContextEnvelope {
-  project: ProjectMemory;
-  task?: TaskMemoryEntry;
-  decisions: DecisionMemoryEntry[];
-  provider: ProviderPreferenceMemory;
+  project: Pick<ProjectMemory, "activeProjectId" | "projectName" | "projectPath" | "repoStateSummary" | "knownConventions" | "discoveredInstructions">;
+  task?: Pick<
+    TaskMemoryEntry,
+    "taskId" | "taskTitle" | "status" | "phase" | "taskSummary" | "outcomeSummary" | "blockerSummary" | "workflowState" | "branchName"
+  >;
+  decisions: Array<Pick<DecisionMemoryEntry, "id" | "decisionType" | "summary" | "rationale" | "actor" | "impactScope" | "createdAtIso">>;
+  provider: Pick<ProviderPreferenceMemory, "preferredProvider" | "preferredModelByProvider" | "activeProviderContext" | "updatedAtIso">;
   auditRelease: Pick<AuditReleaseMemory, "recurringBlockers" | "resolvedFindings" | "releaseDecisions" | "incidents">;
-  chat: ChatSessionMemory;
+  chat: Pick<
+    ChatSessionMemory,
+    "activeChatSessionId" | "activeChatType" | "recentConversationSummaries" | "linkedTaskContext" | "linkedAgentContext" | "activeProviderModelContext" | "recentProjectActions"
+  >;
 }
-

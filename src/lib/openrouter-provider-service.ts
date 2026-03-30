@@ -50,6 +50,8 @@ export interface OpenRouterChatFailure {
   model: string;
   executionState: "failed";
   errorCode:
+    | "rate_limited"
+    | "temporary_unavailable"
     | "missing_api_key"
     | "invalid_api_key"
     | "network_error"
@@ -58,6 +60,8 @@ export interface OpenRouterChatFailure {
     | "malformed_response"
     | "provider_error";
   errorMessage: string;
+  retryAfterSeconds?: number;
+  transient?: boolean;
   receivedAtIso: string;
 }
 
@@ -157,12 +161,38 @@ export class OpenRouterProviderService {
         };
       }
 
+      if (error === "openrouter_http_429") {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "rate_limited",
+          errorMessage: "OpenRouter rate limited this request.",
+          retryAfterSeconds: 30,
+          transient: true,
+          receivedAtIso,
+        };
+      }
+
+      if (error.startsWith("openrouter_http_5")) {
+        return {
+          provider: "openrouter",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "temporary_unavailable",
+          errorMessage: "OpenRouter is temporarily unavailable.",
+          transient: true,
+          receivedAtIso,
+        };
+      }
+
       return {
         provider: "openrouter",
         model: input.model,
         executionState: "failed",
         errorCode: "provider_error",
         errorMessage: "OpenRouter returned an error response.",
+        transient: true,
         receivedAtIso,
       };
     }

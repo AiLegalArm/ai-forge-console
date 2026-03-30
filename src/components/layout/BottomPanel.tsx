@@ -2,14 +2,16 @@ import { useMemo, useState } from "react";
 import { Terminal, FileText, TestTube, Code, Activity, ChevronUp, ChevronDown } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { TerminalSessionState } from "@/types/local-shell";
+import type { ExecutionTrace } from "@/types/workflow";
 
 interface BottomPanelProps {
   expanded: boolean;
   onToggle: () => void;
   terminal: TerminalSessionState;
+  traces: ExecutionTrace[];
 }
 
-export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) {
+export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPanelProps) {
   const { t } = useI18n();
   const tabConfig = [
     { id: "terminal", icon: Terminal, label: t("bp.terminal") },
@@ -26,6 +28,7 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
     () => [...terminal.output].slice(0, 6),
     [terminal.output],
   );
+  const latestTraces = useMemo(() => [...traces].sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso)).slice(0, 5), [traces]);
 
   return (
     <div className={`${height} border-t border-border bg-panel shrink-0 flex flex-col transition-all`}>
@@ -72,13 +75,20 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
         )}
         {activeTab === "agent-trace" && (
           <div className="space-y-1">
-            {recentActivity.length === 0 ? (
+            {latestTraces.length === 0 ? (
               <div className="text-muted-foreground">No runtime activity yet. Run a task from chat to stream execution events here.</div>
-            ) : recentActivity.map((line) => (
-              <div key={line.id} className="flex gap-2 items-start">
-                <span className="text-muted-foreground shrink-0">{new Date(line.timestampIso).toLocaleTimeString()}</span>
-                <span className={`shrink-0 px-1 rounded text-[10px] ${line.stream === "stderr" ? "bg-warning/20 text-warning" : line.stream === "system" ? "bg-primary/20 text-primary" : "bg-success/20 text-success"}`}>{line.stream}</span>
-                <span className="text-foreground">{line.text}</span>
+            ) : latestTraces.map((trace) => (
+              <div key={trace.traceId} className="border border-border rounded px-2 py-1.5 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground shrink-0">{new Date(trace.updatedAtIso).toLocaleTimeString()}</span>
+                  <span className={`shrink-0 px-1 rounded text-[10px] ${trace.finalResultState === "failed" ? "bg-destructive/20 text-destructive" : trace.fallbackUsed ? "bg-warning/20 text-warning" : "bg-success/20 text-success"}`}>{trace.status}</span>
+                  <span className="text-foreground truncate">{trace.provider ?? "unknown"} / {trace.model ?? "unknown"}</span>
+                </div>
+                <div className="text-muted-foreground text-[10px] truncate">
+                  {trace.taskId ?? "no-task"} • {trace.summary.outcome}
+                  {trace.summary.failurePoint ? ` • failed @ ${trace.summary.failurePoint}` : ""}
+                  {trace.fallbackUsed ? " • fallback" : ""}
+                </div>
               </div>
             ))}
           </div>
