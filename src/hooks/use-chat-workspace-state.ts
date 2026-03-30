@@ -12,6 +12,7 @@ import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { hasDuplicateLocalPath, selectLocalProjectPath, validateLocalProjectPath } from "@/lib/local-project-service";
 import { validateRepositoryConnection } from "@/lib/local-repository-service";
+import { buildProjectCommandRegistry } from "@/lib/project-command-registry-service";
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
@@ -25,6 +26,7 @@ import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-sh
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
+import type { ProjectCommandRegistry } from "@/types/project-commands";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -207,6 +209,21 @@ export function useChatWorkspaceState() {
     connected: false,
     syncStatus: "idle",
     connectionState: "disconnected",
+  });
+  const [projectCommandRegistry, setProjectCommandRegistry] = useState<ProjectCommandRegistry>({
+    projectRoot: localShell.project.activeProjectRoot,
+    generatedAtIso: new Date().toISOString(),
+    commands: [],
+    primaryCommandIds: [],
+    diagnostics: {
+      agentsFileFound: false,
+      agentsCommandsExtracted: 0,
+      packageJsonFound: false,
+      packageScriptsExtracted: 0,
+      makefileFound: false,
+      makeTargetsExtracted: 0,
+      warnings: ["Command registry not loaded yet."],
+    },
   });
 
   type AddLocalProjectResult = {
@@ -424,8 +441,47 @@ export function useChatWorkspaceState() {
     projects,
     activeProjectId,
     repository,
+    projectCommandRegistry,
+    terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
+    agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
   };
+
+  useEffect(() => {
+    let active = true;
+    const projectRoot = localShell.project.activeProjectRoot;
+    if (!projectRoot) return () => {
+      active = false;
+    };
+
+    void (async () => {
+      const registry = await buildProjectCommandRegistry({ projectRoot });
+      if (!active) return;
+
+      setProjectCommandRegistry(registry);
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            projectInstructionsDetected: registry.diagnostics.agentsFileFound,
+            instructionSources: [
+              ...(registry.diagnostics.agentsFileFound ? ["AGENTS.md/AGENT.md"] : []),
+              ...(registry.diagnostics.packageJsonFound ? ["package.json"] : []),
+              ...(registry.diagnostics.makefileFound ? ["Makefile"] : []),
+            ],
+            commandRegistryLoaded: true,
+            commandRegistryUpdatedAtIso: registry.generatedAtIso,
+          },
+        },
+      });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [localShell.project.activeProjectRoot]);
 
   useEffect(() => {
     const existing = terminalService.selectSession(localShellRef.current.terminal.selectedSessionId);
@@ -804,6 +860,8 @@ export function useChatWorkspaceState() {
             workspaceName: nextName,
             activeProjectRoot: normalizedPath,
             projectInstructionsDetected: Boolean(validation.hasAgentsInstructions),
+            commandRegistryLoaded: false,
+            commandRegistryUpdatedAtIso: undefined,
             runtimeResourcesAvailable: true,
           },
         },
@@ -913,6 +971,8 @@ export function useChatWorkspaceState() {
             ...localShellRef.current.project,
             workspaceName: activeProject.name,
             activeProjectRoot: validation.metadata.rootPath,
+            commandRegistryLoaded: false,
+            commandRegistryUpdatedAtIso: undefined,
             gitBranch: nextRepository.branch ?? localShellRef.current.project.gitBranch,
             hasLocalChanges: !validation.metadata.clean,
           },
@@ -948,6 +1008,8 @@ export function useChatWorkspaceState() {
               ...localShellRef.current.project,
               workspaceName: selectedProject.name,
               activeProjectRoot: nextPath,
+              commandRegistryLoaded: false,
+              commandRegistryUpdatedAtIso: undefined,
             },
           },
         });

@@ -28,6 +28,8 @@ export interface LocalProjectContext {
   activeProjectRoot: string;
   projectInstructionsDetected: boolean;
   instructionSources: string[];
+  commandRegistryLoaded: boolean;
+  commandRegistryUpdatedAtIso?: string;
   gitBranch: string;
   hasLocalChanges: boolean;
   runtimeResourcesAvailable: boolean;
