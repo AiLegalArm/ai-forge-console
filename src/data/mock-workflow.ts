@@ -786,7 +786,7 @@ const gatedTasks = applyParentTaskBlocking(tasks, gatedSubtasks, auditBlockers);
 
 export const workflowState: WorkflowState = {
   tasks: gatedTasks,
-  subtasks,
+  subtasks: gatedSubtasks,
   delegations,
   taskGraphs,
   approvals,
