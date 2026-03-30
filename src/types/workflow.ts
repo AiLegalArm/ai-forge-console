@@ -35,7 +35,10 @@ export type AgentActivityEventType =
   | "command_proposed"
   | "command_execution_requested"
   | "command_executed"
-  | "command_blocked";
+  | "command_blocked"
+  | "operator_intervention_requested"
+  | "operator_intervention_applied"
+  | "operator_intervention_rejected";
 
 export interface AgentActivityEvent {
   id: string;
@@ -492,6 +495,61 @@ export interface ExecutionTrace {
   summary: ExecutionTraceSummary;
 }
 
+export type OperatorInterventionType =
+  | "reassign_subtask"
+  | "override_agent_assignment"
+  | "switch_provider_model"
+  | "change_routing_mode"
+  | "request_re_audit"
+  | "request_re_review"
+  | "cancel_stop_run"
+  | "retry_run"
+  | "force_fallback"
+  | "mark_task_blocked"
+  | "mark_task_unblocked";
+
+export type OperatorInterventionResultState =
+  | "pending_confirmation"
+  | "applied"
+  | "rejected_policy"
+  | "rejected_precondition"
+  | "failed";
+
+export interface OperatorIntervention {
+  id: string;
+  type: OperatorInterventionType;
+  projectId: string;
+  taskId?: string;
+  subtaskId?: string;
+  executionRunId?: string;
+  executionTraceId?: string;
+  agentId?: string;
+  auditorId?: string;
+  actor: {
+    operatorId: string;
+    operatorLabel: string;
+    mode: "operator" | "plan" | "build" | "audit" | "release";
+  };
+  reason: string;
+  createdAtIso: string;
+  resultState: OperatorInterventionResultState;
+  confirmationRequired: boolean;
+  confirmedByOperator: boolean;
+  linkedApprovalId?: string;
+  metadata?: {
+    fromAgentId?: string;
+    toAgentId?: string;
+    provider?: "openrouter" | "ollama";
+    modelId?: string;
+    routingMode?: "cloud_preferred" | "local_preferred" | "hybrid" | "local_only" | "sensitive_local_only";
+    fallbackForced?: boolean;
+    retryRequested?: boolean;
+    reAuditRequested?: boolean;
+    reReviewRequested?: boolean;
+    blockedState?: "blocked" | "unblocked";
+  };
+}
+
 export interface WorkflowState {
   tasks: WorkflowTask[];
   subtasks: WorkflowSubtask[];
@@ -499,6 +557,7 @@ export interface WorkflowState {
   taskGraphs: WorkflowTaskGraph[];
   activityEvents: AgentActivityEvent[];
   executionTraces: ExecutionTrace[];
+  interventions: OperatorIntervention[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];
   github: GitHubSyncState;

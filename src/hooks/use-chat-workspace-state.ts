@@ -23,6 +23,7 @@ import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembl
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
+import { applyOperatorIntervention, type OperatorInterventionRequest } from "@/lib/operator-intervention-service";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -2918,6 +2919,34 @@ export function useChatWorkspaceState() {
       });
     },
     refreshLocalInference,
+    applyOperatorIntervention: (payload: Omit<OperatorInterventionRequest, "actor" | "projectId"> & { operatorLabel?: string }) => {
+      const interventionResult = applyOperatorIntervention(workflowRef.current, {
+        ...payload,
+        projectId: activeProjectId,
+        actor: {
+          operatorId: "operator-local-1",
+          operatorLabel: payload.operatorLabel ?? "Operator",
+          mode: "operator",
+        },
+      });
+      dispatch({ type: "set_workflow", workflow: interventionResult.workflow });
+
+      if (interventionResult.nextRoutingMode) {
+        setLocalInference((prev) => ({
+          ...prev,
+          routing: {
+            ...prev.routing,
+            activeMode: interventionResult.nextRoutingMode!,
+            conversationOverrides: {
+              ...prev.routing.conversationOverrides,
+              [currentChatSessionId]: interventionResult.nextRoutingMode!,
+            },
+          },
+        }));
+      }
+      if (interventionResult.nextProvider) setProviderSource(interventionResult.nextProvider);
+      if (interventionResult.nextModelId) setActiveModel(interventionResult.nextModelId);
+    },
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
       if (!task?.github) return;

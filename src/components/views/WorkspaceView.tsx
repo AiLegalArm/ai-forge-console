@@ -4,9 +4,10 @@ import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
-import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
+import type { OperatorInterventionType, WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
+import { useState } from "react";
 import {
   Files,
   GitBranch,
@@ -65,9 +66,22 @@ interface WorkspaceViewProps {
   onActiveProjectChange: (projectId: string) => void;
   onFocusTask: (taskId: string) => void;
   onLaunchTask: (taskId: string) => void;
+  onOperatorIntervention: (payload: {
+    type: OperatorInterventionType;
+    taskId?: string;
+    subtaskId?: string;
+    executionRunId?: string;
+    reason: string;
+    targetAgentId?: string;
+    provider?: "openrouter" | "ollama";
+    modelId?: string;
+    routingMode?: "cloud_preferred" | "local_preferred" | "hybrid" | "local_only" | "sensitive_local_only";
+    confirmedByOperator: boolean;
+    operatorLabel?: string;
+  }) => void;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask, onOperatorIntervention }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
   if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
@@ -84,14 +98,14 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
-          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onFocusTask={onFocusTask} onLaunchTask={onLaunchTask} />
+          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onFocusTask={onFocusTask} onLaunchTask={onLaunchTask} onOperatorIntervention={onOperatorIntervention} />
         </div>
       </div>
     </div>
   );
 }
 
-function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void }) {
+function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask, onOperatorIntervention }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void; onOperatorIntervention: WorkspaceViewProps["onOperatorIntervention"] }) {
   const { t } = useI18n();
   const tasks = workspaceState.workflow.tasks;
   const subtasks = workspaceState.workflow.subtasks;
@@ -111,6 +125,16 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
   const criticalPath = workspaceState.workflow.tasks.filter((task) => task.status !== "completed" && task.phase !== "planning");
   const activeReleaseTask = workspaceState.workflow.tasks.find((task) => task.phase === "release");
   const operatorMode = mode === "operator";
+  const [interventionType, setInterventionType] = useState<OperatorInterventionType>("reassign_subtask");
+  const [interventionReason, setInterventionReason] = useState("Operator intervention requested.");
+  const [selectedSubtaskId, setSelectedSubtaskId] = useState<string>(delegatedSubtasks[0]?.id ?? "");
+  const [selectedRunId, setSelectedRunId] = useState<string>(workspaceState.workflow.executionTraces[0]?.runId ?? "");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(workspaceState.activeAgents[0]?.id ?? "");
+  const [confirmIntervention, setConfirmIntervention] = useState(false);
+
+  const requiresConfirmation = ["cancel_stop_run", "force_fallback", "switch_provider_model", "change_routing_mode"].includes(interventionType);
+  const defaultProvider = workspaceState.providerSource;
+  const defaultModel = workspaceState.activeModel;
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
@@ -147,6 +171,59 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">intervention controls</span>
+        <div className="mt-1.5 rounded border border-warning/30 bg-warning/5 p-2 space-y-1.5 text-[10px]">
+          <select value={interventionType} onChange={(event) => setInterventionType(event.target.value as OperatorInterventionType)} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[10px]">
+            <option value="reassign_subtask">reassign subtask</option>
+            <option value="override_agent_assignment">override agent assignment</option>
+            <option value="switch_provider_model">switch provider/model</option>
+            <option value="change_routing_mode">change routing mode</option>
+            <option value="request_re_audit">request re-audit</option>
+            <option value="request_re_review">request re-review</option>
+            <option value="cancel_stop_run">cancel/stop run</option>
+            <option value="retry_run">retry run</option>
+            <option value="force_fallback">force fallback</option>
+            <option value="mark_task_blocked">mark task blocked</option>
+            <option value="mark_task_unblocked">mark task unblocked</option>
+          </select>
+          <select value={selectedSubtaskId} onChange={(event) => setSelectedSubtaskId(event.target.value)} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[10px]">
+            {delegatedSubtasks.map((subtask) => <option key={subtask.id} value={subtask.id}>{subtask.id}</option>)}
+          </select>
+          <select value={selectedRunId} onChange={(event) => setSelectedRunId(event.target.value)} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[10px]">
+            {workspaceState.workflow.executionTraces.map((trace) => <option key={trace.runId} value={trace.runId}>{trace.runId}</option>)}
+          </select>
+          <select value={selectedAgentId} onChange={(event) => setSelectedAgentId(event.target.value)} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[10px]">
+            {workspaceState.activeAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.id}</option>)}
+          </select>
+          <input value={interventionReason} onChange={(event) => setInterventionReason(event.target.value)} className="w-full rounded border border-border bg-background px-1.5 py-1 text-[10px]" placeholder="reason" />
+          <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <input type="checkbox" checked={confirmIntervention} onChange={(event) => setConfirmIntervention(event.target.checked)} />
+            explicit confirmation
+          </label>
+          <button
+            onClick={() => onOperatorIntervention({
+              type: interventionType,
+              taskId: activeTask?.id,
+              subtaskId: selectedSubtaskId || undefined,
+              executionRunId: selectedRunId || undefined,
+              reason: interventionReason,
+              targetAgentId: selectedAgentId || undefined,
+              provider: defaultProvider,
+              modelId: defaultModel,
+              routingMode: workspaceState.routingMode,
+              confirmedByOperator: requiresConfirmation ? confirmIntervention : true,
+            })}
+            className="w-full rounded border border-warning/40 bg-warning/20 px-1.5 py-1 font-mono text-[10px] text-foreground hover:bg-warning/30"
+          >
+            apply intervention
+          </button>
+          <div className="text-[9px] text-muted-foreground">
+            interventions: {workspaceState.workflow.interventions.length} · pending approvals: {workspaceState.workflow.approvals.filter((entry) => entry.status === "pending").length}
+          </div>
         </div>
       </div>
 
@@ -210,6 +287,19 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
               {task.rollup?.blockerIds.length ? (
                 <div className="text-[9px] text-destructive font-mono pl-4">audit blockers: {task.rollup.blockerIds.length}</div>
               ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">intervention log</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.interventions.slice(0, 4).map((entry) => (
+            <div key={entry.id} className="rounded border border-border p-1.5 text-[10px]">
+              <div className="font-mono text-foreground">{entry.type}</div>
+              <div className="text-muted-foreground">{entry.resultState} • {entry.actor.operatorLabel}</div>
+              <div className="text-muted-foreground truncate">{entry.reason}</div>
             </div>
           ))}
         </div>

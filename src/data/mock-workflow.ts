@@ -334,42 +334,6 @@ const tasks: WorkflowTask[] = [
   },
 ];
 
-const subtasks: WorkflowSubtask[] = [
-  {
-    id: "subtask-rbac-frontend-browser",
-    taskId: "task-rbac-exec",
-    title: "Frontend invite flow browser verification",
-    status: "completed",
-    linkedAgentId: "agent-browser",
-    linkedFindingIds: ["AF-BROWSER-211"],
-    evidenceIds: ["ev-browser-trace-211", "ev-browser-shot-211"],
-    criticalPath: true,
-    updatedAtIso: "2026-03-29T10:47:15.000Z",
-  },
-  {
-    id: "subtask-rbac-backend-security",
-    taskId: "task-rbac-audit",
-    title: "Backend invite token scope hardening",
-    status: "completed",
-    linkedAgentId: "agent-auditor",
-    linkedFindingIds: ["AF-SEC-014"],
-    evidenceIds: ["ev-sec-runtime", "ev-sec-browser-network"],
-    criticalPath: true,
-    updatedAtIso: "2026-03-29T10:46:55.000Z",
-  },
-  {
-    id: "subtask-rbac-release-checklist",
-    taskId: "task-rbac-release",
-    title: "Release readiness checklist and sign-off",
-    status: "in_progress",
-    linkedAgentId: "agent-release",
-    linkedFindingIds: ["AF-REL-501", "AF-TEST-302"],
-    evidenceIds: ["ev-release-audit", "ev-test-quality"],
-    criticalPath: true,
-    updatedAtIso: "2026-03-29T10:48:10.000Z",
-  },
-];
-
 const approvals: WorkflowApproval[] = [
   {
     id: "approval-git-push-1",
@@ -856,6 +820,7 @@ export const workflowState: WorkflowState = {
   agentCommandRequests,
   activityEvents,
   executionTraces,
+  interventions: [],
   github: {
     activeRepositoryId: "repo-saas-dashboard",
     repositories,
