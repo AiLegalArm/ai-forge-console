@@ -116,53 +116,53 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <div className="flex items-center gap-1.5 text-2xs font-mono text-primary">
+      <div className="flex items-center justify-between border-b border-border-subtle px-2.5 py-1.5 bg-background">
+        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide text-primary">
           <Waypoints className="h-3 w-3" />
           <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-2xs text-muted-foreground hidden sm:inline font-mono">
+          <span className="text-[10px] text-muted-foreground hidden sm:inline font-mono">
             {workspaceState.routingMode.replace(/_/g, " ")} · {activeSession?.providerMeta.provider}
           </span>
-          <Badge variant="outline" size="sm">exec: {workspaceState.providerExecutionState}</Badge>
+          <Badge variant="outline" size="sm">state: {workspaceState.providerExecutionState}</Badge>
         </div>
       </div>
 
       {/* Config bar */}
-      <div className="border-b border-border px-3 py-2 space-y-2">
-        <div className="border border-border-subtle rounded-md p-2">
-          <div className="text-2xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Setup</div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-1.5 text-2xs">
-            <div className="border border-border-subtle rounded-md px-2 py-1.5">
+      <div className="border-b border-border-subtle px-2.5 py-2 space-y-1.5 bg-card">
+        <div className="border border-border-subtle p-2">
+          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1">Setup</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-1 text-[11px]">
+            <div className="border border-border-subtle rounded px-2 py-1.5">
               <div className="text-muted-foreground">1. Project</div>
               <div className="text-foreground font-medium truncate">{workspaceState.currentProject}</div>
             </div>
-            <div className={`border rounded-md px-2 py-1.5 ${hasConnectedRepo ? "border-success/30" : "border-warning/30"}`}>
+            <div className={`border rounded px-2 py-1.5 ${hasConnectedRepo ? "border-success/30" : "border-warning/30"}`}>
               <div className="text-muted-foreground">2. Repository</div>
               <div className={`font-medium ${hasConnectedRepo ? "text-success" : "text-warning"}`}>{hasConnectedRepo ? "Connected" : "Required"}</div>
             </div>
-            <div className={`border rounded-md px-2 py-1.5 ${hasProviderConnection ? "border-success/30" : "border-warning/30"}`}>
+            <div className={`border rounded px-2 py-1.5 ${hasProviderConnection ? "border-success/30" : "border-warning/30"}`}>
               <div className="text-muted-foreground">3. Provider</div>
               <div className={`font-medium ${hasProviderConnection ? "text-success" : "text-warning"}`}>{hasProviderConnection ? "Ready" : "Required"}</div>
             </div>
-            <div className="border border-primary/30 rounded-md px-2 py-1.5">
+            <div className="border border-primary/30 rounded px-2 py-1.5">
               <div className="text-muted-foreground">4. Start</div>
               <div className="text-primary font-medium">Ask for a plan or task</div>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-2xs font-mono">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-[10px] font-mono">
           <label className="space-y-1">
             <span className="text-muted-foreground">Provider</span>
-            <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground">
+            <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
             </select>
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Model</span>
-            <select value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground">
+            <select value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               {workspaceState.availableModels.map((model) => (
                 <option key={model.id} value={model.id}>{model.displayName}</option>
               ))}
@@ -170,7 +170,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Routing</span>
-            <select value={workspaceState.routingProfile} onChange={(e) => onRoutingProfileChange(e.target.value as AppRoutingModeProfile)} className="w-full border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground">
+            <select value={workspaceState.routingProfile} onChange={(e) => onRoutingProfileChange(e.target.value as AppRoutingModeProfile)} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="cheap_fast">cheap_fast</option>
               <option value="balanced">balanced</option>
               <option value="quality_first">quality_first</option>
@@ -180,14 +180,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Mode</span>
-            <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground">
+            <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="cloud">cloud</option>
               <option value="local">local</option>
               <option value="hybrid">hybrid</option>
             </select>
           </label>
         </div>
-        <div className="flex flex-wrap items-center gap-1 text-2xs font-mono">
+        <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
           <Badge variant="default" size="sm">{workspaceState.activeProvider} / {workspaceState.activeModel}</Badge>
           <Badge variant="outline" size="sm">last: {workspaceState.lastUsedModel}</Badge>
           <Badge variant="outline" size="sm">{workspaceState.currentProject}</Badge>
@@ -198,7 +198,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <button
               key={profile}
               onClick={() => onRoutingProfileChange(profile)}
-              className={`px-2 py-1 rounded-md text-2xs font-mono border transition-colors ${
+              className={`px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
                 workspaceState.routingProfile === profile ? "border-primary/40 bg-primary/10 text-primary" : "border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover"
               }`}
             >
@@ -214,7 +214,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <button
             key={tab.id}
             onClick={() => onConversationTypeChange(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-2xs font-mono transition-colors border-b-2 shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono transition-colors border-b-2 shrink-0 ${
               activeTab === tab.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -228,15 +228,15 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       {/* Messages — compact rows, no bubbles */}
-      <div className="flex-1 overflow-auto p-3 space-y-1 min-h-0">
+      <div className="flex-1 overflow-auto p-2 space-y-1 min-h-0 bg-background">
         {/* Onboarding checklist */}
-        <div className="border border-border-subtle rounded-md p-2 space-y-2 mb-2">
-          <div className={`border rounded-md p-2 space-y-1.5 ${onboardingComplete ? "border-success/30" : "border-border-subtle"}`}>
+        <div className="border border-border-subtle p-2 space-y-2 mb-2">
+          <div className={`border rounded p-2 space-y-1.5 ${onboardingComplete ? "border-success/30" : "border-border-subtle"}`}>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs uppercase tracking-wider font-mono text-muted-foreground">First-run</span>
-              <span className="text-2xs font-mono text-muted-foreground">{completedChecklistItems}/{firstRunChecklist.length}</span>
+              <span className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground">First-run</span>
+              <span className="text-[10px] font-mono text-muted-foreground">{completedChecklistItems}/{firstRunChecklist.length}</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-2xs font-mono">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-[10px] font-mono">
               {firstRunChecklist.map((step) => (
                 <div key={step.id} className="flex items-center gap-1">
                   {step.done ? <CheckCircle className="h-3 w-3 text-success" /> : <Clock className="h-3 w-3 text-muted-foreground" />}
@@ -246,11 +246,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1">
-            <button className="px-2 py-1 text-2xs rounded-md bg-primary text-primary-foreground inline-flex items-center gap-1 font-mono" onClick={() => {
+            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground inline-flex items-center gap-1 font-mono" onClick={() => {
               onCreateProject({ name: projectNameInput || "New Project", description: projectDescriptionInput, projectType: projectTypeInput });
               setLastOnboardingMessage(`Created project "${projectNameInput || "New Project"}".`);
             }}><FolderPlus className="h-3 w-3" />Create</button>
-            <button className="px-2 py-1 text-2xs rounded-md border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               void (async () => {
                 const result = await onAddLocalProject({
                   name: projectNameInput || "Local Project",
@@ -261,40 +261,40 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 if (result.ok && result.path) setProjectPathInput(result.path);
               })();
             }}><HardDriveDownload className="h-3 w-3" />Add Local</button>
-            <button className="px-2 py-1 text-2xs rounded-md border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               void (async () => {
                 const result = await onConnectRepository({ pathOrUrl: repoInput, name: repoNameInput || undefined, branch: repoBranchInput || undefined });
                 setLastOnboardingMessage(result.message);
               })();
             }}><GitBranchPlus className="h-3 w-3" />Connect Git</button>
-            <button className="px-2 py-1 text-2xs rounded-md border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               onProviderSourceChange(providerSelection);
               setLastOnboardingMessage(`Provider connected: ${providerSelection}.`);
             }}><PlugZap className="h-3 w-3" />Provider</button>
           </div>
-          <div className="text-2xs text-muted-foreground font-mono">{lastOnboardingMessage}</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-2xs">
-            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Description" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Type" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/project" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground">
+          <div className="text-[10px] text-muted-foreground font-mono">{lastOnboardingMessage}</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px]">
+            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Description" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Type" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/project" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
             </select>
-            <input value={repoNameInput} onChange={(e) => setRepoNameInput(e.target.value)} placeholder="Repo name" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="Repo URL / path" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
-            <input value={repoBranchInput} onChange={(e) => setRepoBranchInput(e.target.value)} placeholder="Branch" className="border border-border-subtle rounded-md bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={repoNameInput} onChange={(e) => setRepoNameInput(e.target.value)} placeholder="Repo name" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="Repo URL / path" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={repoBranchInput} onChange={(e) => setRepoBranchInput(e.target.value)} placeholder="Branch" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
           </div>
-          <div className="border border-border-subtle rounded-md p-2 text-2xs font-mono space-y-2">
+          <div className="border border-border-subtle p-2 text-[10px] font-mono space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Active context</span>
               <span className="text-primary">{workspaceState.currentProject}</span>
             </div>
             <div className="flex flex-wrap gap-1">
               {workspaceState.projects.map((project) => (
-                <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded-md border transition-colors ${workspaceState.activeProjectId === project.id ? "border-primary/40 text-primary" : "border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover"}`}>
+                <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded border transition-colors ${workspaceState.activeProjectId === project.id ? "border-primary/40 text-primary" : "border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover"}`}>
                   {project.name} · {project.source}
                 </button>
               ))}
@@ -306,7 +306,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               <Badge variant="outline" size="sm"><GitBranchPlus className="h-3 w-3 mr-0.5" />{workspaceState.repository.branch ?? "no-branch"}</Badge>
               <Badge variant="outline" size="sm"><RefreshCw className="h-3 w-3 mr-0.5" />{workspaceState.repository.syncStatus ?? "idle"}</Badge>
             </div>
-            <div className="border border-border-subtle rounded-md p-2 space-y-1">
+            <div className="border border-border-subtle p-2 space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Context</span>
                 <span className="text-primary uppercase">{workspaceState.currentConversationType}</span>
@@ -322,14 +322,14 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               ).summary}</p>
             </div>
             {workspaceState.repository.connected ? (
-              <div className="border border-success/20 rounded-md p-2 space-y-1">
-                <div className="text-success text-2xs">Sync status</div>
+              <div className="border border-success/20 rounded p-2 space-y-1">
+                <div className="text-success text-[10px]">Sync status</div>
                 <div className="text-muted-foreground">{workspaceState.repository.name} · {workspaceState.repository.url} · {workspaceState.repository.clean ? "clean" : "dirty"}</div>
-                <button onClick={onDisconnectRepository} className="text-destructive text-2xs hover:underline">Disconnect</button>
+                <button onClick={onDisconnectRepository} className="text-destructive text-[10px] hover:underline">Disconnect</button>
               </div>
             ) : null}
             {!workspaceState.repository.connected ? (
-              <div className="border border-warning/30 rounded-md p-2 text-warning text-2xs">
+              <div className="border border-warning/30 rounded p-2 text-warning text-[10px]">
                 Connect a repository to unlock commit, review, and deploy.
               </div>
             ) : null}
@@ -338,34 +338,34 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {activeTab === "main" && <OrchestratorSummary currentTask={workspaceState.currentTask} />}
         {activeTab === "audit" && (
-          <div className="border border-warning/30 rounded-md p-2 text-2xs font-mono text-warning">
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono text-warning">
             {t("chat.audit_findings" as never)} {auditSummary.critical} {t("chat.critical" as never)} · {auditSummary.high} {t("chat.high" as never)} · {t("chat.score" as never)} {auditSummary.score}
           </div>
         )}
         {activeTab === "review" && (
-          <div className="border border-info/30 rounded-md p-2 text-2xs font-mono text-info">
+          <div className="border border-info/30 rounded p-2 text-[10px] font-mono text-info">
             {t("chat.review_evidence" as never)} {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} {t("chat.linked_items" as never)} ·
             {t("chat.blockers" as never)} {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
           </div>
         )}
 
         {activeApproval && (
-          <div className="border border-warning/30 rounded-md p-2 text-2xs font-mono">
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono">
             <p className="text-warning">{t("chat.approval_requested" as never)} {activeApproval.title}</p>
             <p className="text-muted-foreground mt-1">{activeApproval.description}</p>
-            <button onClick={() => onApprovalResolve(sessionId)} className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-2xs text-primary-foreground">
+            <button onClick={() => onApprovalResolve(sessionId)} className="mt-1.5 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground">
               <Check className="h-3 w-3" /> {t("chat.mark_approved" as never)}
             </button>
           </div>
         )}
 
         {workspaceState.pendingApprovals.length > 0 && (
-          <div className="border border-warning/30 rounded-md p-2 text-2xs font-mono space-y-1">
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono space-y-1">
             <p className="text-warning">{t("chat.workflow_approvals" as never)}</p>
             {workspaceState.pendingApprovals.map((approval) => (
               <div key={approval.id} className="flex items-center justify-between gap-2">
                 <span className="text-foreground truncate">{approval.title}</span>
-                <button onClick={() => onWorkflowApprovalResolve?.(approval.id)} className="text-2xs rounded-md bg-primary px-1.5 py-0.5 text-primary-foreground">
+                <button onClick={() => onWorkflowApprovalResolve?.(approval.id)} className="text-[10px] rounded bg-primary px-1.5 py-0.5 text-primary-foreground">
                   {t("chat.approve" as never)}
                 </button>
               </div>
@@ -374,10 +374,10 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
         )}
 
         {agentCommandRequests.length > 0 && (
-          <div className="border border-primary/30 rounded-md p-2 text-2xs font-mono space-y-1.5">
+          <div className="border border-primary/30 rounded p-2 text-[10px] font-mono space-y-1.5">
             <p className="text-primary">Agent commands</p>
             {agentCommandRequests.map((request) => (
-              <div key={request.id} className="border border-border-subtle rounded-md p-1.5 space-y-1">
+              <div key={request.id} className="border border-border-subtle rounded p-1.5 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-foreground truncate">{request.rawCommand}</span>
                   <span className="text-muted-foreground">{request.origin.replace(/_/g, " ")}</span>
@@ -386,7 +386,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">{request.safetyLevel} · {request.executionState} · {request.resultState}</span>
                   {request.linkedApprovalId ? (
-                    <button onClick={() => onWorkflowApprovalResolve?.(request.linkedApprovalId!)} className="rounded-md bg-primary px-1.5 py-0.5 text-primary-foreground">
+                    <button onClick={() => onWorkflowApprovalResolve?.(request.linkedApprovalId!)} className="rounded bg-primary px-1.5 py-0.5 text-primary-foreground">
                       {t("chat.approve" as never)}
                     </button>
                   ) : null}
@@ -398,47 +398,41 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
         {/* Message list — compact rows, role labels, no bubbles */}
         {!hasMessages ? (
-          <div className="border border-dashed border-border-subtle rounded-md p-3 space-y-1">
+          <div className="border border-dashed border-border-subtle rounded p-3 space-y-1">
             <p className="text-xs font-medium text-foreground">No conversation yet</p>
-            <p className="text-2xs text-muted-foreground">Describe what you want to build, then track task, agent, audit, and release state.</p>
-            <p className="text-2xs font-mono text-muted-foreground">Tip: "Plan the next task for {workspaceState.currentProject}"</p>
+            <p className="text-[10px] text-muted-foreground">Describe what you want to build, then track task, agent, audit, and release state.</p>
+            <p className="text-[10px] font-mono text-muted-foreground">Tip: "Plan the next task for {workspaceState.currentProject}"</p>
           </div>
         ) : null}
 
         {messages.map((msg: ChatMessage, idx: number) => (
           <div
             key={`${msg.id}-${idx}`}
-            className="py-1.5 border-b border-border-subtle last:border-0 animate-fade-in"
+            className="py-1.5 border-b border-border-subtle/80 last:border-0 animate-fade-in"
             style={{ animationDelay: `${idx * 30}ms`, animationFillMode: "backwards" }}
           >
             <div className="flex items-center gap-1.5 mb-0.5">
               {msg.status && statusIcon[msg.status]}
-              <span className={`text-2xs font-mono font-semibold ${roleLabelMap[msg.role]?.color ?? "text-muted-foreground"}`}>
+              <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role]?.color ?? "text-muted-foreground"}`}>
                 {msg.authorLabel || roleLabelMap[msg.role]?.label || msg.role}
               </span>
               {msg.status === "streaming" && (
-                <span className="text-2xs text-primary font-mono inline-flex items-center gap-1"><Radio className="h-2.5 w-2.5 animate-pulse" /> {t("chat.streaming" as never)}</span>
+                <span className="text-[10px] text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
               )}
-              {msg.phaseLabel ? (
-                <span className="text-2xs text-muted-foreground font-mono border border-border-subtle rounded px-1">{msg.phaseLabel}</span>
-              ) : null}
-              {msg.liveState ? (
-                <span className={`text-2xs font-mono ${liveStateTone[msg.liveState] ?? "text-muted-foreground"}`}>{msg.liveState.replace(/_/g, " ")}</span>
-              ) : null}
-              <span className="text-2xs text-muted-foreground ml-auto font-mono">{formatTime(msg.createdAtIso)}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.provider ?? activeSession?.providerMeta.provider ?? workspaceState.providerSource}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.model ?? activeSession?.providerMeta.model ?? workspaceState.activeModel}</span>
+              <span className="text-[10px] text-muted-foreground ml-auto font-mono">{formatTime(msg.createdAtIso)}</span>
             </div>
-            <p className="text-sm text-foreground leading-normal whitespace-pre-wrap">{msg.content}</p>
-            {msg.partialContent && msg.status !== "completed" ? (
-              <p className="text-2xs text-muted-foreground font-mono mt-1">partial: {msg.partialContent.slice(0, 220)}</p>
-            ) : null}
-            {msg.linked?.executionContextId ? (
-              <TraceInlineStatus traceId={msg.linked.executionContextId} workspaceState={workspaceState} />
-            ) : null}
+            {msg.status === "streaming" ? (
+              <StreamingText text={msg.content} />
+            ) : (
+              <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">{msg.content}</p>
+            )}
             {msg.linked?.taskTitle && (
-              <p className="text-2xs text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
             {msg.linked?.evidenceIds?.length ? (
-              <p className="text-2xs text-info mt-0.5 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
+              <p className="text-[10px] text-info mt-0.5 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
             ) : null}
           </div>
         ))}
@@ -446,7 +440,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border p-2 shrink-0 space-y-1.5 relative">
+      <div className="border-t border-border-subtle p-2 shrink-0 space-y-1.5 relative bg-card">
         <div className="flex items-center gap-1 px-1 flex-wrap">
           {[
             { key: "plan", label: t("plan") },
@@ -456,7 +450,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <button
               key={m.key}
               onClick={() => setComposerMode(m.key)}
-              className={`px-2 py-0.5 text-2xs font-mono rounded-md transition-colors ${
+              className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
                 composerMode === m.key
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
@@ -466,29 +460,29 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             </button>
           ))}
           <div className="flex-1" />
-          <button className="hidden sm:flex items-center gap-1 px-2 py-0.5 text-2xs font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded-md transition-colors">
+          <button className="hidden sm:flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
             <Eye className="h-2.5 w-2.5" /> {t("chat.local")}
           </button>
-          <button className="flex items-center gap-1 px-2 py-0.5 text-2xs font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded-md transition-colors">
+          <button className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
             <Cpu className="h-2.5 w-2.5" /> <span className="hidden sm:inline">{workspaceState.activeBackend}</span>
           </button>
         </div>
 
         {placeholders.length > 0 && (
-          <div className="px-1 text-2xs font-mono text-muted-foreground">
+          <div className="px-1 text-[10px] font-mono text-muted-foreground">
             {t("chat.attachments" as never)} {placeholders.map((item) => item.name).join(", ")}
           </div>
         )}
 
         <div className="flex items-end gap-1">
           <div className="flex gap-0.5 shrink-0">
-            <button onClick={() => setShowSlashMenu(!showSlashMenu)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded-md transition-colors" title="Slash commands">
+            <button onClick={() => setShowSlashMenu(!showSlashMenu)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors" title="Slash commands">
               <Slash className="h-3.5 w-3.5" />
             </button>
-            <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded-md transition-colors hidden sm:block" title="@agent">
+            <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors hidden sm:block" title="@agent">
               <AtSign className="h-3.5 w-3.5" />
             </button>
-            <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded-md transition-colors">
+            <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
               <Paperclip className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -505,23 +499,23 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               }}
               placeholder={t("chat.placeholder")}
               disabled={sendDisabled}
-              className="w-full bg-input border border-border-subtle rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 resize-none font-mono transition-colors"
+              className="w-full bg-input border border-border-subtle rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 resize-none font-mono transition-colors"
             />
           </div>
           <button
             onClick={() => onSendMessage(activeTab)}
             disabled={sendDisabled}
-            className="p-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>
         {sendDisabled && (
-          <p className="text-2xs font-mono text-warning px-1">Connect a provider/model above before sending.</p>
+          <p className="text-[10px] font-mono text-warning px-1">Connect a provider/model above before sending.</p>
         )}
 
         {showSlashMenu && (
-          <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border-subtle rounded-md p-1 min-w-[180px] z-50">
+          <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border-subtle rounded p-1 min-w-[200px] z-50">
             {[
               { cmd: "/build", descKey: "slash.build" },
               { cmd: "/plan", descKey: "slash.plan" },
@@ -535,7 +529,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               <button
                 key={item.cmd}
                 onClick={() => setShowSlashMenu(false)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-2xs hover:bg-surface-hover rounded-md transition-colors"
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-[10px] hover:bg-surface-hover rounded transition-colors"
               >
                 <span className="font-mono text-primary">{item.cmd}</span>
                 <span className="text-muted-foreground">{t(item.descKey as never)}</span>
@@ -552,14 +546,23 @@ function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; works
   const trace = workspaceState.workflow.executionTraces.find((item) => item.traceId === traceId);
   if (!trace) return null;
   return (
-    <div className="mt-1 border border-border-subtle rounded px-2 py-1 text-2xs font-mono text-muted-foreground">
-      <span className="text-foreground">{trace.liveState.replace(/_/g, " ")}</span>
-      {" · "}
-      {trace.currentPhase ?? "in progress"}
-      {" · "}
-      {trace.provider ?? "unknown"}/{trace.model ?? "unknown"}
-      {trace.latestPartialOutput ? <span className="block mt-0.5">latest: {trace.latestPartialOutput.slice(0, 180)}</span> : null}
-      {trace.blockedReason ? <span className="block mt-0.5 text-destructive">blocked: {trace.blockedReason}</span> : null}
+    <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">
+      {text.slice(0, visibleLen)}
+      {visibleLen < text.length && <span className="inline-block w-1 h-3.5 bg-primary animate-pulse ml-0.5" />}
+    </p>
+  );
+}
+
+function TypingIndicator({ agents }: { agents: string[] }) {
+  if (agents.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 py-1.5 animate-fade-in">
+      <div className="flex gap-0.5">
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span className="text-[10px] font-mono text-muted-foreground">{agents.join(", ")} typing…</span>
     </div>
   );
 }
@@ -567,12 +570,12 @@ function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; works
 function OrchestratorSummary({ currentTask }: { currentTask: string }) {
   const { t } = useI18n();
   return (
-    <div className="border border-primary/20 rounded-md p-2 mb-1">
-      <p className="text-2xs uppercase tracking-wider font-mono text-primary mb-0.5">{t("chat.main_workflow" as never)}</p>
+    <div className="border border-primary/20 rounded p-2 mb-1">
+      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-0.5">{t("chat.main_workflow" as never)}</p>
       <p className="text-sm text-foreground">
         command → orchestrator → approvals → agent execution → audit/review → deploy
       </p>
-      <p className="text-2xs text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {currentTask}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {currentTask}</p>
     </div>
   );
 }
