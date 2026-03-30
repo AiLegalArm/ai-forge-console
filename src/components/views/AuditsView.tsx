@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
-import {
-  auditFindings,
-  auditGateDecisions,
-  auditRuns,
-  auditSummary,
-  auditors,
-  findingSeverityOrder,
-} from "@/data/mock-audits";
 import { ShieldCheck, AlertTriangle, AlertCircle, Info, CheckCircle2, Filter, FileText } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { FindingSeverity } from "@/types/audits";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { findingSeverityOrder } from "@/data/mock-audits";
 
 const severityStyles: Record<FindingSeverity, { bg: string; text: string; icon: React.ReactNode }> = {
   critical: { bg: "bg-destructive/10 border-destructive/20", text: "text-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
@@ -29,6 +22,15 @@ const statusBadge: Record<string, string> = {
 
 export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const auditFindings = workspaceState.auditors.findings;
+  const auditGateDecisions = workspaceState.auditors.gateDecisions;
+  const auditRuns = workspaceState.auditors.runs;
+  const auditors = workspaceState.auditors.auditors;
+  const auditSummary = {
+    overall: auditGateDecisions.some((gate) => gate.verdict === "no_go") ? "no_go" : "go",
+    score: Math.max(0, 100 - (auditFindings.filter((finding) => finding.blocking).length * 8)),
+    resolved: auditFindings.filter((finding) => finding.status === "resolved").length,
+  };
   const [activeSeverity, setActiveSeverity] = useState<FindingSeverity | "all">("all");
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(auditFindings[0]?.id ?? null);
 
@@ -39,6 +41,7 @@ export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntim
 
   const selectedFinding = auditFindings.find((finding) => finding.id === selectedFindingId) ?? null;
   const blockingGateCount = auditGateDecisions.filter((gate) => gate.verdict !== "go").length;
+  const activeBlockers = workspaceState.auditors.blockers.filter((blocker) => blocker.status === "active");
   const currentVerdict = workspaceState.auditGateVerdict ?? auditSummary.overall;
   const recentRuns = workspaceState.auditors.runs.slice(0, 6);
   const severitySummary = workspaceState.auditors.findings.reduce((acc, finding) => {
@@ -90,7 +93,20 @@ export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntim
         <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
         <div>
           <div className="text-xs font-semibold text-warning uppercase">Go / No-Go: {currentVerdict === "no_go" || currentVerdict === "fail" ? "NO-GO" : "GO"}</div>
-          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {severitySummary.critical} {t("au.before_release")}</div>
+          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {severitySummary.critical} {t("au.before_release")} • {activeBlockers.length} active workflow blockers</div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-3">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Audit-driven blockers</h2>
+        <div className="space-y-1.5">
+          {activeBlockers.slice(0, 6).map((blocker) => (
+            <div key={blocker.id} className="border border-warning/30 bg-warning/5 rounded p-2 text-[10px]">
+              <div className="text-foreground font-mono">{blocker.entityType}:{blocker.entityId} • {blocker.blockingSeverity}</div>
+              <div className="text-muted-foreground">Blocked by {blocker.sourceAuditorType} auditor via {blocker.linkedFindingIds.join(", ")}.</div>
+              <div className="text-primary">Unblock: {blocker.unblockCondition}</div>
+            </div>
+          ))}
         </div>
       </div>
 

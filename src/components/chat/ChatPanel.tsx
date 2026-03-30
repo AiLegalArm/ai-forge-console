@@ -1,16 +1,18 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight,
+  CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight, Radio,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
 import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
-import { auditSummary } from "@/data/mock-audits";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
+import { Badge } from "@/components/ui/badge";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactNode }[] = [
   { id: "main", labelKey: "chat.main", shortKey: "chat.main.short", icon: <MessageSquare className="h-3 w-3" /> },
@@ -21,19 +23,22 @@ const tabConfig: { id: ChatTab; labelKey: string; shortKey: string; icon: ReactN
 
 const statusIcon: Record<string, React.ReactNode> = {
   completed: <CheckCircle className="h-3 w-3 text-success shrink-0" />,
-  streaming: <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />,
+  streaming: <span className="live-dot shrink-0" aria-hidden />,
   pending: <Clock className="h-3 w-3 text-muted-foreground shrink-0" />,
   failed: <XCircle className="h-3 w-3 text-destructive shrink-0" />,
   needs_approval: <Clock className="h-3 w-3 text-warning shrink-0" />,
 };
 
-const roleStyles: Record<string, string> = {
-  user: "bg-primary/10 border-primary/20 ml-4 sm:ml-8",
-  orchestrator: "bg-surface border-border mr-4 sm:mr-8",
-  agent: "bg-surface border-border mr-4 sm:mr-8",
-  system: "bg-muted/50 border-border mx-2 sm:mx-4 text-center",
-  auditor: "bg-warning/5 border-warning/20 mr-4 sm:mr-8",
-  reviewer: "bg-info/5 border-info/20 mr-4 sm:mr-8",
+const liveStateTone: Record<string, string> = {
+  idle: "text-muted-foreground",
+  preparing: "text-info",
+  streaming: "text-primary",
+  waiting_for_tool: "text-warning",
+  waiting_for_approval: "text-warning",
+  blocked: "text-destructive",
+  fallback_running: "text-warning",
+  completed: "text-success",
+  failed: "text-destructive",
 };
 
 interface ChatPanelProps {
@@ -44,7 +49,7 @@ interface ChatPanelProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatTab) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve?: (approvalId: string) => void;
+  onWorkflowApprovalResolve?: (approvalId: string) => void | Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;
@@ -77,6 +82,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const activeSession = chatState.sessions.find((session) => session.id === sessionId);
   const activeDraft = chatState.draftInputBySessionId[sessionId] ?? "";
   const activeApproval = chatState.approvalRequestBySessionId[sessionId];
+  const agentCommandRequests = workspaceState.workflow.agentCommandRequests.filter((request) => request.linkedChatId === sessionId).slice(0, 4);
   const placeholders = chatState.attachmentPlaceholdersBySessionId[sessionId] ?? [];
   const hasConnectedRepo = workspaceState.repository.connected;
   const hasProviderConnection = workspaceState.providerSource === "openrouter"
@@ -89,19 +95,20 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   const hasConnectedRepository = workspaceState.repository.connected;
   const firstRunChecklist = [
     { id: "project", label: "Project ready", done: Boolean(workspaceState.activeProjectId) },
-    { id: "repo", label: "Git repository connected", done: hasConnectedRepository },
-    { id: "provider", label: "Provider and model selected", done: hasConnectedProvider },
-    { id: "chat", label: "First message sent", done: hasSentFirstMessage },
-    { id: "activity", label: "Activity stream visible", done: workspaceState.workflow.activityEvents.length > 0 },
-    {
-      id: "audit",
-      label: "Audit/review/deploy state visible",
-      done: Boolean(workspaceState.currentReviewId || workspaceState.releaseReadinessStatus),
-    },
+    { id: "repo", label: "Git connected", done: hasConnectedRepository },
+    { id: "provider", label: "Provider selected", done: hasConnectedProvider },
+    { id: "chat", label: "First message", done: hasSentFirstMessage },
+    { id: "activity", label: "Activity stream", done: workspaceState.workflow.activityEvents.length > 0 },
+    { id: "audit", label: "Audit state", done: Boolean(workspaceState.currentReviewId || workspaceState.releaseReadinessStatus) },
   ];
   const completedChecklistItems = firstRunChecklist.filter((step) => step.done).length;
   const onboardingComplete = completedChecklistItems === firstRunChecklist.length;
   const sendDisabled = !hasConnectedProvider;
+  const auditSummary = {
+    critical: workspaceState.auditors.findings.filter((finding) => finding.severity === "critical").length,
+    high: workspaceState.auditors.findings.filter((finding) => finding.severity === "high").length,
+    score: Math.max(0, 100 - (workspaceState.auditors.findings.filter((finding) => finding.blocking).length * 8)),
+  };
 
   const roleLabelMap: Record<string, { label: string; color: string }> = {
     user: { label: t("chat.you"), color: "text-primary" },
@@ -111,67 +118,115 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
     auditor: { label: t("chat.auditor_label"), color: "text-warning" },
     reviewer: { label: t("chat.reviewer" as never), color: "text-info" },
   };
+  const smartActions = getSmartActionSuggestions(workspaceState);
+
+  const handleSmartAction = (actionId: SmartActionId) => {
+    switch (actionId) {
+      case "switch_to_local_mode":
+        onDeploymentModeChange("local");
+        return;
+      case "reconnect_provider":
+        onProviderSourceChange(workspaceState.providerSource === "ollama" ? "openrouter" : "ollama");
+        return;
+      case "switch_provider_fallback":
+        onRoutingProfileChange("cheap_fast");
+        return;
+      case "open_review":
+      case "open_diff_review":
+        onConversationTypeChange("review");
+        return;
+      case "run_audit":
+        onConversationTypeChange("audit");
+        onDraftChange(sessionId, "/audit run current task");
+        return;
+      case "resume_last_task":
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `Resume task ${workspaceState.currentTask} from latest state.`);
+        return;
+      case "plan_subtasks":
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `Plan subtasks for ${workspaceState.currentTask}.`);
+        return;
+      case "retry_failed_run":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, `Retry failed execution for ${workspaceState.currentTask} and summarize blockers.`);
+        return;
+      case "approve_push":
+        if (workspaceState.pendingApprovals[0]) onWorkflowApprovalResolve?.(workspaceState.pendingApprovals[0].id);
+        return;
+      case "run_tests":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, "Run tests and report failures only.");
+        return;
+      case "open_terminal_output":
+        onConversationTypeChange("agent");
+        onDraftChange(sessionId, "Inspect terminal output and propose recovery actions.");
+        return;
+      default:
+        onConversationTypeChange("main");
+        onDraftChange(sessionId, `${smartActions.find((action) => action.id === actionId)?.label}: proceed with operator-safe defaults.`);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between border-b border-border bg-card px-2 py-1">
-        <div className="flex items-center gap-1 text-[10px] font-mono text-primary">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-border-subtle px-2.5 py-1.5 bg-background">
+        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wide text-primary">
           <Waypoints className="h-3 w-3" />
           <span>{activeSession?.title ?? t("chat.command_surface" as never)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground hidden sm:inline">
-            {workspaceState.routingMode.replace(/_/g, " ")} • {activeSession?.providerMeta.provider}
+          <span className="text-[10px] text-muted-foreground hidden sm:inline font-mono">
+            {workspaceState.routingMode.replace(/_/g, " ")} · {activeSession?.providerMeta.provider}
           </span>
-          <span className="text-[10px] font-mono rounded border border-border px-1.5 py-0.5 text-muted-foreground">
-            exec: {workspaceState.providerExecutionState}
-          </span>
+          <Badge variant="outline" size="sm">state: {workspaceState.providerExecutionState}</Badge>
         </div>
       </div>
 
-      <div className="border-b border-border bg-card px-2 py-2 space-y-2">
-        <div className="rounded border border-border/70 bg-background/60 p-2">
-          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1">Getting started</div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-1.5 text-[10px]">
-            <div className="rounded border border-border px-2 py-1.5">
-              <div className="text-muted-foreground">1. Active project</div>
-              <div className="text-foreground font-semibold truncate">{workspaceState.currentProject}</div>
+      {/* Config bar */}
+      <div className="border-b border-border-subtle px-2.5 py-2 space-y-1.5 bg-card">
+        <div className="border border-border-subtle p-2">
+          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground mb-1">Setup</div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-1 text-[11px]">
+            <div className="border border-border-subtle rounded px-2 py-1.5">
+              <div className="text-muted-foreground">1. Project</div>
+              <div className="text-foreground font-medium truncate">{workspaceState.currentProject}</div>
             </div>
-            <div className={`rounded border px-2 py-1.5 ${hasConnectedRepo ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
+            <div className={`border rounded px-2 py-1.5 ${hasConnectedRepo ? "border-success/30" : "border-warning/30"}`}>
               <div className="text-muted-foreground">2. Repository</div>
-              <div className={hasConnectedRepo ? "text-success font-semibold" : "text-warning font-semibold"}>{hasConnectedRepo ? "Connected" : "Connect to continue"}</div>
+              <div className={`font-medium ${hasConnectedRepo ? "text-success" : "text-warning"}`}>{hasConnectedRepo ? "Connected" : "Required"}</div>
             </div>
-            <div className={`rounded border px-2 py-1.5 ${hasProviderConnection ? "border-success/50 bg-success/5" : "border-warning/50 bg-warning/5"}`}>
-              <div className="text-muted-foreground">3. Model provider</div>
-              <div className={hasProviderConnection ? "text-success font-semibold" : "text-warning font-semibold"}>{hasProviderConnection ? "Ready" : "Needs connection"}</div>
+            <div className={`border rounded px-2 py-1.5 ${hasProviderConnection ? "border-success/30" : "border-warning/30"}`}>
+              <div className="text-muted-foreground">3. Provider</div>
+              <div className={`font-medium ${hasProviderConnection ? "text-success" : "text-warning"}`}>{hasProviderConnection ? "Ready" : "Required"}</div>
             </div>
-            <div className="rounded border border-primary/40 bg-primary/5 px-2 py-1.5">
-              <div className="text-muted-foreground">4. Start workflow</div>
-              <div className="text-primary font-semibold">Ask for a plan or task execution</div>
+            <div className="border border-primary/30 rounded px-2 py-1.5">
+              <div className="text-muted-foreground">4. Start</div>
+              <div className="text-primary font-medium">Ask for a plan or task</div>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs font-mono">
+        <SmartActionChips title="Contextual assists" suggestions={smartActions} onAction={handleSmartAction} />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-[10px] font-mono">
           <label className="space-y-1">
             <span className="text-muted-foreground">Provider</span>
-            <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border rounded bg-background px-2 py-1">
+            <select value={workspaceState.providerSource} onChange={(e) => onProviderSourceChange(e.target.value as "openrouter" | "ollama")} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
             </select>
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Model</span>
-            <select value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border rounded bg-background px-2 py-1">
+            <select value={workspaceState.activeModel} onChange={(e) => onModelChange(e.target.value)} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               {workspaceState.availableModels.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.displayName}
-                </option>
+                <option key={model.id} value={model.id}>{model.displayName}</option>
               ))}
             </select>
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Routing</span>
-            <select value={workspaceState.routingProfile} onChange={(e) => onRoutingProfileChange(e.target.value as AppRoutingModeProfile)} className="w-full border border-border rounded bg-background px-2 py-1">
+            <select value={workspaceState.routingProfile} onChange={(e) => onRoutingProfileChange(e.target.value as AppRoutingModeProfile)} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="cheap_fast">cheap_fast</option>
               <option value="balanced">balanced</option>
               <option value="quality_first">quality_first</option>
@@ -181,36 +236,26 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </label>
           <label className="space-y-1">
             <span className="text-muted-foreground">Mode</span>
-            <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border rounded bg-background px-2 py-1">
+            <select value={workspaceState.deploymentMode} onChange={(e) => onDeploymentModeChange(e.target.value as "local" | "cloud" | "hybrid")} className="w-full border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="cloud">cloud</option>
               <option value="local">local</option>
               <option value="hybrid">hybrid</option>
             </select>
           </label>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
-          <span className="rounded-full border border-primary/30 bg-primary/10 text-primary px-2 py-0.5">
-            Active {workspaceState.activeProvider} / {workspaceState.activeModel}
-          </span>
-          <span className="rounded-full border border-border px-2 py-0.5">
-            Last used {workspaceState.lastUsedModel}
-          </span>
-          <span className="rounded-full border border-border px-2 py-0.5">
-            Project {workspaceState.currentProject}
-          </span>
-          {workspaceState.currentTask ? (
-            <span className="rounded-full border border-border px-2 py-0.5">
-              Task {workspaceState.currentTask}
-            </span>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+          <Badge variant="default" size="sm">{workspaceState.activeProvider} / {workspaceState.activeModel}</Badge>
+          <Badge variant="outline" size="sm">last: {workspaceState.lastUsedModel}</Badge>
+          <Badge variant="outline" size="sm">{workspaceState.currentProject}</Badge>
+          {workspaceState.currentTask && <Badge variant="outline" size="sm">{workspaceState.currentTask}</Badge>}
         </div>
         <div className="flex flex-wrap gap-1">
           {(["cheap_fast", "balanced", "quality_first", "privacy_first", "local_only"] as AppRoutingModeProfile[]).map((profile) => (
             <button
               key={profile}
               onClick={() => onRoutingProfileChange(profile)}
-              className={`px-2 py-1 rounded text-[10px] font-mono border ${
-                workspaceState.routingProfile === profile ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
+              className={`px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
+                workspaceState.routingProfile === profile ? "border-primary/40 bg-primary/10 text-primary" : "border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover"
               }`}
             >
               {profile}
@@ -219,12 +264,13 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
         </div>
       </div>
 
-      <div className="flex items-center border-b border-border bg-card shrink-0 overflow-x-auto">
+      {/* Chat tabs — underline style */}
+      <div className="flex items-center border-b border-border shrink-0 overflow-x-auto">
         {tabConfig.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onConversationTypeChange(tab.id)}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 text-xs font-mono transition-colors border-b-2 shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono transition-colors border-b-2 shrink-0 ${
               activeTab === tab.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -237,38 +283,30 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto p-2 sm:p-3 space-y-2 min-h-0">
-        <div className="rounded-lg border border-border p-2 bg-card space-y-3">
-          <div className={`rounded border p-2 space-y-2 ${onboardingComplete ? "border-success/40 bg-success/5" : "border-primary/30 bg-primary/5"}`}>
+      {/* Messages — compact rows, no bubbles */}
+      <div className="flex-1 overflow-auto p-2 space-y-1 min-h-0 bg-background">
+        {/* Onboarding checklist */}
+        <div className="border border-border-subtle p-2 space-y-2 mb-2">
+          <div className={`border rounded p-2 space-y-1.5 ${onboardingComplete ? "border-success/30" : "border-border-subtle"}`}>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] uppercase tracking-wider font-mono text-primary">First-run flow</p>
-              <span className="text-[10px] font-mono text-muted-foreground">
-                {completedChecklistItems}/{firstRunChecklist.length} complete
-              </span>
+              <span className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground">First-run</span>
+              <span className="text-[10px] font-mono text-muted-foreground">{completedChecklistItems}/{firstRunChecklist.length}</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px] font-mono">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-1 text-[10px] font-mono">
               {firstRunChecklist.map((step) => (
-                <div key={step.id} className="flex items-center gap-1.5">
-                  {step.done ? <CheckCircle className="h-3 w-3 text-success" /> : <Clock className="h-3 w-3 text-warning" />}
+                <div key={step.id} className="flex items-center gap-1">
+                  {step.done ? <CheckCircle className="h-3 w-3 text-success" /> : <Clock className="h-3 w-3 text-muted-foreground" />}
                   <span className={step.done ? "text-foreground" : "text-muted-foreground"}>{step.label}</span>
                 </div>
               ))}
             </div>
-            {!onboardingComplete ? (
-              <div className="text-[10px] text-muted-foreground font-mono inline-flex items-center gap-1">
-                Continue left-to-right: project → repo → provider/model → first message.
-                <ArrowRight className="h-3 w-3" />
-              </div>
-            ) : (
-              <div className="text-[10px] text-success font-mono">Core journey complete. Continue driving from chat.</div>
-            )}
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground inline-flex items-center gap-1" onClick={() => {
+          <div className="flex flex-wrap items-center gap-1">
+            <button className="px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground inline-flex items-center gap-1 font-mono" onClick={() => {
               onCreateProject({ name: projectNameInput || "New Project", description: projectDescriptionInput, projectType: projectTypeInput });
               setLastOnboardingMessage(`Created project "${projectNameInput || "New Project"}".`);
-            }}><FolderPlus className="h-3 w-3" />Create Project</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+            }}><FolderPlus className="h-3 w-3" />Create</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               void (async () => {
                 const result = await onAddLocalProject({
                   name: projectNameInput || "Local Project",
@@ -276,116 +314,114 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                   projectRoot: projectRootInput || projectPathInput || undefined,
                 });
                 setLastOnboardingMessage(result.message);
-                if (result.ok && result.path) {
-                  setProjectPathInput(result.path);
-                }
+                if (result.ok && result.path) setProjectPathInput(result.path);
               })();
-            }}><HardDriveDownload className="h-3 w-3" />Add Local Project</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+            }}><HardDriveDownload className="h-3 w-3" />Add Local</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               void (async () => {
-                const result = await onConnectRepository({
-                  pathOrUrl: repoInput,
-                  name: repoNameInput || undefined,
-                  branch: repoBranchInput || undefined,
-                });
+                const result = await onConnectRepository({ pathOrUrl: repoInput, name: repoNameInput || undefined, branch: repoBranchInput || undefined });
                 setLastOnboardingMessage(result.message);
               })();
-            }}><GitBranchPlus className="h-3 w-3" />Connect Git Repository</button>
-            <button className="px-2 py-1 text-[10px] rounded border border-border inline-flex items-center gap-1" onClick={() => {
+            }}><GitBranchPlus className="h-3 w-3" />Connect Git</button>
+            <button className="px-2 py-1 text-[10px] rounded border border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover inline-flex items-center gap-1 font-mono transition-colors" onClick={() => {
               onProviderSourceChange(providerSelection);
               setLastOnboardingMessage(`Provider connected: ${providerSelection}.`);
-            }}><PlugZap className="h-3 w-3" />Connect Provider</button>
+            }}><PlugZap className="h-3 w-3" />Provider</button>
           </div>
           <div className="text-[10px] text-muted-foreground font-mono">{lastOnboardingMessage}</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Short description" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Project type / label (optional)" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/my-local-project" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root (optional)" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root override (optional)" className="border border-border rounded bg-background px-2 py-1" />
-            <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border rounded bg-background px-2 py-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px]">
+            <input value={projectNameInput} onChange={(e) => setProjectNameInput(e.target.value)} placeholder="Project name" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectDescriptionInput} onChange={(e) => setProjectDescriptionInput(e.target.value)} placeholder="Description" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectTypeInput} onChange={(e) => setProjectTypeInput(e.target.value)} placeholder="Type" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectPathInput} onChange={(e) => setProjectPathInput(e.target.value)} placeholder="/workspace/project" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={projectRootInput} onChange={(e) => setProjectRootInput(e.target.value)} placeholder="Project root" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <select value={providerSelection} onChange={(e) => setProviderSelection(e.target.value as "openrouter" | "ollama")} className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground">
               <option value="openrouter">OpenRouter</option>
               <option value="ollama">Ollama</option>
             </select>
-            <input value={repoNameInput} onChange={(e) => setRepoNameInput(e.target.value)} placeholder="Repository name" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="Repository URL / path" className="border border-border rounded bg-background px-2 py-1" />
-            <input value={repoBranchInput} onChange={(e) => setRepoBranchInput(e.target.value)} placeholder="Branch" className="border border-border rounded bg-background px-2 py-1" />
+            <input value={repoNameInput} onChange={(e) => setRepoNameInput(e.target.value)} placeholder="Repo name" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="Repo URL / path" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
+            <input value={repoBranchInput} onChange={(e) => setRepoBranchInput(e.target.value)} placeholder="Branch" className="border border-border-subtle rounded bg-input px-2 py-1 text-foreground placeholder:text-muted-foreground" />
           </div>
-          <div className="rounded border border-border/70 p-2 text-[10px] font-mono space-y-2">
+          <div className="border border-border-subtle p-2 text-[10px] font-mono space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Active project context</span>
+              <span className="text-muted-foreground">Active context</span>
               <span className="text-primary">{workspaceState.currentProject}</span>
             </div>
             <div className="flex flex-wrap gap-1">
               {workspaceState.projects.map((project) => (
-                <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded border ${workspaceState.activeProjectId === project.id ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>
-                  {project.name} • {project.source} • {project.projectType ?? "general"}
+                <button key={project.id} onClick={() => onActiveProjectChange(project.id)} className={`px-2 py-1 rounded border transition-colors ${workspaceState.activeProjectId === project.id ? "border-primary/40 text-primary" : "border-border-subtle text-muted-foreground hover:text-foreground hover:bg-surface-hover"}`}>
+                  {project.name} · {project.source}
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <span className={`rounded-full px-2 py-0.5 border ${workspaceState.repository.connected ? "border-success text-success" : "border-border text-muted-foreground"}`}>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge variant={workspaceState.repository.connected ? "success" : "neutral"} size="sm">
                 Repo {workspaceState.repository.connected ? "connected" : "disconnected"}
-              </span>
-              <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><GitBranchPlus className="h-3 w-3" />{workspaceState.repository.branch ?? "no-branch"}</span>
-              <span className="rounded-full px-2 py-0.5 border border-border text-muted-foreground inline-flex items-center gap-1"><RefreshCw className="h-3 w-3" />{workspaceState.repository.syncStatus ?? "idle"}</span>
+              </Badge>
+              <Badge variant="outline" size="sm"><GitBranchPlus className="h-3 w-3 mr-0.5" />{workspaceState.repository.branch ?? "no-branch"}</Badge>
+              <Badge variant="outline" size="sm"><RefreshCw className="h-3 w-3 mr-0.5" />{workspaceState.repository.syncStatus ?? "idle"}</Badge>
+            </div>
+            <div className="border border-border-subtle p-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Context</span>
+                <span className="text-primary uppercase">{workspaceState.currentConversationType}</span>
+              </div>
+              <p className="text-muted-foreground">{(
+                workspaceState.currentConversationType === "main"
+                  ? workspaceState.contextPackets.mainChat
+                  : workspaceState.currentConversationType === "agent"
+                    ? workspaceState.contextPackets.agentChat
+                    : workspaceState.currentConversationType === "audit"
+                      ? workspaceState.contextPackets.auditChat
+                      : workspaceState.contextPackets.reviewChat
+              ).summary}</p>
             </div>
             {workspaceState.repository.connected ? (
-              <div className="rounded border border-primary/20 bg-primary/5 p-2 space-y-1">
-                <div className="text-primary">Sync status card</div>
-                <div className="text-muted-foreground">{workspaceState.repository.name} • {workspaceState.repository.url} • {workspaceState.repository.clean ? "clean" : "dirty"}</div>
-                <button onClick={onDisconnectRepository} className="text-destructive underline">Disconnect repository</button>
+              <div className="border border-success/20 rounded p-2 space-y-1">
+                <div className="text-success text-[10px]">Sync status</div>
+                <div className="text-muted-foreground">{workspaceState.repository.name} · {workspaceState.repository.url} · {workspaceState.repository.clean ? "clean" : "dirty"}</div>
+                <button onClick={onDisconnectRepository} className="text-destructive text-[10px] hover:underline">Disconnect</button>
               </div>
             ) : null}
             {!workspaceState.repository.connected ? (
-              <div className="rounded border border-warning/30 bg-warning/5 p-2 text-warning">
-                Connect a repository to unlock commit, review, and deploy continuity.
+              <div className="border border-warning/30 rounded p-2 text-warning text-[10px]">
+                Connect a repository to unlock commit, review, and deploy.
               </div>
             ) : null}
           </div>
         </div>
 
-        {activeTab === "main" && (
-          <OrchestratorSummary currentTask={workspaceState.currentTask} />
-        )}
-
+        {activeTab === "main" && <OrchestratorSummary currentTask={workspaceState.currentTask} />}
         {activeTab === "audit" && (
-          <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono text-warning">
-            {t("chat.audit_findings" as never)} {auditSummary.critical} {t("chat.critical" as never)} • {auditSummary.high} {t("chat.high" as never)} • {t("chat.score" as never)} {auditSummary.score}
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono text-warning">
+            {t("chat.audit_findings" as never)} {auditSummary.critical} {t("chat.critical" as never)} · {auditSummary.high} {t("chat.high" as never)} · {t("chat.score" as never)} {auditSummary.score}
           </div>
         )}
         {activeTab === "review" && (
-          <div className="rounded-lg border border-info/30 bg-info/5 p-2 text-xs font-mono text-info">
-            {t("chat.review_evidence" as never)} {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} {t("chat.linked_items" as never)} •
+          <div className="border border-info/30 rounded p-2 text-[10px] font-mono text-info">
+            {t("chat.review_evidence" as never)} {workspaceState.evidenceFlow.linkedByReviewId["pr-rbac-42"]?.length ?? 0} {t("chat.linked_items" as never)} ·
             {t("chat.blockers" as never)} {workspaceState.evidenceFlow.releaseReadinessBlockers.length}
           </div>
         )}
 
         {activeApproval && (
-          <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono">
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono">
             <p className="text-warning">{t("chat.approval_requested" as never)} {activeApproval.title}</p>
             <p className="text-muted-foreground mt-1">{activeApproval.description}</p>
-            <button
-              onClick={() => onApprovalResolve(sessionId)}
-              className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground"
-            >
+            <button onClick={() => onApprovalResolve(sessionId)} className="mt-1.5 inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground">
               <Check className="h-3 w-3" /> {t("chat.mark_approved" as never)}
             </button>
           </div>
         )}
 
-
         {workspaceState.pendingApprovals.length > 0 && (
-          <div className="rounded-lg border border-warning/30 bg-warning/5 p-2 text-xs font-mono space-y-1">
+          <div className="border border-warning/30 rounded p-2 text-[10px] font-mono space-y-1">
             <p className="text-warning">{t("chat.workflow_approvals" as never)}</p>
             {workspaceState.pendingApprovals.map((approval) => (
               <div key={approval.id} className="flex items-center justify-between gap-2">
                 <span className="text-foreground truncate">{approval.title}</span>
-                <button
-                  onClick={() => onWorkflowApprovalResolve?.(approval.id)}
-                  className="text-[10px] rounded bg-primary px-1.5 py-0.5 text-primary-foreground"
-                >
+                <button onClick={() => onWorkflowApprovalResolve?.(approval.id)} className="text-[10px] rounded bg-primary px-1.5 py-0.5 text-primary-foreground">
                   {t("chat.approve" as never)}
                 </button>
               </div>
@@ -393,67 +429,74 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         )}
 
-        {!hasMessages ? (
-          <div className="rounded-lg border border-dashed border-border bg-background/50 p-3 space-y-1.5">
-            <p className="text-xs font-semibold text-foreground">No conversation yet</p>
-            <p className="text-[11px] text-muted-foreground">Use the composer to describe what you want to build, then track task, agent, audit, and release state across the workspace.</p>
-            <p className="text-[10px] font-mono text-muted-foreground">Tip: start with “Plan the next task for {workspaceState.currentProject}”.</p>
-          </div>
-        ) : (
-          messages.map((msg: ChatMessage) => (
-            <div key={msg.id} className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]}`}>
-              <div className="flex items-center gap-1.5 mb-1">
-                {msg.status && statusIcon[msg.status]}
-                <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
-                  {msg.authorLabel || roleLabelMap[msg.role].label}
-                </span>
-                <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
+        {agentCommandRequests.length > 0 && (
+          <div className="border border-primary/30 rounded p-2 text-[10px] font-mono space-y-1.5">
+            <p className="text-primary">Agent commands</p>
+            {agentCommandRequests.map((request) => (
+              <div key={request.id} className="border border-border-subtle rounded p-1.5 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground truncate">{request.rawCommand}</span>
+                  <span className="text-muted-foreground">{request.origin.replace(/_/g, " ")}</span>
+                </div>
+                <p className="text-muted-foreground">{request.reason}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{request.safetyLevel} · {request.executionState} · {request.resultState}</span>
+                  {request.linkedApprovalId ? (
+                    <button onClick={() => onWorkflowApprovalResolve?.(request.linkedApprovalId!)} className="rounded bg-primary px-1.5 py-0.5 text-primary-foreground">
+                      {t("chat.approve" as never)}
+                    </button>
+                  ) : null}
+                </div>
               </div>
-              <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-              {msg.linked?.taskTitle && (
-                <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
-              )}
-              {msg.linked?.evidenceIds?.length ? (
-                <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
-              ) : null}
-            </div>
-          ))
+            ))}
+          </div>
         )}
+
+        {/* Message list — compact rows, role labels, no bubbles */}
+        {!hasMessages ? (
+          <div className="border border-dashed border-border-subtle rounded p-3 space-y-1">
+            <p className="text-xs font-medium text-foreground">No conversation yet</p>
+            <p className="text-[10px] text-muted-foreground">Describe what you want to build, then track task, agent, audit, and release state.</p>
+            <p className="text-[10px] font-mono text-muted-foreground">Tip: "Plan the next task for {workspaceState.currentProject}"</p>
+          </div>
+        ) : null}
+
         {messages.map((msg: ChatMessage, idx: number) => (
           <div
-            key={msg.id}
-            className={`rounded-lg border p-2 sm:p-2.5 ${roleStyles[msg.role]} animate-fade-in`}
-            style={{ animationDelay: `${idx * 40}ms`, animationFillMode: "backwards" }}
+            key={`${msg.id}-${idx}`}
+            className="py-2 border-b border-border-subtle/80 last:border-0"
           >
             <div className="flex items-center gap-1.5 mb-1">
               {msg.status && statusIcon[msg.status]}
-              <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role].color}`}>
-                {msg.authorLabel || roleLabelMap[msg.role].label}
+              <span className={`text-[10px] font-mono font-semibold ${roleLabelMap[msg.role]?.color ?? "text-muted-foreground"}`}>
+                {msg.authorLabel || roleLabelMap[msg.role]?.label || msg.role}
               </span>
               {msg.status === "streaming" && (
-                <span className="text-[9px] text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
+                <span className="text-[10px] text-primary font-mono">{t("chat.streaming" as never)}</span>
               )}
-              <span className="text-[9px] text-muted-foreground ml-auto">{formatTime(msg.createdAtIso)}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.provider ?? activeSession?.providerMeta.provider ?? workspaceState.providerSource}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{msg.providerMeta?.model ?? activeSession?.providerMeta.model ?? workspaceState.activeModel}</span>
+              <span className="text-[10px] text-muted-foreground ml-auto font-mono tabular-nums">{formatTime(msg.createdAtIso)}</span>
             </div>
             {msg.status === "streaming" ? (
               <StreamingText text={msg.content} />
             ) : (
-              <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              <p className="text-[12px] text-foreground leading-relaxed whitespace-pre-wrap">{msg.content}</p>
             )}
             {msg.linked?.taskTitle && (
-              <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
             {msg.linked?.evidenceIds?.length ? (
-              <p className="text-[10px] text-info mt-1 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
+              <p className="text-[10px] text-info mt-0.5 font-mono">{t("chat.evidence" as never)} ↔ {msg.linked.evidenceIds.join(", ")}</p>
             ) : null}
           </div>
         ))}
 
-        <TypingIndicator agents={messages.filter(m => m.status === "streaming").map(m => m.authorLabel || roleLabelMap[m.role]?.label || "")} />
       </div>
 
-      <div className="border-t border-border bg-card p-2 shrink-0 space-y-1.5 relative">
-        <div className="flex items-center gap-0.5 sm:gap-1 px-1 flex-wrap">
+      {/* Composer */}
+      <div className="border-t border-border-subtle p-2 shrink-0 space-y-1.5 relative bg-card">
+        <div className="flex items-center gap-1 px-1 flex-wrap">
           {[
             { key: "plan", label: t("plan") },
             { key: "execute", label: t("chat.execute") },
@@ -462,7 +505,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <button
               key={m.key}
               onClick={() => setComposerMode(m.key)}
-              className={`px-1.5 sm:px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+              className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
                 composerMode === m.key
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
@@ -472,10 +515,10 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             </button>
           ))}
           <div className="flex-1" />
-          <button className="hidden sm:flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded">
+          <button className="hidden sm:flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
             <Eye className="h-2.5 w-2.5" /> {t("chat.local")}
           </button>
-          <button className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded">
+          <button className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
             <Cpu className="h-2.5 w-2.5" /> <span className="hidden sm:inline">{workspaceState.activeBackend}</span>
           </button>
         </div>
@@ -491,7 +534,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
             <button onClick={() => setShowSlashMenu(!showSlashMenu)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors" title="Slash commands">
               <Slash className="h-3.5 w-3.5" />
             </button>
-            <button className="p-1.5 text-muted-foreground hover:text-accent hover:bg-surface-hover rounded transition-colors hidden sm:block" title="@agent">
+            <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-surface-hover rounded transition-colors hidden sm:block" title="@agent">
               <AtSign className="h-3.5 w-3.5" />
             </button>
             <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover rounded transition-colors">
@@ -511,25 +554,23 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               }}
               placeholder={t("chat.placeholder")}
               disabled={sendDisabled}
-              className="w-full bg-input border border-border rounded-lg px-2 sm:px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-mono"
+              className="w-full bg-input border border-border-subtle rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 resize-none font-mono transition-colors"
             />
           </div>
           <button
             onClick={() => onSendMessage(activeTab)}
             disabled={sendDisabled}
-            className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
         </div>
-        {sendDisabled ? (
-          <p className="text-[10px] font-mono text-warning px-1">
-            Connect and select a provider/model above before sending your first command.
-          </p>
-        ) : null}
+        {sendDisabled && (
+          <p className="text-[10px] font-mono text-warning px-1">Connect a provider/model above before sending.</p>
+        )}
 
         {showSlashMenu && (
-          <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border rounded-lg shadow-lg p-1 min-w-[180px] sm:min-w-[200px] z-50">
+          <div className="absolute bottom-full left-2 mb-1 bg-popover border border-border-subtle rounded p-1 min-w-[200px] z-50">
             {[
               { cmd: "/build", descKey: "slash.build" },
               { cmd: "/plan", descKey: "slash.plan" },
@@ -543,10 +584,10 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               <button
                 key={item.cmd}
                 onClick={() => setShowSlashMenu(false)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-surface-hover rounded transition-colors"
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-[10px] hover:bg-surface-hover rounded transition-colors"
               >
                 <span className="font-mono text-primary">{item.cmd}</span>
-                <span className="text-muted-foreground text-[10px] sm:text-xs">{t(item.descKey as never)}</span>
+                <span className="text-muted-foreground">{t(item.descKey as never)}</span>
               </button>
             ))}
           </div>
@@ -556,22 +597,13 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   );
 }
 
-function StreamingText({ text }: { text: string }) {
-  const [visibleLen, setVisibleLen] = useState(0);
-  useEffect(() => {
-    setVisibleLen(0);
-    const id = setInterval(() => {
-      setVisibleLen((prev) => {
-        if (prev >= text.length) { clearInterval(id); return prev; }
-        return Math.min(prev + 2, text.length);
-      });
-    }, 18);
-    return () => clearInterval(id);
-  }, [text]);
+function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; workspaceState: WorkspaceRuntimeState }) {
+  const trace = workspaceState.workflow.executionTraces.find((item) => item.traceId === traceId);
+  if (!trace) return null;
   return (
-    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+    <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">
       {text.slice(0, visibleLen)}
-      {visibleLen < text.length && <span className="inline-block w-1.5 h-3 bg-primary animate-pulse ml-0.5 rounded-sm" />}
+      {visibleLen < text.length && <span className="inline-block w-1 h-3.5 bg-primary animate-pulse ml-0.5" />}
     </p>
   );
 }
@@ -579,15 +611,13 @@ function StreamingText({ text }: { text: string }) {
 function TypingIndicator({ agents }: { agents: string[] }) {
   if (agents.length === 0) return null;
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 animate-fade-in">
-      <div className="flex gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-center gap-2 py-1.5 animate-fade-in">
+      <div className="flex gap-0.5">
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
       </div>
-      <span className="text-[10px] font-mono text-muted-foreground">
-        {agents.join(", ")} typing…
-      </span>
+      <span className="text-[10px] font-mono text-muted-foreground">{agents.join(", ")} typing…</span>
     </div>
   );
 }
@@ -595,12 +625,12 @@ function TypingIndicator({ agents }: { agents: string[] }) {
 function OrchestratorSummary({ currentTask }: { currentTask: string }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 sm:p-2.5">
-      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-1">{t("chat.main_workflow" as never)}</p>
-      <p className="text-xs text-foreground">
-        command → orchestrator plan → approvals → agent execution stream → audit/review summary → code/deploy
+    <div className="border border-primary/20 rounded p-2 mb-1">
+      <p className="text-[10px] uppercase tracking-wider font-mono text-primary mb-0.5">{t("chat.main_workflow" as never)}</p>
+      <p className="text-sm text-foreground">
+        command → orchestrator → approvals → agent execution → audit/review → deploy
       </p>
-      <p className="text-[10px] text-muted-foreground mt-1 font-mono">{t("chat.task" as never)} {currentTask}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {currentTask}</p>
     </div>
   );
 }

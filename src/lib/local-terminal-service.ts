@@ -8,6 +8,7 @@ import type {
   TerminalSession,
   TerminalSessionExecutionState,
   TerminalSessionState,
+  TerminalCommandOrigin,
 } from "@/types/local-shell";
 
 interface CommandRuntime {
@@ -23,11 +24,22 @@ interface SessionRuntimeState {
 
 interface ExecuteCommandInput {
   command: string;
+  source?: TerminalCommand["source"];
+  sourceCommandId?: string;
+  sourceCategory?: TerminalCommand["sourceCategory"];
+  linkedProjectId?: string;
   cwd?: string;
   linkedTaskId?: string;
   linkedChatSessionId?: string;
   timeoutMs?: number;
   approved?: boolean;
+  origin?: TerminalCommandOrigin;
+  linkedAgentId?: string;
+  linkedAgentCommandRequestId?: string;
+  commandSource?: string;
+  originReason?: string;
+  classificationHint?: TerminalExecutionClassification;
+  forceApproval?: boolean;
 }
 
 export interface ExecuteCommandResult {
@@ -246,22 +258,33 @@ export class LocalTerminalExecutionService {
 
     const session = state.session;
     const cwd = input.cwd ?? session.workingDirectory;
-    const classification = classifyCommand(input.command);
-    const approvalState = approvalFor(classification);
+    const classification = input.classificationHint ?? classifyCommand(input.command);
+    const approvalState = input.forceApproval === undefined ? approvalFor(classification) : input.forceApproval ? "required" : "not_required";
     const requiresApproval = approvalState === "required";
 
     const command: TerminalCommand = {
       id: commandId(),
       command: input.command,
+      rawCommand: input.command,
       cwd,
       state: "queued",
       requiresApproval,
+      source: input.source,
+      sourceCommandId: input.sourceCommandId,
+      sourceCategory: input.sourceCategory,
+      linkedProjectId: input.linkedProjectId,
+      launchedAtIso: nowIso(),
       linkedTaskId: input.linkedTaskId ?? session.linkedTaskId,
       linkedChatSessionId: input.linkedChatSessionId ?? session.linkedChatSessionId,
       classification,
       approvalState,
       createdAtIso: nowIso(),
       updatedAtIso: nowIso(),
+      origin: input.origin,
+      linkedAgentId: input.linkedAgentId,
+      linkedAgentCommandRequestId: input.linkedAgentCommandRequestId,
+      commandSource: input.commandSource,
+      originReason: input.originReason,
     };
 
     session.commandHistory = [command, ...session.commandHistory].slice(0, 100);

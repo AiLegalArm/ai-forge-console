@@ -33,6 +33,12 @@ export interface BrowserAutomationAdapter {
   terminateSession: (session: BrowserAdapterSession) => Promise<void>;
 }
 
+interface BrowserAutomationBridge {
+  createSession: BrowserAutomationAdapter["createSession"];
+  executeStep: BrowserAutomationAdapter["executeStep"];
+  terminateSession: BrowserAutomationAdapter["terminateSession"];
+}
+
 export interface BrowserScenarioExecutionInput {
   scenario: BrowserScenario;
   linkedTaskId?: string;
@@ -71,10 +77,10 @@ function createExecutionEvent(
 }
 
 function normalizeFailure(reason: string): BrowserFailureState["reason"] {
-  if (reason.includes("launch")) return "launch_failure";
+  if (reason.includes("launch") || reason.includes("runtime bridge unavailable")) return "launch_failure";
   if (reason.includes("timeout")) return "scenario_timeout";
-  if (reason.includes("network") || reason.includes("reachable")) return "target_unreachable";
-  if (reason.includes("interrupt")) return "session_interrupted";
+  if (reason.includes("network") || reason.includes("reachable") || reason.includes("target")) return "target_unreachable";
+  if (reason.includes("interrupt") || reason.includes("terminate")) return "session_interrupted";
   if (reason.includes("evidence")) return "evidence_capture_failure";
   return "step_failure";
 }
@@ -108,6 +114,22 @@ function sessionSummary(scenario: BrowserScenario, status: BrowserSessionSummary
     failedSteps: failures,
     resultState: status,
   };
+}
+
+async function withStepTimeout<T>(promise: Promise<T>, timeoutMs: number, stepLabel: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`scenario timeout: step '${stepLabel}' exceeded ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export class BrowserAutomationService {
@@ -150,7 +172,7 @@ export class BrowserAutomationService {
 
       for (const step of scenario.steps) {
         currentStepId = step.id;
-        const result = await this.adapter.executeStep(adapterSession, step, timeoutMs);
+        const result = await withStepTimeout(this.adapter.executeStep(adapterSession, step, timeoutMs), timeoutMs, step.label);
 
         const updatedStep: BrowserScenarioStep = {
           ...step,
@@ -175,6 +197,7 @@ export class BrowserAutomationService {
             uri: result.screenshotUri,
             blocking: result.status === "failed",
           });
+          events.push(createExecutionEvent("evidence_captured", `Captured screenshot for: ${step.label}`, sessionId, step.id));
         }
 
         for (const item of result.consoleEvents ?? []) {
@@ -186,9 +209,24 @@ export class BrowserAutomationService {
         }
 
         scenario.steps = scenario.steps.map((existing) => (existing.id === step.id ? updatedStep : existing));
-        (scenario as any).currentStepId = step.id;
+        (scenario as { currentStepId?: string }).currentStepId = step.id;
 
         if (result.status === "failed") {
+          const failureEvidenceId = makeEvidenceId(sessionId, "step_failure");
+          updatedStep.evidenceIds = [...(updatedStep.evidenceIds ?? []), failureEvidenceId];
+          evidence.push({
+            id: failureEvidenceId,
+            sessionId,
+            scenarioId: scenario.id,
+            stepId: step.id,
+            kind: "step_failure",
+            title: `Step failure: ${step.label}`,
+            summary: result.note ?? `Step failed: ${step.label}`,
+            createdAtIso: nowIso(),
+            blocking: true,
+            details: [step.expected],
+          });
+          events.push(createExecutionEvent("evidence_captured", `Captured failed step evidence: ${step.label}`, sessionId, step.id));
           events.push(createExecutionEvent("step_failed", `Step failed: ${step.label}`, sessionId, step.id));
           failureState = {
             state: "failed",
@@ -227,6 +265,7 @@ export class BrowserAutomationService {
           blocking: consoleEvents.some((event) => event.level === "error"),
           details: consoleEvents.map((event) => `${event.level}: ${event.message}`),
         });
+        events.push(createExecutionEvent("evidence_captured", "Captured console evidence", sessionId));
       }
 
       if (networkEvents.length > 0) {
@@ -242,6 +281,7 @@ export class BrowserAutomationService {
           blocking: networkEvents.some((event) => event.statusCode >= 400),
           details: networkEvents.map((event) => `${event.method} ${event.url} → ${event.statusCode}`),
         });
+        events.push(createExecutionEvent("evidence_captured", "Captured network evidence", sessionId));
       }
 
       const summaryEvidenceId = makeEvidenceId(sessionId, "scenario_summary");
@@ -256,6 +296,7 @@ export class BrowserAutomationService {
         blocking: scenarioFailed,
         details: scenario.steps.map((step) => `${step.label}: ${step.status}`),
       });
+      events.push(createExecutionEvent("evidence_captured", "Captured scenario summary evidence", sessionId));
 
       events.push(
         createExecutionEvent(
@@ -349,21 +390,70 @@ export class BrowserAutomationService {
   }
 }
 
-export class RuntimeBridgeBrowserAdapter implements BrowserAutomationAdapter {
-  private async resolveBridge() {
-    const candidate = globalThis as {
-      aiForgeBrowserAutomation?: {
-        createSession: BrowserAutomationAdapter["createSession"];
-        executeStep: BrowserAutomationAdapter["executeStep"];
-        terminateSession: BrowserAutomationAdapter["terminateSession"];
-      };
-    };
+class HttpBrowserAutomationBridge implements BrowserAutomationBridge {
+  private readonly basePath = "/api/browser-runtime";
 
-    if (!candidate.aiForgeBrowserAutomation) {
-      throw new Error("browser launch failure: runtime bridge unavailable");
+  private async request<T>(path: string, init: RequestInit): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.basePath}${path}`, {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...(init.headers ?? {}),
+        },
+      });
+    } catch {
+      throw new Error("browser launch failure: runtime unavailable");
     }
 
-    return candidate.aiForgeBrowserAutomation;
+    if (!response.ok) {
+      const body = await response.text();
+      const detail = body.trim() || `${response.status}`;
+      throw new Error(`browser runtime error: ${detail}`);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return (await response.json()) as T;
+  }
+
+  async createSession(scenario: BrowserScenario): Promise<BrowserAdapterSession> {
+    return this.request<BrowserAdapterSession>("/sessions", {
+      method: "POST",
+      body: JSON.stringify({ scenario }),
+    });
+  }
+
+  async executeStep(session: BrowserAdapterSession, step: BrowserScenarioStep, timeoutMs: number): Promise<AdapterExecutionStepResult> {
+    return this.request<AdapterExecutionStepResult>(`/sessions/${encodeURIComponent(session.externalSessionId)}/steps`, {
+      method: "POST",
+      body: JSON.stringify({ step, timeoutMs }),
+    });
+  }
+
+  async terminateSession(session: BrowserAdapterSession): Promise<void> {
+    await this.request<void>(`/sessions/${encodeURIComponent(session.externalSessionId)}`, {
+      method: "DELETE",
+    });
+  }
+}
+
+export class RuntimeBridgeBrowserAdapter implements BrowserAutomationAdapter {
+  private readonly httpBridge = new HttpBrowserAutomationBridge();
+
+  private async resolveBridge(): Promise<BrowserAutomationBridge> {
+    const candidate = globalThis as {
+      aiForgeBrowserAutomation?: BrowserAutomationBridge;
+    };
+
+    if (candidate.aiForgeBrowserAutomation) {
+      return candidate.aiForgeBrowserAutomation;
+    }
+
+    return this.httpBridge;
   }
 
   async createSession(scenario: BrowserScenario): Promise<BrowserAdapterSession> {

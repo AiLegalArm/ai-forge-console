@@ -20,6 +20,9 @@ export type FindingStatus = "open" | "acknowledged" | "resolved" | "dismissed";
 
 export type AuditGateStage = "push_readiness" | "review_readiness" | "merge_readiness" | "release_readiness" | "deploy_readiness";
 
+export type AuditBlockingSeverity = "warning" | "critical";
+export type AuditBlockingEntityType = "task" | "subtask" | "review" | "release_candidate";
+
 export type AuditScopeType = "workspace" | "task" | "chat" | "branch" | "review" | "release_candidate";
 
 export interface AuditScope {
@@ -133,10 +136,26 @@ export interface AuditGateDecision {
   updatedAtIso: string;
 }
 
+export interface AuditBlockerCondition {
+  id: string;
+  sourceAuditorId: string;
+  sourceAuditorType: AuditorType;
+  linkedFindingIds: string[];
+  blockingSeverity: AuditBlockingSeverity;
+  entityType: AuditBlockingEntityType;
+  entityId: string;
+  unblockCondition: string;
+  rationale: string;
+  status: "active" | "cleared";
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
 export interface AuditorControlState {
   auditors: AuditorProfile[];
   findings: AuditorFinding[];
   runs: AuditorRun[];
   runGroups: AuditRunGroup[];
   gateDecisions: AuditGateDecision[];
+  blockers: AuditBlockerCondition[];
 }

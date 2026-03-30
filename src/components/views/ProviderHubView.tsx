@@ -5,6 +5,8 @@ import type { WorkspaceRuntimeState } from "@/types/workspace";
 import { listAgentBackendSummaries } from "@/lib/agent-backends/provider-hub";
 import type { AgentBackendStatus, AgentBackendSummary } from "@/types/agent-backends";
 import { useEffect, useMemo, useState } from "react";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 interface ProviderHubViewProps {
   workspaceState: WorkspaceRuntimeState;
@@ -81,6 +83,14 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
       avgLatency: 0,
     },
   ];
+  const recoveryActions = getSmartActionSuggestions(workspaceState).filter((action) => (
+    ["reconnect_provider", "switch_provider_fallback", "switch_to_local_mode", "open_terminal_output"].includes(action.id)
+  ));
+  const handleRecoveryAction = (actionId: SmartActionId) => {
+    if (actionId === "reconnect_provider" || actionId === "switch_provider_fallback") {
+      void onRefreshLocalInference();
+    }
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -108,6 +118,15 @@ export function ProviderHubView({ workspaceState, onRefreshLocalInference }: Pro
         <div><span className="text-muted-foreground block">fallback</span><span className={localInferenceRuntime.resources.autoFallbackReady ? "text-success" : "text-warning"}>{localInferenceRuntime.resources.autoFallbackReady ? "ready" : "not-ready"}</span></div>
         <div><span className="text-muted-foreground block">task context</span><span className="text-foreground">{workspaceState.currentTask}</span></div>
       </div>
+      <div className="bg-card border border-border rounded-lg p-3 grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
+        <div><span className="text-muted-foreground block">budget pressure</span><span className={`${localInferenceRuntime.operational.budgetPressure === "critical" ? "text-destructive" : localInferenceRuntime.operational.budgetPressure === "high" ? "text-warning" : "text-foreground"} uppercase`}>{localInferenceRuntime.operational.budgetPressure}</span></div>
+        <div><span className="text-muted-foreground block">degraded mode</span><span className={localInferenceRuntime.operational.degradedMode ? "text-warning" : "text-success"}>{localInferenceRuntime.operational.degradedMode ? "enabled" : "off"}</span></div>
+        <div><span className="text-muted-foreground block">openrouter health</span><span className="text-foreground uppercase">{localInferenceRuntime.operational.providerHealth.openrouter}</span></div>
+        <div><span className="text-muted-foreground block">ollama health</span><span className="text-foreground uppercase">{localInferenceRuntime.operational.providerHealth.ollama}</span></div>
+        <div><span className="text-muted-foreground block">fallback events</span><span className="text-info">{localInferenceRuntime.operational.fallbackEvents.length}</span></div>
+        <div><span className="text-muted-foreground block">blocked expensive runs</span><span className="text-warning">{localInferenceRuntime.operational.blockedExpensiveRuns}</span></div>
+      </div>
+      <SmartActionChips title="Failure recovery suggestions" suggestions={recoveryActions} onAction={handleRecoveryAction} maxVisible={3} />
       <div className="flex gap-2 flex-wrap">
         {providerCategories.map((c) => (
           <span key={c.label} className="px-2 py-0.5 text-[10px] font-mono bg-secondary text-secondary-foreground rounded">{c.label} ({c.count})</span>

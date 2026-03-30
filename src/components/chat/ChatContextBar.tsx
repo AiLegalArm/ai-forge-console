@@ -1,4 +1,4 @@
-import { GitBranch, Shield, Cloud, Cpu, RefreshCw, MessageSquareMore, Bot } from "lucide-react";
+import { GitBranch, Shield, Cloud, Cpu, RefreshCw, MessageSquareMore } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { ChatState } from "@/types/chat";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
@@ -17,83 +17,42 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
   const conversationRoutingMode =
     workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ??
     workspaceState.localInference.routing.activeMode;
-  const activeLocalModel = workspaceState.localInference.modelRegistry.find(
-    (model) => model.id === workspaceState.localInference.ollama.selectedModelId,
-  );
-  const activeTask = workspaceState.workflow.tasks.find(
-    (task) => task.linkedChatSessionId === workspaceState.currentChatSessionId || task.title === workspaceState.currentTask,
-  );
-  const currentTaskAuditFindings = workspaceState.auditors.findings.filter(
-    (finding) => finding.linked.taskId === activeTask?.id,
-  );
-  const noGoGates = workspaceState.auditors.gateDecisions.filter((gate) => gate.verdict === "no_go").length;
-  const ollamaState = workspaceState.localInference.ollama.serviceState;
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 border-b border-border bg-panel text-[10px] font-mono overflow-x-auto shrink-0">
-      <span className="text-muted-foreground hidden sm:inline">{t("ctx.project")}</span>
-      <span className="text-foreground truncate">{workspaceState.currentProject}</span>
-      <span className="text-border">|</span>
+    <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-border-subtle bg-card text-[10px] font-mono overflow-x-auto shrink-0 uppercase tracking-wide">
+      <span className="text-muted-foreground">{t("ctx.project")}</span>
+      <span className="text-foreground normal-case tracking-normal">{workspaceState.currentProject}</span>
 
+      <span className="h-3 w-px bg-border-subtle mx-1" />
       <MessageSquareMore className="h-3 w-3 text-primary shrink-0" />
-      <span className="text-primary uppercase">{workspaceState.currentConversationType}</span>
-      <span className="text-foreground truncate max-w-[160px] hidden md:inline">{activeSession?.title}</span>
-      <span className="text-border hidden sm:inline">|</span>
+      <span className="text-primary">{workspaceState.currentConversationType}</span>
+      <span className="text-muted-foreground hidden md:inline normal-case tracking-normal">{activeSession?.title}</span>
 
+      <span className="h-3 w-px bg-border-subtle mx-1" />
       <GitBranch className="h-3 w-3 text-muted-foreground shrink-0" />
-      <span className="text-primary">{workspaceState.currentBranch}</span>
-      <span className={workspaceState.repository.connected ? "text-success" : "text-muted-foreground"}>
-        {workspaceState.repository.connected ? `repo:${workspaceState.repository.name ?? "connected"}` : "repo:disconnected"}
+      <span className="text-foreground normal-case tracking-normal">{workspaceState.currentBranch}</span>
+      <span className={workspaceState.repository.connected ? "text-success" : "text-warning"}>
+        {workspaceState.repository.connected ? "repo:ok" : "repo:off"}
       </span>
-      <span className="text-muted-foreground hidden md:inline">{workspaceState.repository.syncStatus ?? "idle"}</span>
-      <span className="text-border hidden sm:inline">|</span>
 
-      <span className="text-muted-foreground hidden md:inline">{t("ctx.task")}</span>
-      <span className="text-foreground truncate max-w-[160px] hidden md:inline">{workspaceState.currentTask}</span>
-      <span className="text-muted-foreground hidden lg:inline uppercase">{workspaceState.currentPhase}</span>
-      <span className="text-primary hidden lg:inline">{workspaceState.currentTaskStatus}</span>
-      <span className="text-border hidden md:inline">|</span>
-
-      <Cloud className="h-3 w-3 text-primary shrink-0 hidden sm:block" />
-      <span className="text-foreground hidden sm:inline">{activeSession?.providerMeta.provider ?? workspaceState.activeProvider}</span>
-      <span className="text-muted-foreground hidden sm:inline">{activeSession?.providerMeta.model}</span>
-      <span className="text-primary hidden md:inline uppercase">{workspaceState.activeBackend}</span>
-      <span className="text-border hidden sm:inline">|</span>
-
+      <span className="h-3 w-px bg-border-subtle mx-1 hidden md:inline" />
       <span className="hidden md:inline text-muted-foreground">route</span>
-      <span className="hidden md:inline text-primary uppercase">{conversationRoutingMode.replace(/_/g, " ")}</span>
-      <span className="hidden md:inline text-muted-foreground">•</span>
-      <span className="hidden md:inline text-foreground">{activeLocalModel?.displayName ?? "no local model"}</span>
-      <span className={`hidden md:inline ${ollamaState === "available" ? "text-success" : "text-warning"}`}>
-        {ollamaState}
-      </span>
-      <span className="text-border hidden md:inline">|</span>
+      <span className="hidden md:inline text-primary">{conversationRoutingMode.replace(/_/g, " ")}</span>
+      <span className="hidden md:inline text-muted-foreground">{workspaceState.activeModel}</span>
 
+      <span className="h-3 w-px bg-border-subtle mx-1" />
       <Shield className={`h-3 w-3 shrink-0 ${isPrivate ? "text-success" : "text-warning"}`} />
-      <span className={`hidden sm:inline ${isPrivate ? "text-success" : "text-warning"}`}>
-        {isPrivate ? t("ctx.private") : "team"}
-      </span>
+      <span className={`${isPrivate ? "text-success" : "text-warning"}`}>{isPrivate ? t("ctx.private") : "team"}</span>
+      <RefreshCw className={`h-3 w-3 shrink-0 ${isSynced ? "text-success" : "text-warning animate-spin"}`} />
+      <span className={`${isSynced ? "text-success" : "text-warning"}`}>{isSynced ? t("ctx.synced") : workspaceState.syncStatus.replace("_", " ")}</span>
 
-      <span className="text-border hidden md:inline">|</span>
-      <RefreshCw className={`h-3 w-3 shrink-0 hidden md:block ${isSynced ? "text-success" : "text-warning animate-spin"}`} />
-      <span className={`hidden md:inline ${isSynced ? "text-success" : "text-warning"}`}>
-        {isSynced ? t("ctx.synced") : workspaceState.syncStatus.replace("_", " ")}
+      <span className="ml-auto flex items-center gap-1.5">
+        <Cloud className="h-3 w-3 text-primary" />
+        <span className="text-foreground normal-case tracking-normal">{activeSession?.providerMeta.provider ?? workspaceState.activeProvider}</span>
+        <Cpu className="h-3 w-3 text-primary" />
+        <span className="text-primary">{runningCount} active</span>
+        <span className="text-warning">{workspaceState.pendingApprovals.length} approvals</span>
       </span>
-
-      <span className="text-border">|</span>
-      <Cpu className="h-3 w-3 text-primary animate-pulse shrink-0" />
-      <span className="text-primary">{runningCount} {t("ctx.active")}</span>
-      <span className="text-warning hidden md:inline">{workspaceState.pendingApprovals.length} approvals</span>
-      <span className="text-border hidden md:inline">|</span>
-      <span className="text-warning hidden md:inline">{currentTaskAuditFindings.length} audit findings</span>
-      <span className={`hidden md:inline ${noGoGates > 0 ? "text-destructive" : "text-success"}`}>
-        {noGoGates > 0 ? `${noGoGates} no-go gates` : "all gates go"}
-      </span>
-
-      <div className="ml-auto hidden lg:flex items-center gap-1.5">
-        <Bot className="h-3 w-3 text-muted-foreground" />
-        <span className="text-muted-foreground">agent-linked session</span>
-      </div>
     </div>
   );
 }

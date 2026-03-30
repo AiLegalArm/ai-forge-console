@@ -1,3 +1,5 @@
+import type { ProjectCommandCategory, ProjectCommandSource } from "@/types/project-commands";
+
 export type HealthState = "healthy" | "degraded" | "down" | "unknown";
 
 export type DesktopShellMode = "desktop" | "browser";
@@ -28,6 +30,8 @@ export interface LocalProjectContext {
   activeProjectRoot: string;
   projectInstructionsDetected: boolean;
   instructionSources: string[];
+  commandRegistryLoaded: boolean;
+  commandRegistryUpdatedAtIso?: string;
   gitBranch: string;
   hasLocalChanges: boolean;
   runtimeResourcesAvailable: boolean;
@@ -65,13 +69,21 @@ export interface TerminalOutputLine {
   commandId?: string;
 }
 
+export type TerminalCommandOrigin = "user" | "agent_suggested" | "agent_approved" | "blocked";
+
 export interface TerminalCommand {
   id: string;
   command: string;
+  rawCommand: string;
   cwd: string;
   state: "queued" | "running" | "completed" | "failed" | "approval_required";
   exitCode?: number;
   requiresApproval: boolean;
+  source?: ProjectCommandSource | "manual" | "git_workflow";
+  sourceCommandId?: string;
+  sourceCategory?: ProjectCommandCategory;
+  linkedProjectId?: string;
+  launchedAtIso?: string;
   linkedTaskId?: string;
   linkedChatSessionId?: string;
   failureReason?: TerminalExecutionFailureReason;
@@ -82,6 +94,11 @@ export interface TerminalCommand {
   startedAtIso?: string;
   completedAtIso?: string;
   updatedAtIso: string;
+  origin?: TerminalCommandOrigin;
+  linkedAgentId?: string;
+  linkedAgentCommandRequestId?: string;
+  commandSource?: string;
+  originReason?: string;
 }
 
 export type TerminalCommandHistoryEntry = TerminalCommand;

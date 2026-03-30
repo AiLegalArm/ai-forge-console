@@ -1,12 +1,14 @@
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { ChatContextBar } from "@/components/chat/ChatContextBar";
 import { AgentActivityPanel } from "@/components/chat/AgentActivityPanel";
+import { useMemo, useState } from "react";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
 import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import {
   Files,
   GitBranch,
@@ -23,15 +25,24 @@ import {
   MonitorPlay,
   Camera,
   AlertTriangle,
+  Radar,
+  Bot,
+  Flag,
 } from "lucide-react";
+import { SmartActionChips } from "@/components/assistive/SmartActionChips";
+import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
+  proposed: <Clock className="h-3 w-3 text-muted-foreground" />,
+  assigned: <Clock className="h-3 w-3 text-primary" />,
+  accepted: <Clock className="h-3 w-3 text-primary" />,
   completed: <CheckCircle className="h-3 w-3 text-success" />,
   in_progress: <Play className="h-3 w-3 text-primary animate-pulse" />,
   queued: <Clock className="h-3 w-3 text-muted-foreground" />,
   blocked: <XCircle className="h-3 w-3 text-destructive" />,
   awaiting_approval: <Clock className="h-3 w-3 text-warning" />,
   failed: <XCircle className="h-3 w-3 text-destructive" />,
+  cancelled: <XCircle className="h-3 w-3 text-muted-foreground" />,
 };
 
 interface WorkspaceViewProps {
@@ -44,8 +55,8 @@ interface WorkspaceViewProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve: (approvalId: string) => void;
-  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
@@ -56,12 +67,16 @@ interface WorkspaceViewProps {
   onConnectRepository: (payload: { pathOrUrl: string; name?: string; branch?: string }) => Promise<{ ok: boolean; code: string; message: string }>;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
+  onFocusTask: (taskId: string) => void;
+  onLaunchTask: (taskId: string) => void;
+  onTriggerDeploy: (environment: "preview" | "production") => Promise<{ ok: boolean; message: string }>;
+  onRefreshDeployStatus: (deploymentId: string) => Promise<{ ok: boolean; message: string }>;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask, onTriggerDeploy, onRefreshDeployStatus }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
-  if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
+  if (section === "deploy") return <DeployView workspaceState={workspaceState} onTriggerDeploy={onTriggerDeploy} onRefreshDeployStatus={onRefreshDeployStatus} />;
   if (section === "domains") return <DomainsView workspaceState={workspaceState} />;
   if (section === "design") return <DesignView workspaceState={workspaceState} />;
   if (section === "browser") return <BrowserView workspaceState={workspaceState} onRunBrowserScenario={onRunBrowserScenario} />;
@@ -69,51 +84,228 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   return (
     <div className="flex flex-col h-full">
       <ChatContextBar workspaceState={workspaceState} chatState={chatState} />
-      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} />
+      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} traces={workspaceState.workflow.executionTraces} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
         </div>
-        <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
-          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />
+        <div className="w-72 border-l border-border-subtle bg-panel overflow-auto shrink-0 hidden lg:block">
+          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onFocusTask={onFocusTask} onLaunchTask={onLaunchTask} />
         </div>
       </div>
     </div>
   );
 }
 
-function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void }) {
+function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void }) {
   const { t } = useI18n();
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const tasks = workspaceState.workflow.tasks;
+  const subtasks = workspaceState.workflow.subtasks;
   const completed = tasks.filter((s) => s.status === "completed").length;
   const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
 
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
   const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
+  const parentTask = tasks.find((task) => task.id === "task-rbac") ?? activeTask;
+  const delegatedSubtasks = subtasks.filter((subtask) => subtask.parentTaskId === parentTask?.id);
   const taskEvidence = activeTask?.id ? workspaceState.evidenceFlow.linkedByTaskId[activeTask.id] ?? [] : [];
   const blockerEvidence = workspaceState.evidenceFlow.records.filter((record) => record.blocking);
+  const blockedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "blocked");
+  const completedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "completed");
+  const activeBlockers = workspaceState.workflow.tasks.filter((task) => task.status === "blocked" || (task.designBrowserBlockers ?? 0) > 0);
+  const criticalPath = workspaceState.workflow.tasks.filter((task) => task.status !== "completed" && task.phase !== "planning");
+  const activeReleaseTask = workspaceState.workflow.tasks.find((task) => task.phase === "release");
+  const operatorMode = mode === "operator";
+  const operatorDashboard = workspaceState.operatorDashboard;
+  const selectedDrillDown = useMemo(
+    () => operatorDashboard.executionDrillDowns.find((trace) => trace.traceId === selectedTraceId) ?? operatorDashboard.executionDrillDowns[0],
+    [operatorDashboard.executionDrillDowns, selectedTraceId],
+  );
+  const operatorActions = getSmartActionSuggestions(workspaceState);
+  const handleOperatorAction = (actionId: SmartActionId) => {
+    const activeTaskId = activeTask?.id ?? workspaceState.currentTask;
+    if (actionId === "approve_push" && workspaceState.pendingApprovals[0]) {
+      void onWorkflowApprovalResolve(workspaceState.pendingApprovals[0].id);
+      return;
+    }
+    if (actionId === "retry_failed_run" || actionId === "resume_last_task" || actionId === "plan_subtasks") {
+      if (activeTaskId) onLaunchTask(activeTaskId);
+      return;
+    }
+    if (actionId === "review_blockers" || actionId === "inspect_release_blockers") {
+      if (activeTaskId) onFocusTask(activeTaskId);
+    }
+  };
 
   return (
-    <div className="p-2.5 space-y-3 text-xs">
+    <div className="p-2 space-y-2 text-[11px]">
+      <div className={`border p-2 ${operatorMode ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-foreground flex items-center gap-1"><Radar className="h-3 w-3 text-primary" /> Operator Mode</span>
+          <span className={`text-[9px] font-mono uppercase ${operatorMode ? "text-success" : "text-muted-foreground"}`}>{operatorMode ? "active" : "standby"}</span>
+        </div>
+        <div className="mt-2 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">project</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.currentProject}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">task</span><span className="font-mono text-primary truncate max-w-[120px]">{activeTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">provider/model</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.providerSource}/{workspaceState.activeModel}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">routing</span><span className="font-mono text-foreground uppercase">{workspaceState.routingMode.replace(/_/g, " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">budget pressure</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.budgetPressure === "critical" ? "text-destructive" : workspaceState.localInference.operational.budgetPressure === "high" ? "text-warning" : "text-foreground"}`}>{workspaceState.localInference.operational.budgetPressure}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">degraded mode</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.operational.degradedMode ? "enabled" : "off"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">fallback activity</span><span className="font-mono text-info">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">missing approvals</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">rollback readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.readiness.rollback === "ready" ? "text-success" : "text-warning"}`}>{workspaceState.releaseControl.operations.readiness.rollback}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">operator dashboard</span>
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
+          <div className="grid grid-cols-2 gap-1">
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">active tasks</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.activeTasks}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
+          </div>
+          <div className="text-muted-foreground">release blockers {workspaceState.releaseControl.operations.blockerSummary.total} • failures {workspaceState.releaseControl.operations.decisionFactors.unresolvedExecutionFailures}</div>
+          <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>
+            provider/runtime {operatorDashboard.globalSummary.degradedProviderRuntime ? "degraded" : "healthy"}
+          </div>
+        </div>
+      </div>
+      {operatorMode ? (
+        <SmartActionChips
+          title="Operator interventions"
+          suggestions={operatorActions}
+          maxVisible={3}
+          onAction={handleOperatorAction}
+        />
+      ) : null}
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">project summaries</span>
+        <div className="mt-1.5 space-y-1">
+          {operatorDashboard.projectSummaries.map((project) => (
+            <div key={project.projectId} className={`border p-1.5 text-[10px] ${project.isActiveProject ? "border-primary/40 bg-primary/5" : "border-border"}`}>
+              <div className="font-mono text-foreground truncate">{project.projectName}</div>
+              <div className="text-muted-foreground">active {project.activeTaskCount} • blocked {project.blockedTaskCount} • subtasks {project.activeSubtaskCount}</div>
+              <div className="text-muted-foreground">agents {project.agentUtilization.active}/{project.agentUtilization.active + project.agentUtilization.idle} • {(project.agentUtilization.utilizationRatio * 100).toFixed(0)}%</div>
+              <div className="text-muted-foreground">{project.providerModelState.providerSource}/{project.providerModelState.model} • {project.providerModelState.routingProfile}</div>
+              <div className={`${project.releaseReadiness === "go" ? "text-success" : "text-warning"} font-mono uppercase`}>release {project.releaseReadiness}</div>
+              <div className="text-muted-foreground">audit sev c:{project.auditSeveritySummary.critical} h:{project.auditSeveritySummary.high} m:{project.auditSeveritySummary.medium}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">execution drill-down</span>
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
+          <div className="flex flex-wrap gap-1">
+            {operatorDashboard.entryPoints.fromDashboardCards.slice(0, 4).map((traceId) => (
+              <button key={traceId} onClick={() => setSelectedTraceId(traceId)} className={`border rounded px-1 py-0.5 font-mono ${selectedDrillDown?.traceId === traceId ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>card:{traceId}</button>
+            ))}
+            {operatorDashboard.entryPoints.fromActivityStream.slice(0, 2).map((traceId) => (
+              <button key={`act-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">activity:{traceId}</button>
+            ))}
+            {operatorDashboard.entryPoints.fromTaskGraph.slice(0, 2).map((traceId) => (
+              <button key={`task-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">task:{traceId}</button>
+            ))}
+          </div>
+          {selectedDrillDown ? (
+            <div className="space-y-1">
+              <div className="font-mono text-foreground">{selectedDrillDown.traceId} • {selectedDrillDown.runId}</div>
+              <div className="text-muted-foreground">{selectedDrillDown.actor.role} {selectedDrillDown.actor.id ?? "system"} • task {selectedDrillDown.linked.taskId ?? "—"} / subtask {selectedDrillDown.linked.subtaskId ?? "—"}</div>
+              <div className="text-muted-foreground">provider/model {selectedDrillDown.providerModel.provider ?? "—"}/{selectedDrillDown.providerModel.model ?? "—"}</div>
+              <div className="text-muted-foreground">routing: {selectedDrillDown.routing.decision ?? "n/a"} • fallback {selectedDrillDown.routing.fallbackUsed ? "yes" : "no"} • degraded {selectedDrillDown.routing.degradedExecution ? "yes" : "no"}</div>
+              <div className="text-muted-foreground">cost control {selectedDrillDown.routing.costControlSignal} • outcome {selectedDrillDown.outcome}</div>
+              <div className="text-muted-foreground">approvals {selectedDrillDown.approvalInteractions.join(", ") || "none"} • blockers/findings {selectedDrillDown.findingsOrBlockers.join(", ") || "none"}</div>
+              <div className="text-muted-foreground">steps {selectedDrillDown.steps.length} • final status {selectedDrillDown.status}{selectedDrillDown.failureType ? ` • ${selectedDrillDown.failureType}` : ""}</div>
+            </div>
+          ) : <div className="text-muted-foreground">No execution traces available.</div>}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">task launch + focus</span>
+        <div className="mt-1.5 space-y-1">
+          {tasks.map((task) => (
+            <div key={task.id} className="border border-border-subtle p-1.5">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[task.status]}
+                <span className="text-[10px] text-foreground truncate">{task.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono">{task.phase} • {task.status} • owner {task.ownerAgentId ?? "orchestrator"}</div>
+              <div className="mt-1 flex gap-1">
+                <button onClick={() => onLaunchTask(task.id)} className="text-[9px] font-mono border border-primary/30 text-primary rounded px-1.5 py-0.5 hover:bg-primary/10">launch</button>
+                <button onClick={() => onFocusTask(task.id)} className="text-[9px] font-mono border border-border rounded px-1.5 py-0.5 hover:bg-muted">focus</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><GitCommitHorizontal className="h-3 w-3" /> subtask command map</span>
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">parent task</span><span className="font-mono text-foreground">{parentTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">active subtasks</span><span className="font-mono text-primary">{delegatedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">blocked</span><span className="font-mono text-destructive">{blockedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">completed</span><span className="font-mono text-success">{completedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">critical path</span><span className="font-mono text-warning">{criticalPath.map((task) => task.id).join(" → ")}</span></div>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.task_graph" as never)}</span>
           <span className="text-[10px] font-mono text-primary">{Math.round(progress)}%</span>
         </div>
-        <div className="h-1 bg-muted rounded-full overflow-hidden mb-2">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+        <div className="h-1 bg-muted  overflow-hidden mb-2">
+          <div className="h-full bg-primary  transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
-          {tasks.map((task) => (
+          {parentTask ? (
+            <div className="py-1 border-b border-border/30">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[parentTask.status]}
+                <span className="text-[10px] text-foreground truncate font-semibold">{parentTask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                owner {parentTask.ownerAgentId ?? "orchestrator"} • {Math.round(parentTask.completionRate ?? 0)}% rollup
+              </div>
+            </div>
+          ) : null}
+          {delegatedSubtasks.map((subtask) => (
+            <div key={subtask.id} className="py-1 border-b border-border/30 last:border-0 pl-2">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[subtask.status]}
+                <span className="text-[10px] text-foreground truncate">{subtask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                {subtask.assignedAgentId} • {subtask.priority} • {subtask.status}
+              </div>
+            </div>
+          ))}
+          {tasks.filter((task) => !task.parentTaskId).map((task) => (
             <div key={task.id} className="py-1 border-b border-border/30 last:border-0">
               <div className="flex items-center gap-1.5">
                 {taskStatusIcons[task.status]}
                 <span className="text-[10px] text-foreground truncate">{task.title}</span>
               </div>
               <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
+              {task.rollup ? (
+                <div className="text-[9px] font-mono pl-4 text-muted-foreground">
+                  subtasks {task.rollup.completedSubtasks}/{task.rollup.totalSubtasks} • blocked {task.rollup.blockedSubtasks}
+                </div>
+              ) : null}
               {task.designBrowserBlockers ? (
                 <div className="text-[9px] text-warning font-mono pl-4">{t("rail.design_blockers" as never)} {task.designBrowserBlockers}</div>
+              ) : null}
+              {task.rollup?.blockerIds.length ? (
+                <div className="text-[9px] text-destructive font-mono pl-4">audit blockers: {task.rollup.blockerIds.length}</div>
               ) : null}
             </div>
           ))}
@@ -121,21 +313,50 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.approvals" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">delegations</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.delegations.map((delegation) => (
+            <div key={delegation.id} className="border border-border-subtle p-1.5 text-[10px]">
+              <div className="text-foreground font-mono truncate">
+                {delegation.subtaskId} → {delegation.toAgentId}
+              </div>
+              <div className="text-muted-foreground">
+                {delegation.state} • {delegation.assignmentMetadata.expectedOutcome}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Flag className="h-3 w-3 text-warning" /> approval command center</span>
         <div className="mt-1.5 space-y-1">
           {workspaceState.pendingApprovals.length === 0 ? (
             <div className="text-[10px] text-muted-foreground font-mono">{t("rail.no_approvals" as never)}</div>
           ) : (
             workspaceState.pendingApprovals.map((approval: WorkflowApproval) => (
-              <div key={approval.id} className="rounded border border-warning/30 bg-warning/5 p-1.5">
+              <div key={approval.id} className="border border-warning/30 bg-warning/5 p-1.5">
                 <div className="text-[10px] text-warning font-mono">{approval.category}</div>
                 <div className="text-[10px] text-foreground">{approval.title}</div>
+                <div className="text-[9px] text-muted-foreground font-mono">task {approval.taskId ?? "—"} • agent {approval.agentId ?? "operator"} • risk {approval.category}</div>
                 <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="mt-1 text-[10px] font-mono text-primary hover:underline">
                   {t("chat.approve" as never)}
                 </button>
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">agent commands</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.agentCommandRequests.slice(0, 3).map((request) => (
+            <div key={request.id} className="border border-border-subtle p-1.5 text-[10px]">
+              <div className="text-foreground font-mono truncate">{request.rawCommand}</div>
+              <div className="text-muted-foreground">{request.origin.replace(/_/g, " ")} • {request.executionState}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -162,8 +383,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.audit_review" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><ShieldAlert className="h-3 w-3 text-warning" /> audit control</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">active blockers</span><span className="text-destructive font-mono">{activeBlockers.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">severity overview</span><span className="text-warning font-mono uppercase">{activeBlockers.length > 0 ? "elevated" : "stable"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.design_state" as never)}</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
@@ -173,12 +396,13 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.go_nogo" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Bot className="h-3 w-3 text-primary" /> release command layer</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.finalDecision.blockers.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.warnings.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pending_approvals" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.approvalsPending.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">release candidate</span><span className="text-foreground font-mono">{activeReleaseTask?.linkedReleaseCandidateId ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.operations.blockerSummary.total}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.goNoGo.warnings.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pending_approvals" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
         </div>
       </div>
 
@@ -233,9 +457,28 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
           {workspaceState.localShell.capabilities.map((gate) => (
             <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
               <span>{gate.capability.replace(/_/g, " ")}</span>
-              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? t("rail.approval" as never) : t("rail.allowed" as never)}</span>
+              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "require_approval" : "allow"}</span>
             </div>
           ))}
+          {workspaceState.policyState.lastDecision ? (
+            <div className="mt-2 border border-warning/30 bg-warning/5 p-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-warning font-mono uppercase">policy</span>
+                <span
+                  className={`font-mono ${
+                    workspaceState.policyState.lastDecision.blocked
+                      ? "text-destructive"
+                      : workspaceState.policyState.lastDecision.requiresApproval
+                        ? "text-warning"
+                        : "text-success"
+                  }`}
+                >
+                  {workspaceState.policyState.lastDecision.outcome}
+                </span>
+              </div>
+              <div className="text-muted-foreground">{workspaceState.policyState.lastDecision.rationale}</div>
+            </div>
+          ) : null}
         </div>
       </div>
       <div>
@@ -253,9 +496,11 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("memory")}</span>
         <div className="mt-1.5 space-y-0.5 text-[10px]">
-          <div className="flex justify-between text-muted-foreground"><span>{t("snapshots")}</span><span className="text-foreground font-mono">7</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">48K tok</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{workspaceState.projectInstructions.source?.fileType ?? "AGENTS.md / AGENT.md"}</span><span className={`font-mono ${workspaceState.projectInstructions.status === "loaded" ? "text-success" : workspaceState.projectInstructions.status === "parse_warning" ? "text-warning" : "text-muted-foreground"}`}>{workspaceState.projectInstructions.status}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("snapshots")}</span><span className="text-foreground font-mono">{workspaceState.memory.tasks.length}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">{workspaceState.contextEnvelope.decisions.length + workspaceState.contextEnvelope.chat.recentProjectActions.length} scoped</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>AGENTS.md</span><span className={`font-mono ${workspaceState.memory.project.discoveredInstructions.some((entry) => entry.toLowerCase().includes("agent")) ? "text-success" : "text-warning"}`}>{workspaceState.memory.project.discoveredInstructions.length > 0 ? t("ctx.synced") : t("rail.missing" as never)}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Provider defaults</span><span className="text-primary font-mono">{workspaceState.memory.providerPreferences.preferredProvider}/{workspaceState.memory.providerPreferences.preferredModelByProvider[workspaceState.memory.providerPreferences.preferredProvider]}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>Task blockers</span><span className={`font-mono ${workspaceState.contextEnvelope.task?.blockerSummary.length ? "text-warning" : "text-success"}`}>{workspaceState.contextEnvelope.task?.blockerSummary.length ?? 0}</span></div>
         </div>
       </div>
     </div>
@@ -351,7 +596,7 @@ function GitView({
   onGitAction,
 }: {
   workspaceState: WorkspaceRuntimeState;
-  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => Promise<void>;
 }) {
   const { t } = useI18n();
   const activeTask =
@@ -364,6 +609,15 @@ function GitView({
   const commitState = activeTask?.github?.commitWorkflow;
   const pushState = activeTask?.github?.pushWorkflow;
   const reviewState = activeTask?.github?.pullRequest;
+  const reviewOps = evaluatePullRequestReviewOperations({
+    task: activeTask,
+    pullRequest: reviewState,
+    workflow: workspaceState.workflow,
+    auditors: workspaceState.auditors,
+    evidenceFlow: workspaceState.evidenceFlow,
+    defaultBranch: workspaceState.workflow.github.repositories.find((repo) => repo.id === activeTask?.github?.repositoryId)?.defaultBranch,
+    releaseGateBlocked: workspaceState.releaseReadinessStatus === "blocked" || workspaceState.releaseReadinessStatus === "no_go",
+  });
   const openFindings = reviewState?.findings.filter((finding) => finding.status === "open") ?? [];
   const repoConnected = workspaceState.repository.connected || Boolean(activeRepo);
   const repoName = workspaceState.repository.name ?? (activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : undefined);
@@ -411,17 +665,26 @@ function GitView({
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
         <div className="flex items-center gap-2 text-primary"><Upload className="h-3.5 w-3.5" /> {t("git.review_audit" as never)}</div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.pr_status" as never)}</span><span className="font-mono text-foreground">{reviewState?.status ?? "not_opened"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR branch</span><span className="font-mono text-foreground">{reviewState?.sourceBranch && reviewState?.targetBranch ? `${reviewState.sourceBranch} → ${reviewState.targetBranch}` : "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR draft</span><span className="font-mono text-foreground">{reviewState?.draftPreparationStatus ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR creation</span><span className="font-mono text-foreground">{reviewState?.creationStatus ?? "idle"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.review_chat" as never)}</span><span className="font-mono text-foreground">{reviewState?.reviewChatSessionId ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.auditors" as never)}</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.merge_readiness" as never)}</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.release_gate" as never)}</span><span className={`font-mono ${reviewState?.releaseGateReadiness === "blocked" ? "text-warning" : "text-success"}`}>{reviewState?.releaseGateReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review readiness</span><span className={`font-mono ${reviewOps?.reviewReadiness.state === "blocked" ? "text-destructive" : "text-foreground"}`}>{reviewOps?.reviewReadiness.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Merge evaluation</span><span className={`font-mono ${reviewOps?.mergeReadiness.state === "ready" ? "text-success" : reviewOps?.mergeReadiness.state === "blocked" ? "text-destructive" : "text-warning"}`}>{reviewOps?.mergeReadiness.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Release handoff</span><span className={`font-mono ${reviewOps?.releaseHandoff.state === "ready" ? "text-success" : "text-warning"}`}>{reviewOps?.releaseHandoff.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review blockers</span><span className="font-mono text-warning">{reviewOps?.blockers.length ?? 0}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.open_findings" as never)}</span><span className="font-mono text-warning">{openFindings.length}</span></div>
+        {reviewOps?.recommendedNextSteps[0] ? <div className="text-[11px] text-muted-foreground">Next: {reviewOps.recommendedNextSteps[0]}</div> : null}
         {openFindings[0] ? (
           <div className="flex items-center gap-1 text-warning">
             <ShieldAlert className="h-3 w-3" />
             <span className="truncate">{openFindings[0].title}</span>
           </div>
         ) : null}
+        {reviewState?.pendingError ? <div className="text-warning">{reviewState.pendingError}</div> : null}
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-1 text-xs">
@@ -438,6 +701,8 @@ function GitView({
         <button onClick={() => activeTask && void onGitAction("stage_all", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.stage_all" as never)}</button>
         <button onClick={() => activeTask && void onGitAction("commit", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.commit" as never)}</button>
         <button onClick={() => activeTask && void onGitAction("push", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
+        <button onClick={() => activeTask && void onGitAction("prepare_pr", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Prepare PR</button>
+        <button onClick={() => activeTask && void onGitAction("create_pr", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Create PR</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.sync")}</button>
       </div>
@@ -445,9 +710,13 @@ function GitView({
   );
 }
 
-function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
+function DeployView({ workspaceState, onTriggerDeploy, onRefreshDeployStatus }: {
+  workspaceState: WorkspaceRuntimeState;
+  onTriggerDeploy: (environment: "preview" | "production") => Promise<{ ok: boolean; message: string }>;
+  onRefreshDeployStatus: (deploymentId: string) => Promise<{ ok: boolean; message: string }>;
+}) {
   const { t } = useI18n();
-  const { deployments, releaseCandidates, finalDecision } = workspaceState.releaseControl;
+  const { deployments, releaseCandidates, operations } = workspaceState.releaseControl;
   const activeReleaseCandidate = releaseCandidates.find((candidate) => candidate.id === workspaceState.releaseControl.activeCandidateId);
 
   return (
@@ -456,9 +725,15 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
       <div className="bg-card border border-border rounded-lg p-4 space-y-3 text-xs">
         <div className="flex items-center justify-between">
           <span className="font-mono text-muted-foreground">{t("deploy.go_nogo" as never)}</span>
-          <span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{finalDecision.status}</span>
+          <span className={`font-mono uppercase ${operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{operations.goNoGo.status}</span>
         </div>
-        <div className="text-muted-foreground">{finalDecision.summary}</div>
+        <div className="text-muted-foreground">{operations.goNoGo.summary}</div>
+        <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Preview readiness</span><span className="font-mono">{operations.deployReadiness.previewStatus}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Production readiness</span><span className="font-mono">{operations.deployReadiness.productionStatus}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Deploy blockers</span><span className="font-mono text-warning">{operations.deployReadiness.blockers.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Release dependencies</span><span className="font-mono">{operations.deployReadiness.dependencyState}</span></div>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -466,7 +741,7 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
           <div key={deployment.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5 text-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${deployment.status === "blocked" || deployment.status === "failed" ? "bg-destructive" : deployment.status === "preview_ready" || deployment.status === "production_ready" ? "bg-primary" : "bg-success"}`} />
+                <span className={`w-2 h-2  ${deployment.status === "blocked" || deployment.status === "failed" ? "bg-destructive" : deployment.status === "preview_ready" || deployment.status === "production_ready" ? "bg-primary" : "bg-success"}`} />
                 <span className="font-semibold text-foreground">{deployment.environment}</span>
                 <span className="text-[10px] text-muted-foreground font-mono">{deployment.id}</span>
               </div>
@@ -491,25 +766,39 @@ function DeployView({ workspaceState }: { workspaceState: WorkspaceRuntimeState 
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review" as never)}</span><span className="font-mono text-foreground">{activeReleaseCandidate.linkedReviewId ?? "—"}</span></div>
         </div>
       ) : null}
+      <div className="flex gap-2">
+        <button onClick={() => void onTriggerDeploy("preview")} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">
+          Trigger Preview Deploy
+        </button>
+        <button onClick={() => void onTriggerDeploy("production")} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">
+          Trigger Production Deploy
+        </button>
+        {deployments[0] ? (
+          <button onClick={() => void onRefreshDeployStatus(deployments[0].id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">
+            Refresh Latest Status
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
-  const { domains, finalDecision } = workspaceState.releaseControl;
+  const { domains, operations } = workspaceState.releaseControl;
   return (
     <div className="p-4 space-y-3">
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Globe className="h-4 w-4 text-primary" /> {t("domains")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">{t("domains.readiness" as never)}</span><span className={`font-mono uppercase ${finalDecision.status === "go" ? "text-success" : "text-warning"}`}>{finalDecision.status}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{t("domains.readiness" as never)}</span><span className={`font-mono uppercase ${operations.readiness.domain === "ready" ? "text-success" : "text-warning"}`}>{operations.readiness.domain}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Rollback readiness</span><span className={`font-mono uppercase ${operations.readiness.rollback === "ready" ? "text-success" : "text-warning"}`}>{operations.readiness.rollback}</span></div>
       </div>
       <div className="space-y-2">
         {domains.map((domain) => (
           <div key={domain.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${domain.assignmentState === "blocked" || domain.verificationState === "error" ? "bg-destructive" : domain.verificationState === "pending_verification" ? "bg-warning" : "bg-success"}`} />
+                <span className={`w-2 h-2  ${domain.assignmentState === "blocked" || domain.verificationState === "error" ? "bg-destructive" : domain.verificationState === "pending_verification" ? "bg-warning" : "bg-success"}`} />
                 <span className="text-xs font-mono text-foreground">{domain.name}</span>
               </div>
               <span className={`text-[10px] font-mono uppercase ${domain.assignmentState === "blocked" ? "text-destructive" : "text-success"}`}>{domain.assignmentState}</span>

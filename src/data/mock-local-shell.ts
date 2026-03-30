@@ -21,6 +21,8 @@ export const localShellState: LocalShellWorkspaceState = {
     activeProjectRoot: "/workspace/ai-forge-console",
     projectInstructionsDetected: true,
     instructionSources: ["AGENTS.md", "README.md"],
+    commandRegistryLoaded: true,
+    commandRegistryUpdatedAtIso: now,
     gitBranch: "feature/local-first-shell-foundation",
     hasLocalChanges: true,
     runtimeResourcesAvailable: true,

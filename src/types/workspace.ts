@@ -3,13 +3,17 @@ import type { AuditorControlState } from "@/types/audits";
 import type { WorkflowState, WorkflowTask, WorkflowApproval } from "@/types/workflow";
 import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, ProviderBackend, RoutingMode } from "@/types/local-inference";
 import type { OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
+import type { ProjectCommandRegistry } from "@/types/project-commands";
 import type { BrowserSession, DesignSession } from "@/types/agents";
 import type { SyncStatus } from "@/types/contracts";
 import type { EvidenceFlowState } from "@/types/evidence";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
 import type { AuditorVerdict } from "@/types/audits";
-import type { ProjectInstructionState } from "@/lib/project-instructions-service";
+import type { ContextInjectionPacket } from "@/types/context";
+import type { ExecutionPolicyState } from "@/types/execution-policy";
+import type { MemoryContextEnvelope, WorkspaceMemoryState } from "@/types/memory";
+import type { OperatorDashboardState } from "@/types/operator-dashboard";
 
 export type PrivacyMode = "private" | "team";
 export interface AgentRuntimeState {
@@ -108,8 +112,23 @@ export interface WorkspaceRuntimeState {
   projects: WorkspaceProjectEntry[];
   activeProjectId: string;
   repository: WorkspaceRepositoryState;
+  projectCommandRegistry: ProjectCommandRegistry;
+  terminalCommandRegistryReady: boolean;
+  agentCommandRegistryReady: boolean;
   providerExecutionState: OpenRouterExecutionState;
-  projectInstructions: ProjectInstructionState;
+  policyState: ExecutionPolicyState;
+  contextPackets: {
+    mainChat: ContextInjectionPacket;
+    agentChat: ContextInjectionPacket;
+    auditChat: ContextInjectionPacket;
+    reviewChat: ContextInjectionPacket;
+    workerAgent: ContextInjectionPacket;
+    auditor: ContextInjectionPacket;
+    releaseFlow: ContextInjectionPacket;
+  };
+  memory: WorkspaceMemoryState;
+  contextEnvelope: MemoryContextEnvelope;
+  operatorDashboard: OperatorDashboardState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;
