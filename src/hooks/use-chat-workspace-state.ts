@@ -18,6 +18,7 @@ import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
+import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
@@ -1655,6 +1656,75 @@ export function useChatWorkspaceState() {
           },
         },
       });
+
+      if (chatType === "main") {
+        const orchestration = runMainChatOrchestrator({
+          message: draft,
+          sessionId,
+          chatId: sessionId,
+          workflow: workflowRef.current,
+          agents: workspaceState.activeAgents,
+          nowIso: new Date().toISOString(),
+        });
+
+        if (orchestration.handled) {
+          dispatch({
+            type: "set_workflow",
+            workflow: orchestration.updatedWorkflow,
+          });
+
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+          const updatedTask = orchestration.updatedWorkflow.tasks[0];
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        role: "orchestrator" as const,
+                        authorLabel: "Orchestrator",
+                        content: orchestration.response,
+                        status: "completed" as const,
+                        createdAtIso: new Date().toISOString(),
+                        linked: {
+                          taskId: updatedTask?.id,
+                          taskTitle: updatedTask?.title,
+                          agentId: updatedTask?.ownerAgentId,
+                        },
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
+                  ? {
+                      ...session,
+                      lastMessageAtIso: new Date().toISOString(),
+                      linked: {
+                        ...session.linked,
+                        taskId: updatedTask?.id ?? session.linked.taskId,
+                        taskTitle: updatedTask?.title ?? session.linked.taskTitle,
+                      },
+                    }
+                  : session,
+              ),
+            },
+          });
+
+          orchestration.triggers.forEach((trigger) => {
+            const triggerSessionId = chatStateRef.current.selectedSessionIdByType[trigger.chatType];
+            if (!triggerSessionId) return;
+            void proposeAgentCommand(trigger.chatType, triggerSessionId, trigger.reason, trigger.agentId);
+          });
+          return;
+        }
+      }
 
       const executeProviderRequest = async () => {
         if (providerSource === "openrouter" && chatType === "main") {
