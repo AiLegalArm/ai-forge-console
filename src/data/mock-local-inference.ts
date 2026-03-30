@@ -396,6 +396,24 @@ export const localInferenceRuntime: LocalInferenceRuntimeState = {
     degradedMode: false,
     autoFallbackReady: true,
   },
+  operational: {
+    degradedMode: false,
+    budgetPressure: "medium",
+    blockedExpensiveRuns: 2,
+    fallbackEvents: [
+      {
+        atIso: "2026-03-29T10:44:00.000Z",
+        reason: "openrouter_rate_limited",
+        from: "openrouter",
+        to: "ollama",
+        runId: "run-main-session-1-1",
+      },
+    ],
+    providerHealth: {
+      openrouter: "pressured",
+      ollama: "healthy",
+    },
+  },
   scenarioLog: [
     "Ollama runtime detected at localhost:11434 and health check passed.",
     "Local model registry synced with 4 models; qwen3-coder-14b set active.",
