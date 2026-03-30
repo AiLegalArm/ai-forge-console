@@ -18,7 +18,7 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
     { id: "logs", icon: FileText, label: t("bp.logs") },
     { id: "tests", icon: TestTube, label: t("bp.tests") },
     { id: "python", icon: Code, label: t("bp.python") },
-    { id: "agent-trace", icon: Activity, label: "Runtime activity" },
+    { id: "agent-trace", icon: Activity, label: "Runtime" },
   ];
   const [activeTab, setActiveTab] = useState("terminal");
   const height = expanded ? "h-64" : "h-36";
@@ -31,13 +31,13 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
   const latestTraces = useMemo(() => [...traces].sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso)).slice(0, 5), [traces]);
 
   return (
-    <div className={`${height} border-t border-border bg-panel shrink-0 flex flex-col transition-all`}>
+    <div className={`${height} border-t border-border bg-card shrink-0 flex flex-col transition-all duration-150`}>
       <div className="flex items-center border-b border-border px-1 overflow-x-auto">
         {tabConfig.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors border-b-2 shrink-0 ${
+            className={`flex items-center gap-1 px-2 py-1.5 text-2xs font-mono transition-colors border-b-2 shrink-0 ${
               activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -49,13 +49,13 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <div className="flex-1 overflow-auto p-2 font-mono text-xs">
+      <div className="flex-1 overflow-auto p-2 font-mono text-2xs">
         {activeTab === "terminal" && (
           <div className="space-y-0.5">
             <div className="text-muted-foreground mb-1">session {terminal.sessionId} · cwd {terminal.workingDirectory}</div>
             {latestCommand ? (
-              <div className="text-[10px] text-muted-foreground mb-1">
-                origin {latestCommand.origin ?? "user"} {latestCommand.linkedAgentId ? `• agent ${latestCommand.linkedAgentId}` : ""} {latestCommand.linkedAgentCommandRequestId ? `• request ${latestCommand.linkedAgentCommandRequestId}` : ""}
+              <div className="text-muted-foreground mb-1">
+                origin {latestCommand.origin ?? "user"} {latestCommand.linkedAgentId ? `· agent ${latestCommand.linkedAgentId}` : ""}
               </div>
             ) : null}
             {terminal.output.map((line) => (
@@ -68,7 +68,7 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
               <div className="flex gap-2 items-center">
                 <span className="text-muted-foreground">now</span>
                 <span className="text-primary">$</span>
-                <span className="w-1.5 h-3.5 bg-primary animate-pulse" />
+                <span className="w-1.5 h-3 bg-primary animate-pulse" />
               </div>
             ) : null}
           </div>
@@ -76,18 +76,17 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
         {activeTab === "agent-trace" && (
           <div className="space-y-1">
             {latestTraces.length === 0 ? (
-              <div className="text-muted-foreground">No runtime activity yet. Run a task from chat to stream execution events here.</div>
+              <div className="text-muted-foreground">No runtime activity yet.</div>
             ) : latestTraces.map((trace) => (
-              <div key={trace.traceId} className="border border-border rounded px-2 py-1.5 space-y-0.5">
+              <div key={trace.traceId} className="border border-border-subtle rounded-md px-2 py-1.5 space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground shrink-0">{new Date(trace.updatedAtIso).toLocaleTimeString()}</span>
-                  <span className={`shrink-0 px-1 rounded text-[10px] ${trace.finalResultState === "failed" ? "bg-destructive/20 text-destructive" : trace.fallbackUsed ? "bg-warning/20 text-warning" : "bg-success/20 text-success"}`}>{trace.status}</span>
+                  <span className={`shrink-0 px-1 rounded-md text-2xs ${trace.finalResultState === "failed" ? "bg-destructive/15 text-destructive" : trace.fallbackUsed ? "bg-warning/15 text-warning" : "bg-success/15 text-success"}`}>{trace.status}</span>
                   <span className="text-foreground truncate">{trace.provider ?? "unknown"} / {trace.model ?? "unknown"}</span>
                 </div>
-                <div className="text-muted-foreground text-[10px] truncate">
-                  {trace.taskId ?? "no-task"} • {trace.summary.outcome}
-                  {trace.summary.failurePoint ? ` • failed @ ${trace.summary.failurePoint}` : ""}
-                  {trace.fallbackUsed ? " • fallback" : ""}
+                <div className="text-muted-foreground truncate">
+                  {trace.taskId ?? "no-task"} · {trace.summary.outcome}
+                  {trace.fallbackUsed ? " · fallback" : ""}
                 </div>
               </div>
             ))}
