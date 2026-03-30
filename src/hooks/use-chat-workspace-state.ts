@@ -19,6 +19,7 @@ import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
+import { routedAgentExecutionService } from "@/lib/routed-agent-execution-service";
 import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
 import {
@@ -32,11 +33,10 @@ import {
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
-import type { LocalInferenceRuntimeState } from "@/types/local-inference";
+import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, RoutingMode, TaskType } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
-import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
@@ -2042,77 +2042,58 @@ export function useChatWorkspaceState() {
       }
 
       const executeProviderRequest = async () => {
-        if (providerSource === "openrouter" && chatType === "main") {
-          setProviderExecutionState("sending");
+        const resolveRoutingTaskType = (): TaskType => {
+          if (chatType === "audit") return "audit";
+          if (chatType === "review") return "review";
+          if (chatType === "main") return "planning";
+          if (activeAgent?.role === "frontend") return "frontend";
+          if (activeAgent?.role === "backend") return "backend";
+          if (activeAgent?.id?.includes("architect")) return "architecture";
+          return "coding";
+        };
 
-          const recentMessages = (currentChat.messagesBySessionId[sessionId] ?? [])
-            .filter((message) => message.role === "user" || message.role === "orchestrator" || message.role === "agent")
-            .slice(-8)
-            .map((message) => ({
-              role: message.role === "user" ? "user" : "assistant",
-              content: message.content,
-            })) as Array<{ role: "user" | "assistant"; content: string }>;
-          const contextSystemPrompt = buildContextPrompt(workspaceState.contextPackets.mainChat);
+        const routingTaskType = resolveRoutingTaskType();
+        const routingAgentRole = (activeAgent?.role ??
+          (chatType === "audit" ? "code_auditor" : chatType === "review" ? "reviewer" : "planner")) as AgentRole;
+        const contextSystemPrompt = buildContextPrompt(chatContextPacket);
 
-          setProviderExecutionState("waiting");
-          const openRouterResult = await openRouterProviderService.executeChatCompletion({
-            model: activeModel,
-            userInput: draft,
-            contextMessages: recentMessages,
-            systemPrompt:
-              `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.\n` +
-              `${contextSystemPrompt}`,
-          });
+        setProviderExecutionState("sending");
+        setProviderExecutionState("waiting");
 
-          const latestChat = chatStateRef.current;
-          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+        const runOutput = await routedAgentExecutionService.execute({
+          prompt: draft,
+          systemPrompt:
+            `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}. ` +
+            `Agent: ${activeAgent?.name ?? "system"}. Task type: ${routingTaskType}. Follow approval and safety context when provided.
+${contextSystemPrompt}`,
+          routingInput: {
+            agentRole: routingAgentRole,
+            taskType: routingTaskType,
+            privacyMode:
+              workspaceState.routingMode === "local_only" || workspaceState.routingMode === "sensitive_local_only"
+                ? "strict_local"
+                : "standard",
+            preferredBackend: workspaceState.activeBackend,
+            fallbackRequired: true,
+          },
+          localInference: localInferenceRef.current,
+          linked: {
+            agentId: activeSession?.linked.agentId ?? activeAgent?.id,
+            taskId: activeSession?.linked.taskId ?? activeWorkflowTask?.id,
+            subtaskId: activeSession?.linked.subtaskId,
+            chatSessionId: sessionId,
+            chatType,
+          },
+          contextPacket: chatContextPacket,
+          taskType: routingTaskType,
+        });
 
-          if (openRouterResult.executionState === "completed") {
-            setProviderExecutionState("streaming_ready");
-            dispatch({
-              type: "set_chat",
-              chat: {
-                ...latestChat,
-                messagesBySessionId: {
-                  ...latestChat.messagesBySessionId,
-                  [sessionId]: sessionMessages.map((message) =>
-                    message.id === responseId
-                      ? {
-                          ...message,
-                          content: openRouterResult.outputText,
-                          status: "completed" as const,
-                          createdAtIso: openRouterResult.receivedAtIso,
-                          providerMeta: {
-                            provider: "OpenRouter",
-                            model: openRouterResult.model,
-                            backend: "cloud",
-                            routingKey: routingProfile,
-                          },
-                        }
-                      : message,
-                  ),
-                },
-                sessions: latestChat.sessions.map((session) =>
-                  session.id === sessionId
-                    ? {
-                        ...session,
-                        lastMessageAtIso: openRouterResult.receivedAtIso,
-                        unreadCount: 0,
-                        providerMeta: {
-                          provider: "OpenRouter",
-                          model: openRouterResult.model,
-                          backend: "cloud",
-                          routingKey: routingProfile,
-                        },
-                      }
-                    : session,
-                ),
-              },
-            });
-            setProviderExecutionState("completed");
-            return;
-          }
+        const latestChat = chatStateRef.current;
+        const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+        const usedProvider = runOutput.run.provider === "openrouter" ? "OpenRouter" : "Ollama";
 
+        if (runOutput.run.status === "completed" && runOutput.outputText) {
+          setProviderExecutionState("streaming_ready");
           dispatch({
             type: "set_chat",
             chat: {
@@ -2123,9 +2104,16 @@ export function useChatWorkspaceState() {
                   message.id === responseId
                     ? {
                         ...message,
-                        content: `OpenRouter request failed: ${openRouterResult.errorMessage}`,
-                        status: "failed" as const,
-                        createdAtIso: openRouterResult.receivedAtIso,
+                        content: runOutput.outputText,
+                        role: chatType === "audit" ? "auditor" : chatType === "review" ? "reviewer" : chatType === "agent" ? "agent" : "orchestrator",
+                        status: "completed" as const,
+                        createdAtIso: runOutput.run.endedAtIso,
+                        providerMeta: {
+                          provider: usedProvider,
+                          model: runOutput.run.providerModelId,
+                          backend: runOutput.run.backend,
+                          routingKey: runOutput.run.routingDecision.profile,
+                        },
                       }
                     : message,
                 ),
@@ -2134,50 +2122,112 @@ export function useChatWorkspaceState() {
                 session.id === sessionId
                   ? {
                       ...session,
-                      lastMessageAtIso: openRouterResult.receivedAtIso,
+                      lastMessageAtIso: runOutput.run.endedAtIso,
                       unreadCount: 0,
+                      providerMeta: {
+                        provider: usedProvider,
+                        model: runOutput.run.providerModelId,
+                        backend: runOutput.run.backend,
+                        routingKey: runOutput.run.routingDecision.profile,
+                      },
                     }
                   : session,
               ),
             },
           });
-          setProviderExecutionState("failed");
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflowRef.current,
+              executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
+              activityEvents: [
+                {
+                  id: `activity-${runOutput.run.id}`,
+                  type: "execution_started",
+                  title: `${activeAgent?.name ?? "Agent"} executed via ${usedProvider}`,
+                  details: `${runOutput.run.providerModelId}${runOutput.run.usedFallback ? " (fallback)" : ""}`,
+                  taskId: runOutput.run.taskId,
+                  chatId: runOutput.run.chatSessionId,
+                  agentId: runOutput.run.agentId,
+                  agentRole: runOutput.run.agentRole,
+                  provider: usedProvider,
+                  backend: runOutput.run.backend,
+                  createdAtIso: runOutput.run.startedAtIso,
+                },
+                {
+                  id: `activity-${runOutput.run.id}-done`,
+                  type: "completed",
+                  title: `${activeAgent?.name ?? "Agent"} response completed`,
+                  details: runOutput.run.usedFallback ? "Completed with fallback route." : "Completed with primary route.",
+                  taskId: runOutput.run.taskId,
+                  chatId: runOutput.run.chatSessionId,
+                  agentId: runOutput.run.agentId,
+                  agentRole: runOutput.run.agentRole,
+                  provider: usedProvider,
+                  backend: runOutput.run.backend,
+                  createdAtIso: runOutput.run.endedAtIso,
+                },
+                ...workflowRef.current.activityEvents,
+              ],
+            },
+          });
+          setProviderExecutionState("completed");
           return;
         }
 
-        setTimeout(() => {
-          const latestChat = chatStateRef.current;
-          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
-
-          dispatch({
-            type: "set_chat",
-            chat: {
-              ...latestChat,
-              messagesBySessionId: {
-                ...latestChat.messagesBySessionId,
-                [sessionId]: sessionMessages.map((message) =>
-                  message.id === responseId
-                    ? {
-                        ...message,
-                        content: mockResponse.content,
-                        status: "completed" as const,
-                        createdAtIso: new Date(Date.now()).toISOString(),
-                      }
-                    : message,
-                ),
-              },
-              sessions: latestChat.sessions.map((session) =>
-                session.id === sessionId
+        dispatch({
+          type: "set_chat",
+          chat: {
+            ...latestChat,
+            messagesBySessionId: {
+              ...latestChat.messagesBySessionId,
+              [sessionId]: sessionMessages.map((message) =>
+                message.id === responseId
                   ? {
-                      ...session,
-                      lastMessageAtIso: new Date().toISOString(),
-                      unreadCount: 0,
+                      ...message,
+                      content: `Execution failed (${usedProvider}/${runOutput.run.providerModelId}): ${runOutput.run.error?.message ?? "Unknown error"}`,
+                      status: "failed" as const,
+                      createdAtIso: runOutput.run.endedAtIso,
                     }
-                  : session,
+                  : message,
               ),
             },
-          });
-        }, 650);
+            sessions: latestChat.sessions.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    lastMessageAtIso: runOutput.run.endedAtIso,
+                    unreadCount: 0,
+                  }
+                : session,
+            ),
+          },
+        });
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflowRef.current,
+            executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
+            activityEvents: [
+              {
+                id: `activity-${runOutput.run.id}-failed`,
+                type: "failed",
+                title: `${activeAgent?.name ?? "Agent"} execution failed`,
+                details: `${runOutput.run.error?.code ?? "execution_error"}: ${runOutput.run.error?.message ?? "unknown"}`,
+                taskId: runOutput.run.taskId,
+                chatId: runOutput.run.chatSessionId,
+                agentId: runOutput.run.agentId,
+                agentRole: runOutput.run.agentRole,
+                provider: usedProvider,
+                backend: runOutput.run.backend,
+                severity: "critical",
+                createdAtIso: runOutput.run.endedAtIso,
+              },
+              ...workflowRef.current.activityEvents,
+            ],
+          },
+        });
+        setProviderExecutionState("failed");
       };
 
       void executeProviderRequest();

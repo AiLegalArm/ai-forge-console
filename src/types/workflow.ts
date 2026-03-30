@@ -1,5 +1,7 @@
 import type { AuditGateDecision, AuditorType, AuditorVerdict } from "@/types/audits";
 import type { RuntimeProviderBackend, SyncStatus } from "@/types/contracts";
+import type { ChatType } from "@/types/chat";
+import type { ModelProvider, RoutingDecision } from "@/types/local-inference";
 
 export type ActivitySeverity = "info" | "warning" | "critical";
 
@@ -388,6 +390,33 @@ export interface WorkflowTaskGraph {
   };
 }
 
+export interface AgentExecutionRun {
+  id: string;
+  agentId?: string;
+  agentRole: "worker" | "auditor" | "orchestrator";
+  taskId?: string;
+  subtaskId?: string;
+  chatSessionId: string;
+  chatType: ChatType;
+  provider: ModelProvider;
+  backend: RuntimeProviderBackend;
+  modelId: string;
+  providerModelId: string;
+  routingDecision: RoutingDecision;
+  status: "completed" | "failed";
+  usedFallback: boolean;
+  fallbackFromRunId?: string;
+  responsePayload?: {
+    text: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+  startedAtIso: string;
+  endedAtIso: string;
+}
+
 export interface WorkflowState {
   tasks: WorkflowTask[];
   subtasks: WorkflowSubtask[];
@@ -396,5 +425,6 @@ export interface WorkflowState {
   activityEvents: AgentActivityEvent[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];
+  executionRuns: AgentExecutionRun[];
   github: GitHubSyncState;
 }

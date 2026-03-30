@@ -15,6 +15,12 @@ interface OllamaTagsResponse {
   }>;
 }
 
+interface OllamaGenerateResponse {
+  response?: string;
+  done?: boolean;
+  error?: string;
+}
+
 export interface OllamaRuntimeSnapshot {
   connection: OllamaConnectionState;
   modelRegistry: LocalModelRegistryEntry[];
@@ -24,6 +30,31 @@ export interface LocalRequestReadiness {
   ready: boolean;
   reason?: string;
 }
+
+export interface OllamaGenerateInput {
+  model: string;
+  prompt: string;
+  systemPrompt?: string;
+}
+
+export interface OllamaGenerateSuccess {
+  provider: "ollama";
+  model: string;
+  outputText: string;
+  executionState: "completed";
+  receivedAtIso: string;
+}
+
+export interface OllamaGenerateFailure {
+  provider: "ollama";
+  model: string;
+  executionState: "failed";
+  errorCode: "network_error" | "timeout" | "model_unavailable" | "provider_error" | "malformed_response";
+  errorMessage: string;
+  receivedAtIso: string;
+}
+
+export type OllamaGenerateResult = OllamaGenerateSuccess | OllamaGenerateFailure;
 
 export class OllamaRuntimeService {
   constructor(
@@ -129,30 +160,123 @@ export class OllamaRuntimeService {
     };
   }
 
+  async executeGenerate(input: OllamaGenerateInput): Promise<OllamaGenerateResult> {
+    const receivedAtIso = new Date().toISOString();
+    const payload = this.buildGeneratePayload(
+      input.model,
+      input.systemPrompt?.trim() ? `${input.systemPrompt.trim()}\n\n${input.prompt}` : input.prompt,
+    );
+    const requestResult = await this.requestWithTimeout("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!requestResult.ok) {
+      const error = requestResult.error;
+      if (error === "ollama_timeout") {
+        return {
+          provider: "ollama",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "timeout",
+          errorMessage: "Ollama generate request timed out.",
+          receivedAtIso,
+        };
+      }
+
+      if (error === "ollama_network_error") {
+        return {
+          provider: "ollama",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "network_error",
+          errorMessage: "Unable to reach Ollama runtime.",
+          receivedAtIso,
+        };
+      }
+
+      if (error === "ollama_http_404") {
+        return {
+          provider: "ollama",
+          model: input.model,
+          executionState: "failed",
+          errorCode: "model_unavailable",
+          errorMessage: "Requested Ollama model is unavailable.",
+          receivedAtIso,
+        };
+      }
+
+      return {
+        provider: "ollama",
+        model: input.model,
+        executionState: "failed",
+        errorCode: "provider_error",
+        errorMessage: "Ollama returned an error response.",
+        receivedAtIso,
+      };
+    }
+
+    const response = requestResult.data as OllamaGenerateResponse;
+    if (typeof response.response !== "string" || response.response.trim().length === 0) {
+      return {
+        provider: "ollama",
+        model: input.model,
+        executionState: "failed",
+        errorCode: "malformed_response",
+        errorMessage: "Ollama response did not include text output.",
+        receivedAtIso,
+      };
+    }
+
+    return {
+      provider: "ollama",
+      model: input.model,
+      outputText: response.response,
+      executionState: "completed",
+      receivedAtIso,
+    };
+  }
+
   private async fetchWithTimeout(path: string): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+    const response = await this.requestWithTimeout(path, { method: "GET" });
+    if (!response.ok) {
+      const mappedError = response.error === "ollama_timeout"
+        ? "Connection to Ollama timed out."
+        : response.error === "ollama_network_error"
+          ? "Unable to reach Ollama runtime."
+          : response.error.startsWith("ollama_http_")
+            ? `HTTP ${response.error.replace("ollama_http_", "")} from Ollama.`
+            : response.error;
+      return { ok: false, error: mappedError };
+    }
+    return response;
+  }
+
+  private async requestWithTimeout(path: string, init: RequestInit): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        method: "GET",
+        ...init,
         signal: controller.signal,
       });
 
       if (!response.ok) {
-        return { ok: false, error: `HTTP ${response.status} from Ollama.` };
+        return { ok: false, error: `ollama_http_${response.status}` };
       }
 
       const data: unknown = await response.json();
       return { ok: true, data };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        return { ok: false, error: "Connection to Ollama timed out." };
+        return { ok: false, error: "ollama_timeout" };
       }
 
       return {
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown Ollama connection error.",
+        error: "ollama_network_error",
       };
     } finally {
       window.clearTimeout(timeout);

@@ -9,6 +9,7 @@ import type {
   WorkflowDelegation,
   WorkflowSubtask,
   WorkflowTaskGraph,
+  AgentExecutionRun,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
 import { auditBlockers } from "@/data/mock-audits";
@@ -782,6 +783,37 @@ const activityEvents: AgentActivityEvent[] = [
   },
 ];
 
+const executionRuns: AgentExecutionRun[] = [
+  {
+    id: "run-rbac-frontend-1",
+    agentId: "agent-frontend",
+    agentRole: "worker",
+    taskId: "task-rbac-exec",
+    subtaskId: "task-rbac-exec",
+    chatSessionId: "agent-session-1",
+    chatType: "agent",
+    provider: "openrouter",
+    backend: "cloud",
+    modelId: "openrouter-openai-gpt-4.1",
+    providerModelId: "openai/gpt-4.1",
+    routingDecision: {
+      profile: "code_heavy",
+      selectedProvider: "openrouter",
+      selectedModelId: "openrouter-openai-gpt-4.1",
+      fallbackProvider: "ollama",
+      fallbackModelId: "ollama-qwen3-coder-14b",
+      reason: "profile_code_heavy",
+    },
+    status: "completed",
+    usedFallback: false,
+    responsePayload: {
+      text: "Migration applied and invite modal wiring in progress.",
+    },
+    startedAtIso: "2026-03-29T10:44:20.000Z",
+    endedAtIso: "2026-03-29T10:44:40.000Z",
+  },
+];
+
 const gatedSubtasks = applySubtaskAuditBlocking(subtasks, auditBlockers);
 const gatedTasks = applyParentTaskBlocking(tasks, gatedSubtasks, auditBlockers);
 
@@ -794,6 +826,7 @@ export const workflowState: WorkflowState = {
   taskGraphs,
   approvals,
   agentCommandRequests,
+  executionRuns,
   activityEvents,
   github: {
     activeRepositoryId: "repo-saas-dashboard",
