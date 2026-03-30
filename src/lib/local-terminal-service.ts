@@ -23,11 +23,17 @@ interface SessionRuntimeState {
 
 interface ExecuteCommandInput {
   command: string;
+  source?: TerminalCommand["source"];
+  sourceCommandId?: string;
+  sourceCategory?: TerminalCommand["sourceCategory"];
+  linkedProjectId?: string;
   cwd?: string;
   linkedTaskId?: string;
   linkedChatSessionId?: string;
   timeoutMs?: number;
   approved?: boolean;
+  classificationHint?: TerminalExecutionClassification;
+  forceApproval?: boolean;
 }
 
 export interface ExecuteCommandResult {
@@ -246,16 +252,22 @@ export class LocalTerminalExecutionService {
 
     const session = state.session;
     const cwd = input.cwd ?? session.workingDirectory;
-    const classification = classifyCommand(input.command);
-    const approvalState = approvalFor(classification);
+    const classification = input.classificationHint ?? classifyCommand(input.command);
+    const approvalState = input.forceApproval === undefined ? approvalFor(classification) : input.forceApproval ? "required" : "not_required";
     const requiresApproval = approvalState === "required";
 
     const command: TerminalCommand = {
       id: commandId(),
       command: input.command,
+      rawCommand: input.command,
       cwd,
       state: "queued",
       requiresApproval,
+      source: input.source,
+      sourceCommandId: input.sourceCommandId,
+      sourceCategory: input.sourceCategory,
+      linkedProjectId: input.linkedProjectId,
+      launchedAtIso: nowIso(),
       linkedTaskId: input.linkedTaskId ?? session.linkedTaskId,
       linkedChatSessionId: input.linkedChatSessionId ?? session.linkedChatSessionId,
       classification,

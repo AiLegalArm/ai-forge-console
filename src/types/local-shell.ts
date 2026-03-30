@@ -1,3 +1,5 @@
+import type { ProjectCommandCategory, ProjectCommandSource } from "@/types/project-commands";
+
 export type HealthState = "healthy" | "degraded" | "down" | "unknown";
 
 export type DesktopShellMode = "desktop" | "browser";
@@ -70,10 +72,16 @@ export interface TerminalOutputLine {
 export interface TerminalCommand {
   id: string;
   command: string;
+  rawCommand: string;
   cwd: string;
   state: "queued" | "running" | "completed" | "failed" | "approval_required";
   exitCode?: number;
   requiresApproval: boolean;
+  source?: ProjectCommandSource | "manual" | "git_workflow";
+  sourceCommandId?: string;
+  sourceCategory?: ProjectCommandCategory;
+  linkedProjectId?: string;
+  launchedAtIso?: string;
   linkedTaskId?: string;
   linkedChatSessionId?: string;
   failureReason?: TerminalExecutionFailureReason;

@@ -44,7 +44,7 @@ interface ChatPanelProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatTab) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve?: (approvalId: string) => void;
+  onWorkflowApprovalResolve?: (approvalId: string) => void | Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
   onDeploymentModeChange: (mode: "local" | "cloud" | "hybrid") => void;

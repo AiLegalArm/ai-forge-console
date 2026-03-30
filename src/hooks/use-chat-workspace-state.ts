@@ -26,7 +26,7 @@ import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-sh
 import type { WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
-import type { ProjectCommandRegistry } from "@/types/project-commands";
+import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -157,6 +157,8 @@ export function useChatWorkspaceState() {
   const chatStateRef = useRef(chatState);
   chatStateRef.current = chatState;
   const workflow = state.workflow;
+  const workflowRef = useRef(workflow);
+  workflowRef.current = workflow;
   const localInference = state.localInference;
   const localShell = state.localShell;
   const activeBrowserSession = state.browserSession;
@@ -225,6 +227,9 @@ export function useChatWorkspaceState() {
       warnings: ["Command registry not loaded yet."],
     },
   });
+  const [pendingCommandLaunchByApprovalId, setPendingCommandLaunchByApprovalId] = useState<
+    Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>
+  >({});
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -537,6 +542,27 @@ export function useChatWorkspaceState() {
     });
   };
 
+  const mapRunSafetyToTerminalClassification = (entry: ProjectCommandEntry): TerminalCommand["classification"] => {
+    if (entry.runSafety === "safe") return "safe_read_only";
+    if (entry.runSafety === "caution") return "modifying";
+    return "risky";
+  };
+
+  const setCommandExecutionSnapshot = (commandId: string, execution: ProjectCommandExecutionRecord, pendingApprovalId?: string) => {
+    setProjectCommandRegistry((prev) => ({
+      ...prev,
+      commands: prev.commands.map((entry) =>
+        entry.id === commandId
+          ? {
+              ...entry,
+              lastExecution: execution,
+              pendingApprovalId,
+            }
+          : entry,
+      ),
+    }));
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -675,7 +701,365 @@ export function useChatWorkspaceState() {
     setConversationType: (chatType: ChatType) => dispatch({ type: "set_active_chat_type", chatType }),
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
-    approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    approveWorkflowApproval: async (approvalId: string) => {
+      dispatch({ type: "approve_workflow_approval", approvalId });
+      const pendingLaunch = pendingCommandLaunchByApprovalId[approvalId];
+      if (!pendingLaunch) return;
+
+      setPendingCommandLaunchByApprovalId((prev) => {
+        const next = { ...prev };
+        delete next[approvalId];
+        return next;
+      });
+
+      const commandEntry = projectCommandRegistry.commands.find((entry) => entry.id === pendingLaunch.commandId);
+      if (!commandEntry) return;
+
+      const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
+        workingDirectory: commandEntry.workingDirectory || localShellRef.current.project.activeProjectRoot,
+        linkedTaskId: pendingLaunch.taskId,
+        linkedChatSessionId: pendingLaunch.chatId,
+      });
+      terminalService.selectSession(activeTerminal.id);
+
+      const terminalResult = await terminalService.execute(activeTerminal.id, {
+        command: commandEntry.rawCommand,
+        source: commandEntry.source,
+        sourceCommandId: commandEntry.id,
+        sourceCategory: commandEntry.category,
+        linkedProjectId: pendingLaunch.projectId,
+        cwd: commandEntry.workingDirectory || localShellRef.current.project.activeProjectRoot,
+        linkedTaskId: pendingLaunch.taskId,
+        linkedChatSessionId: pendingLaunch.chatId,
+        approved: true,
+        classificationHint: mapRunSafetyToTerminalClassification(commandEntry),
+        forceApproval: false,
+      });
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          terminal: terminalService.getSessionState(),
+        },
+      });
+      appendTerminalMessage(terminalResult.command);
+
+      setCommandExecutionSnapshot(commandEntry.id, {
+        executionId: terminalResult.command.id,
+        commandId: commandEntry.id,
+        rawCommand: commandEntry.rawCommand,
+        source: commandEntry.source,
+        launchTimestampIso: terminalResult.command.launchedAtIso ?? new Date().toISOString(),
+        workingDirectory: terminalResult.command.cwd,
+        projectId: pendingLaunch.projectId,
+        linkedTaskId: pendingLaunch.taskId,
+        linkedChatSessionId: pendingLaunch.chatId,
+        status: terminalResult.command.state === "completed" ? "completed" : terminalResult.command.state === "failed" ? "failed" : "running",
+        approvalState: "approved",
+        exitCode: terminalResult.command.exitCode,
+        failureReason: terminalResult.command.failureReason,
+      });
+
+      const latestWorkflow = workflowRef.current;
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...latestWorkflow,
+          activityEvents: [
+            {
+              id: `activity-project-command-${terminalResult.command.id}`,
+              type: terminalResult.command.state === "completed" ? "execution_update" : "failed",
+              title: terminalResult.command.state === "completed" ? "Project command completed after approval" : "Project command failed after approval",
+              details: commandEntry.rawCommand,
+              severity: terminalResult.command.state === "completed" ? "info" : "critical",
+              taskId: pendingLaunch.taskId,
+              chatId: pendingLaunch.chatId,
+              createdAtIso: new Date().toISOString(),
+            },
+            ...latestWorkflow.activityEvents,
+          ],
+        },
+      });
+    },
+    runProjectCommand: async (commandId: string) => {
+      const commandEntry = projectCommandRegistry.commands.find((entry) => entry.id === commandId);
+      const activeProject = projects.find((project) => project.id === activeProjectId);
+      const projectId = activeProject?.id ?? activeProjectId;
+      const linkedTaskId = activeWorkflowTask?.id;
+      const linkedChatSessionId = currentChatSessionId;
+
+      if (!commandEntry) {
+        return { ok: false, code: "command_missing", message: "Command not found in project registry." };
+      }
+      if (commandEntry.availability === "invalid" || commandEntry.availability === "unavailable") {
+        return { ok: false, code: "command_unavailable", message: "Command is unavailable for the active project." };
+      }
+
+      const cwd = commandEntry.workingDirectory || activeProject?.projectRoot || localShellRef.current.project.activeProjectRoot;
+      const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
+        workingDirectory: cwd,
+        linkedTaskId,
+        linkedChatSessionId,
+      });
+      terminalService.selectSession(activeTerminal.id);
+      terminalService.setWorkingDirectory(activeTerminal.id, cwd);
+
+      const requiresApproval = commandEntry.runSafety !== "safe";
+      if (requiresApproval) {
+        const approvalId = `approval-project-command-${commandEntry.id}-${Date.now()}`;
+        setPendingCommandLaunchByApprovalId((prev) => ({
+          ...prev,
+          [approvalId]: {
+            commandId: commandEntry.id,
+            taskId: linkedTaskId,
+            chatId: linkedChatSessionId,
+            projectId,
+          },
+        }));
+        setCommandExecutionSnapshot(commandEntry.id, {
+          executionId: approvalId,
+          commandId: commandEntry.id,
+          rawCommand: commandEntry.rawCommand,
+          source: commandEntry.source,
+          launchTimestampIso: new Date().toISOString(),
+          workingDirectory: cwd,
+          projectId,
+          linkedTaskId,
+          linkedChatSessionId,
+          status: "approval_required",
+          approvalState: "pending",
+        }, approvalId);
+
+        const latestWorkflow = workflowRef.current;
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...latestWorkflow,
+            approvals: [
+              ...latestWorkflow.approvals,
+              {
+                id: approvalId,
+                category: commandEntry.category === "release" ? "production_deploy_approval" : "destructive_file_operations",
+                title: `Approve ${commandEntry.displayName} command`,
+                reason: `Project command requires approval: ${commandEntry.rawCommand}`,
+                status: "pending",
+                taskId: linkedTaskId,
+                chatId: linkedChatSessionId,
+                requestedBy: "project-command-registry",
+                requestedAtIso: new Date().toISOString(),
+              },
+            ],
+            activityEvents: [
+              {
+                id: `activity-${approvalId}`,
+                type: "waiting_for_approval",
+                title: "Project command awaiting approval",
+                details: commandEntry.rawCommand,
+                severity: "warning",
+                taskId: linkedTaskId,
+                chatId: linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...latestWorkflow.activityEvents,
+            ],
+          },
+        });
+
+        return { ok: false, code: "approval_required", message: "Approval required before running this project command.", approvalId };
+      }
+
+      const terminalResult = await terminalService.execute(activeTerminal.id, {
+        command: commandEntry.rawCommand,
+        source: commandEntry.source,
+        sourceCommandId: commandEntry.id,
+        sourceCategory: commandEntry.category,
+        linkedProjectId: projectId,
+        cwd,
+        linkedTaskId,
+        linkedChatSessionId,
+        approved: true,
+        classificationHint: mapRunSafetyToTerminalClassification(commandEntry),
+        forceApproval: false,
+      });
+
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          terminal: terminalService.getSessionState(),
+        },
+      });
+      appendTerminalMessage(terminalResult.command);
+
+      setCommandExecutionSnapshot(commandEntry.id, {
+        executionId: terminalResult.command.id,
+        commandId: commandEntry.id,
+        rawCommand: commandEntry.rawCommand,
+        source: commandEntry.source,
+        launchTimestampIso: terminalResult.command.launchedAtIso ?? new Date().toISOString(),
+        workingDirectory: terminalResult.command.cwd,
+        projectId,
+        linkedTaskId,
+        linkedChatSessionId,
+        status: terminalResult.command.state === "completed" ? "completed" : terminalResult.command.state === "failed" ? "failed" : "running",
+        approvalState: "not_required",
+        exitCode: terminalResult.command.exitCode,
+        failureReason: terminalResult.command.failureReason,
+      });
+
+      const latestWorkflow = workflowRef.current;
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...latestWorkflow,
+          activityEvents: [
+            {
+              id: `activity-project-command-${terminalResult.command.id}`,
+              type: terminalResult.command.state === "completed" ? "execution_update" : "failed",
+              title: terminalResult.command.state === "completed" ? "Project command completed" : "Project command failed",
+              details: commandEntry.rawCommand,
+              severity: terminalResult.command.state === "completed" ? "info" : "critical",
+              taskId: linkedTaskId,
+              chatId: linkedChatSessionId,
+              createdAtIso: new Date().toISOString(),
+            },
+            ...latestWorkflow.activityEvents,
+          ],
+        },
+      });
+
+      return {
+        ok: terminalResult.command.state === "completed",
+        code: terminalResult.command.state === "completed" ? "executed" : terminalResult.command.failureReason ?? "execution_failure",
+        message: terminalResult.command.state === "completed" ? "Project command executed." : "Project command failed.",
+      };
+    },
+    runProjectCommandCategory: async (category: "dev" | "build" | "test" | "lint" | "typecheck") => {
+      const matches = projectCommandRegistry.commands.filter(
+        (entry) => entry.category === category && entry.availability !== "invalid" && entry.availability !== "unavailable",
+      );
+      if (matches.length === 0) return { ok: false, code: "command_unavailable", message: `No ${category} command available for this project.` };
+
+      const preferred = matches.find((entry) => entry.isPrimaryWorkflow) ?? matches[0];
+      const hasConflicts = matches.length > 1 && !matches.some((entry) => entry.isPrimaryWorkflow);
+      if (hasConflicts) {
+        return { ok: false, code: "conflicting_choices", message: `Multiple ${category} commands found. Pick a specific command from the registry list.` };
+      }
+      if (!preferred) return { ok: false, code: "command_missing", message: "Command missing." };
+
+      const activeProject = projects.find((project) => project.id === activeProjectId);
+      const projectId = activeProject?.id ?? activeProjectId;
+      const linkedTaskId = activeWorkflowTask?.id;
+      const linkedChatSessionId = currentChatSessionId;
+      const cwd = preferred.workingDirectory || activeProject?.projectRoot || localShellRef.current.project.activeProjectRoot;
+      const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
+        workingDirectory: cwd,
+        linkedTaskId,
+        linkedChatSessionId,
+      });
+      terminalService.selectSession(activeTerminal.id);
+      terminalService.setWorkingDirectory(activeTerminal.id, cwd);
+
+      const requiresApproval = preferred.runSafety !== "safe";
+      if (requiresApproval) {
+        const approvalId = `approval-project-command-${preferred.id}-${Date.now()}`;
+        setPendingCommandLaunchByApprovalId((prev) => ({
+          ...prev,
+          [approvalId]: { commandId: preferred.id, taskId: linkedTaskId, chatId: linkedChatSessionId, projectId },
+        }));
+        setCommandExecutionSnapshot(preferred.id, {
+          executionId: approvalId,
+          commandId: preferred.id,
+          rawCommand: preferred.rawCommand,
+          source: preferred.source,
+          launchTimestampIso: new Date().toISOString(),
+          workingDirectory: cwd,
+          projectId,
+          linkedTaskId,
+          linkedChatSessionId,
+          status: "approval_required",
+          approvalState: "pending",
+        }, approvalId);
+        const latestWorkflow = workflowRef.current;
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...latestWorkflow,
+            approvals: [
+              ...latestWorkflow.approvals,
+              {
+                id: approvalId,
+                category: preferred.category === "release" ? "production_deploy_approval" : "destructive_file_operations",
+                title: `Approve ${preferred.displayName} command`,
+                reason: `Project command requires approval: ${preferred.rawCommand}`,
+                status: "pending",
+                taskId: linkedTaskId,
+                chatId: linkedChatSessionId,
+                requestedBy: "project-command-registry",
+                requestedAtIso: new Date().toISOString(),
+              },
+            ],
+            activityEvents: [
+              {
+                id: `activity-${approvalId}`,
+                type: "waiting_for_approval",
+                title: "Project command awaiting approval",
+                details: preferred.rawCommand,
+                severity: "warning",
+                taskId: linkedTaskId,
+                chatId: linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...latestWorkflow.activityEvents,
+            ],
+          },
+        });
+        return { ok: false, code: "approval_required", message: "Approval required before running this project command.", approvalId };
+      }
+
+      const terminalResult = await terminalService.execute(activeTerminal.id, {
+        command: preferred.rawCommand,
+        source: preferred.source,
+        sourceCommandId: preferred.id,
+        sourceCategory: preferred.category,
+        linkedProjectId: projectId,
+        cwd,
+        linkedTaskId,
+        linkedChatSessionId,
+        approved: true,
+        classificationHint: mapRunSafetyToTerminalClassification(preferred),
+        forceApproval: false,
+      });
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          terminal: terminalService.getSessionState(),
+        },
+      });
+      appendTerminalMessage(terminalResult.command);
+      setCommandExecutionSnapshot(preferred.id, {
+        executionId: terminalResult.command.id,
+        commandId: preferred.id,
+        rawCommand: preferred.rawCommand,
+        source: preferred.source,
+        launchTimestampIso: terminalResult.command.launchedAtIso ?? new Date().toISOString(),
+        workingDirectory: terminalResult.command.cwd,
+        projectId,
+        linkedTaskId,
+        linkedChatSessionId,
+        status: terminalResult.command.state === "completed" ? "completed" : terminalResult.command.state === "failed" ? "failed" : "running",
+        approvalState: "not_required",
+        exitCode: terminalResult.command.exitCode,
+        failureReason: terminalResult.command.failureReason,
+      });
+      return {
+        ok: terminalResult.command.state === "completed",
+        code: terminalResult.command.state === "completed" ? "executed" : terminalResult.command.failureReason ?? "execution_failure",
+        message: terminalResult.command.state === "completed" ? "Project command executed." : "Project command failed.",
+      };
+    },
     setProviderSource: (nextSource: "openrouter" | "ollama") => {
       setProviderSource(nextSource);
       const nextModel = lastUsedModelByProvider[nextSource];
