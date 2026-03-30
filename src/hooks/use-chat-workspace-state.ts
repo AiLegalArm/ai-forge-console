@@ -22,6 +22,7 @@ import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
 import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
+import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -360,6 +361,9 @@ export function useChatWorkspaceState() {
         ollamaAvailable: localInference.ollama.runtimeAvailable,
         localOnly: deploymentMode === "local",
         releaseCritical: Boolean(activeWorkflowTask?.phase === "release" || activeWorkflowTask?.github?.pullRequest?.auditGate?.verdict === "no_go"),
+        budgetPressure: localInference.operational.budgetPressure,
+        degradedMode: localInference.operational.degradedMode,
+        blockWeakFallbackForRelease: true,
         fallbackRequired: true,
       },
       localInference.hybridModelRegistry,
@@ -449,6 +453,18 @@ export function useChatWorkspaceState() {
           ...currentLocalInference.resources,
           autoFallbackReady: !snapshot.connection.runtimeAvailable || currentLocalInference.resources.autoFallbackReady,
           degradedMode: snapshot.connection.serviceState === "degraded" || snapshot.connection.serviceState === "error",
+        },
+        operational: {
+          ...currentLocalInference.operational,
+          degradedMode:
+            currentLocalInference.operational.degradedMode ||
+            snapshot.connection.serviceState === "degraded" ||
+            snapshot.connection.serviceState === "error",
+          providerHealth: {
+            ...currentLocalInference.operational.providerHealth,
+            ollama: snapshot.connection.runtimeAvailable ? "healthy" : "degraded",
+            openrouter: openRouterSnapshot.config.status === "connected" ? "healthy" : "pressured",
+          },
         },
         scenarioLog: [
           `${new Date().toISOString()}: Ollama ${snapshot.connection.serviceState} (${snapshot.connection.offlineReason ?? "runtime healthy"}).`,
@@ -1991,6 +2007,56 @@ export function useChatWorkspaceState() {
         workflowRef.current.tasks.find((task) => task.linkedChatSessionId === sessionId) ??
         workflowRef.current.tasks.find((task) => task.id === activeSession?.linked.taskId) ??
         workflowRef.current.tasks[0];
+      const releaseCritical = Boolean(linkedTask?.phase === "release" || linkedTask?.github?.pullRequest?.releaseGateReadiness === "blocked");
+      const budgetDecision = evaluateBudgetGuardrails({
+        runEstimateUsd: routingProfile === "quality_first" ? 0.12 : 0.04,
+        modeProfile: routingProfile,
+        releaseCritical,
+        buckets: [
+          { scope: "run", scopeId: sessionId, spentUsd: 0, guardrails: { softLimitUsd: 0.5, hardLimitUsd: 1.2, warnBeforeRunUsd: 0.35, stopOrFallbackUsd: 0.8 } },
+          { scope: "task", scopeId: linkedTask?.id ?? "unknown-task", spentUsd: 0.72, guardrails: { softLimitUsd: 2.5, hardLimitUsd: 4, warnBeforeRunUsd: 2, stopOrFallbackUsd: 3 } },
+          { scope: "project", scopeId: activeProjectId, spentUsd: 6.4, guardrails: { softLimitUsd: 14, hardLimitUsd: 20, warnBeforeRunUsd: 12, stopOrFallbackUsd: 16 } },
+        ],
+      });
+
+      if (!budgetDecision.allowRun) {
+        const blockedMessage = {
+          id: responseId,
+          sessionId,
+          role: "system" as const,
+          authorLabel: "Operator Guardrail",
+          content: budgetDecision.blockReason ?? "Execution blocked by guardrails.",
+          createdAtIso: nowIso,
+          status: "failed" as const,
+        };
+        dispatch({
+          type: "set_chat",
+          chat: {
+            ...currentChat,
+            messagesBySessionId: {
+              ...currentChat.messagesBySessionId,
+              [sessionId]: [...(currentChat.messagesBySessionId[sessionId] ?? []), userMessage, blockedMessage],
+            },
+            draftInputBySessionId: {
+              ...currentChat.draftInputBySessionId,
+              [sessionId]: "",
+            },
+          },
+        });
+        dispatch({
+          type: "set_local_inference",
+          localInference: {
+            ...localInferenceRef.current,
+            operational: {
+              ...localInferenceRef.current.operational,
+              blockedExpensiveRuns: localInferenceRef.current.operational.blockedExpensiveRuns + 1,
+              budgetPressure: budgetDecision.pressure,
+            },
+          },
+        });
+        return;
+      }
+
       const routingDecision = buildRuntimeRoutingDecision(chatType, sessionId, activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId);
       const selectedProviderLabel = routingDecision.selectedProvider === "openrouter" ? "OpenRouter" : "Ollama";
       const selectedProviderModel =
@@ -2086,6 +2152,17 @@ export function useChatWorkspaceState() {
           },
         },
       });
+      dispatch({
+        type: "set_local_inference",
+        localInference: {
+          ...localInferenceRef.current,
+          operational: {
+            ...localInferenceRef.current.operational,
+            budgetPressure: budgetDecision.pressure,
+            degradedMode: localInferenceRef.current.operational.degradedMode || budgetDecision.pressure === "critical",
+          },
+        },
+      });
       const runId = `run-${sessionId}-${now}`;
       const trace = createExecutionTrace({
         runId,
@@ -2109,7 +2186,7 @@ export function useChatWorkspaceState() {
           nowIso,
           type: "context_built",
           title: "Context built",
-          details: chatContextPacket.summary,
+          details: budgetDecision.warning ? `${chatContextPacket.summary} • ${budgetDecision.warning}` : chatContextPacket.summary,
           nextStatus: "in_progress",
         },
       );
@@ -2120,7 +2197,7 @@ export function useChatWorkspaceState() {
           nowIso: new Date().toISOString(),
           type: "routing_selected",
           title: "Routing selected",
-          details: routingDecision.reason,
+          details: `${routingDecision.reason} • budget:${budgetDecision.pressure} • degraded:${localInference.operational.degradedMode ? "yes" : "no"}`,
           provider: selectedProviderLabel,
           model: selectedProviderModel,
           nextStatus: "waiting_provider",
@@ -2327,6 +2404,110 @@ export function useChatWorkspaceState() {
           }
 
           const failureIso = openRouterResult.receivedAtIso;
+          const fallbackAllowed = routingDecision.fallbackProvider === "ollama" && (!releaseCritical || Boolean(routingDecision.fallbackModelId));
+          const fallbackReason = openRouterResult.errorCode === "rate_limited" ? "provider_rate_limited" : "provider_unavailable";
+          if (fallbackAllowed) {
+            const fallbackIso = new Date().toISOString();
+            const fallbackText = `Primary provider unavailable (${openRouterResult.errorCode}). Switched to local fallback (${routingDecision.fallbackModelId ?? "auto"}).\\n\\n${mockResponse.content}`;
+            const fallbackWorkflow = completeExecutionTrace(
+              appendExecutionTraceStep(
+                appendExecutionTraceStep(
+                  appendExecutionTraceStep(workflowRef.current, {
+                    traceId,
+                    nowIso: failureIso,
+                    type: "provider_failed",
+                    title: "Primary provider failed",
+                    details: openRouterResult.errorMessage,
+                    failureType: openRouterResult.errorCode === "rate_limited" ? "timeout" : "provider_failure",
+                    provider: "OpenRouter",
+                    model: selectedProviderModel,
+                    nextStatus: "fallback_in_progress",
+                  }),
+                  {
+                    traceId,
+                    nowIso: fallbackIso,
+                    type: "fallback_selected",
+                    title: "Fallback selected",
+                    details: `Fallback executed due to ${fallbackReason}.`,
+                    provider: "Ollama",
+                    model: routingDecision.fallbackModelId ?? undefined,
+                    nextStatus: "fallback_in_progress",
+                  },
+                ),
+                {
+                  traceId,
+                  nowIso: fallbackIso,
+                  type: "result_received",
+                  title: "Fallback result received",
+                  details: "Local fallback completed successfully.",
+                  provider: "Ollama",
+                  model: routingDecision.fallbackModelId ?? undefined,
+                  nextStatus: "completed",
+                },
+              ),
+              traceId,
+              {
+                nowIso: fallbackIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: "hybrid",
+                  executionWeight: "light",
+                },
+              },
+            );
+
+            dispatch({ type: "set_workflow", workflow: fallbackWorkflow });
+            dispatch({
+              type: "set_local_inference",
+              localInference: {
+                ...localInferenceRef.current,
+                operational: {
+                  ...localInferenceRef.current.operational,
+                  degradedMode: shouldEnterDegradedMode([
+                    { provider: "openrouter", consecutiveFailures: 2, consecutiveRateLimits: openRouterResult.errorCode === "rate_limited" ? 2 : 0 },
+                    { provider: "ollama", consecutiveFailures: 0, consecutiveRateLimits: 0 },
+                  ]),
+                  providerHealth: {
+                    ...localInferenceRef.current.operational.providerHealth,
+                    openrouter: openRouterResult.errorCode === "rate_limited" ? "degraded" : "pressured",
+                    ollama: "healthy",
+                  },
+                  fallbackEvents: [
+                    {
+                      atIso: fallbackIso,
+                      reason: fallbackReason,
+                      from: "openrouter",
+                      to: "ollama",
+                      runId,
+                    },
+                    ...localInferenceRef.current.operational.fallbackEvents,
+                  ].slice(0, 20),
+                },
+              },
+            });
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: fallbackText,
+                          status: "completed" as const,
+                          createdAtIso: fallbackIso,
+                        }
+                      : message,
+                  ),
+                },
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
+
           let failedWorkflow = appendExecutionTraceStep(workflowRef.current, {
             traceId,
             nowIso: failureIso,

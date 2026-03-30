@@ -189,6 +189,10 @@ export interface RoutingInput {
   fallbackRequired?: boolean;
   maxCostTier?: ModelTier;
   latencyPriority?: "low" | "medium" | "high";
+  budgetPressure?: "low" | "medium" | "high" | "critical";
+  degradedMode?: boolean;
+  fallbackDepth?: number;
+  blockWeakFallbackForRelease?: boolean;
 }
 
 export interface RoutingDecision {
@@ -206,6 +210,9 @@ export interface RoutingDecision {
   resolution: "resolved" | "error";
   errorCode?: "no_available_provider" | "no_available_model";
   reason: string;
+  degradedMode?: boolean;
+  budgetPressure?: "low" | "medium" | "high" | "critical";
+  stopReason?: "budget_hard_limit" | "provider_unavailable";
 }
 
 export interface RoutingRule {
@@ -282,5 +289,12 @@ export interface LocalInferenceRuntimeState {
   modelRegistry: LocalModelRegistryEntry[];
   routing: BackendRoutingState;
   resources: LocalResourceState;
+  operational: {
+    degradedMode: boolean;
+    budgetPressure: "low" | "medium" | "high" | "critical";
+    blockedExpensiveRuns: number;
+    fallbackEvents: Array<{ atIso: string; reason: string; from: ModelProvider; to: ModelProvider; runId: string }>;
+    providerHealth: Record<ModelProvider, "healthy" | "pressured" | "degraded">;
+  };
   scenarioLog: string[];
 }

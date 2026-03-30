@@ -30,8 +30,9 @@ export class ModelRoutingEngine {
     const profile = this.resolveProfile(input, localOnly);
     const rankKey = this.resolveRankKey(profile, input.taskType);
     const maxCostTier = this.resolveMaxCost(profile, input.maxCostTier);
+    const budgetPressure = input.budgetPressure ?? "low";
     const privacyAffected = input.privacyMode !== "standard" || localOnly || profile === "local_private";
-    const costAffected = Boolean(maxCostTier) || input.appModeProfile === "cheap_fast";
+    const costAffected = Boolean(maxCostTier) || input.appModeProfile === "cheap_fast" || budgetPressure !== "low";
     const qualityAffected = input.appModeProfile === "quality_first" || input.releaseCritical || profile === "release_critical";
     const overrideApplied = Boolean(input.operatorOverride?.provider || input.operatorOverride?.modelId);
 
@@ -55,7 +56,7 @@ export class ModelRoutingEngine {
       };
     }
 
-    const providerChain = this.resolveProviderChain(input);
+    const providerChain = this.resolveProviderChain(input, budgetPressure);
     const candidateProviders = providerChain.filter((provider) => {
       if (provider === "openrouter") return openRouterAvailable;
       return ollamaAvailable;
@@ -67,8 +68,9 @@ export class ModelRoutingEngine {
     const selectedProvider = input.operatorOverride?.provider ?? selected?.provider ?? candidateProviders[0] ?? providerChain[0] ?? "ollama";
     const selectedModel = this.resolveSelectedModel(selectedProvider, selected?.id ?? null, input, models, rankKey, maxCostTier);
     const fallbackProvider = this.resolveFallbackProvider(selectedProvider, providerChain, input.fallbackProvider);
-    const fallbackModel = this.resolveFallbackModel(fallbackProvider, selectedModel, input, models, rankKey, maxCostTier);
+    const fallbackModel = this.resolveFallbackModel(fallbackProvider, selectedModel, input, models, rankKey, maxCostTier, input.releaseCritical);
     const usedFallback = !selected && fallbackModel !== null;
+    const degradedMode = Boolean(input.degradedMode || budgetPressure === "critical");
 
     return {
       profile,
@@ -85,6 +87,8 @@ export class ModelRoutingEngine {
       resolution: selectedModel ? "resolved" : "error",
       errorCode: selectedModel ? undefined : candidateProviders.length === 0 ? "no_available_provider" : "no_available_model",
       reason: this.buildReason(profile, input, usedFallback, selectedModel, selectedProvider),
+      degradedMode,
+      budgetPressure,
     };
   }
 
@@ -167,7 +171,11 @@ export class ModelRoutingEngine {
     return requested;
   }
 
-  private resolveProviderChain(input: RoutingInput): ModelProvider[] {
+  private resolveProviderChain(input: RoutingInput, budgetPressure: RoutingInput["budgetPressure"]): ModelProvider[] {
+    if (budgetPressure === "high" || budgetPressure === "critical") {
+      const forceLocal: ModelProvider[] = ["ollama", "openrouter"];
+      return forceLocal;
+    }
     const preferred = input.operatorOverride?.provider ?? input.preferredProvider ?? (input.preferredBackend === "local" || input.preferredBackend === "ollama" ? "ollama" : "openrouter");
     const fallback = input.fallbackProvider ?? (preferred === "openrouter" ? "ollama" : "openrouter");
     return [preferred, fallback, preferred === "openrouter" ? "ollama" : "openrouter"].filter((value, index, all) => all.indexOf(value) === index);
@@ -199,9 +207,17 @@ export class ModelRoutingEngine {
     models: HybridModelRegistryEntry[],
     rankKey: "codingSuitability" | "auditSuitability" | "qualityTier",
     maxCostTier?: HybridModelRegistryEntry["costTier"],
+    releaseCritical?: boolean,
   ) {
     if (input.fallbackModelId) return input.fallbackModelId;
     const fallback = this.pickBest(models, fallbackProvider, rankKey, maxCostTier)?.id ?? null;
+    if (releaseCritical && input.blockWeakFallbackForRelease && fallback) {
+      const selectedTier = models.find((model) => model.id === selectedModel)?.qualityTier;
+      const fallbackTier = models.find((model) => model.id === fallback)?.qualityTier;
+      if (selectedTier && fallbackTier && TIER_SCORE[fallbackTier] < TIER_SCORE[selectedTier]) {
+        return null;
+      }
+    }
     if (fallback && fallback !== selectedModel) return fallback;
     return selectedModel;
   }
