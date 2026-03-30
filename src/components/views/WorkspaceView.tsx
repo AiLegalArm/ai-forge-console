@@ -82,7 +82,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   return (
     <div className="flex flex-col h-full">
       <ChatContextBar workspaceState={workspaceState} chatState={chatState} />
-      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} />
+      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} traces={workspaceState.workflow.executionTraces} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />

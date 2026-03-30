@@ -43,7 +43,8 @@ const buildTaskMemoryEntries = (workflow: WorkflowState, auditors: AuditorContro
       const blockers = auditors.blockers.filter((blocker) => blocker.entityId === task.id && blocker.status === "active");
       const approvals = workflow.approvals.filter((approval) => approval.taskId === task.id).slice(0, 8);
       const deniedApprovals = approvals.filter((approval) => approval.status === "denied");
-      const subtaskSummary = task.subtasks.length > 0 ? `${task.subtasks.filter((s) => s.status === "completed").length}/${task.subtasks.length} subtasks complete` : "No subtasks";
+      const subtasks = task.subtasks ?? [];
+      const subtaskSummary = subtasks.length > 0 ? `${subtasks.filter((s) => s.status === "completed").length}/${subtasks.length} subtasks complete` : "No subtasks";
 
       return {
         taskId: task.id,
@@ -67,7 +68,7 @@ const buildTaskMemoryEntries = (workflow: WorkflowState, auditors: AuditorContro
         })),
         branchName: task.branchName,
         linkedChatSessionId: task.linkedChatSessionId,
-        subtaskHistory: task.subtasks.map((subtask) => ({
+        subtaskHistory: subtasks.map((subtask) => ({
           subtaskId: subtask.id,
           title: subtask.title,
           status: subtask.status,

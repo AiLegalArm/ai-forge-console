@@ -5,6 +5,16 @@ export type ChatType = "main" | "agent" | "audit" | "review";
 export type MessageRole = "user" | "orchestrator" | "agent" | "auditor" | "reviewer" | "system";
 
 export type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "needs_approval";
+export type MessageLiveState =
+  | "idle"
+  | "preparing"
+  | "streaming"
+  | "waiting_for_tool"
+  | "waiting_for_approval"
+  | "blocked"
+  | "fallback_running"
+  | "completed"
+  | "failed";
 
 export interface ChatAttachment {
   id: string;
@@ -44,8 +54,11 @@ export interface ChatMessage {
   role: MessageRole;
   authorLabel?: string;
   content: string;
+  partialContent?: string;
   createdAtIso: string;
   status: MessageStatus;
+  liveState?: MessageLiveState;
+  phaseLabel?: string;
   attachments?: ChatAttachment[];
   approval?: ApprovalRequest;
   linked?: ChatLinkedContext;

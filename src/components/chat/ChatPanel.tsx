@@ -1,8 +1,8 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight,
+  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight, Radio,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
@@ -26,6 +26,18 @@ const statusIcon: Record<string, React.ReactNode> = {
   pending: <Clock className="h-3 w-3 text-muted-foreground shrink-0" />,
   failed: <XCircle className="h-3 w-3 text-destructive shrink-0" />,
   needs_approval: <Clock className="h-3 w-3 text-warning shrink-0" />,
+};
+
+const liveStateTone: Record<string, string> = {
+  idle: "text-muted-foreground",
+  preparing: "text-info",
+  streaming: "text-primary",
+  waiting_for_tool: "text-warning",
+  waiting_for_approval: "text-warning",
+  blocked: "text-destructive",
+  fallback_running: "text-warning",
+  completed: "text-success",
+  failed: "text-destructive",
 };
 
 interface ChatPanelProps {
@@ -425,7 +437,6 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         ))}
 
-        <TypingIndicator agents={messages.filter(m => m.status === "streaming").map(m => m.authorLabel || roleLabelMap[m.role]?.label || "")} />
       </div>
 
       {/* Composer */}
@@ -531,18 +542,9 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   );
 }
 
-function StreamingText({ text }: { text: string }) {
-  const [visibleLen, setVisibleLen] = useState(0);
-  useEffect(() => {
-    setVisibleLen(0);
-    const id = setInterval(() => {
-      setVisibleLen((prev) => {
-        if (prev >= text.length) { clearInterval(id); return prev; }
-        return Math.min(prev + 2, text.length);
-      });
-    }, 18);
-    return () => clearInterval(id);
-  }, [text]);
+function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; workspaceState: WorkspaceRuntimeState }) {
+  const trace = workspaceState.workflow.executionTraces.find((item) => item.traceId === traceId);
+  if (!trace) return null;
   return (
     <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">
       {text.slice(0, visibleLen)}

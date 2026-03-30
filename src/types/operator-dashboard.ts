@@ -15,6 +15,10 @@ export interface OperatorDashboardSummary {
   executionFailures: number;
   routingAnomalies: number;
   degradedProviderRuntime: boolean;
+  liveRuns: number;
+  waitingRuns: number;
+  blockedRuns: number;
+  partialStreamingRuns: number;
 }
 
 export interface OperatorProjectSummary {

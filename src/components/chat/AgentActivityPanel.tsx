@@ -1,11 +1,12 @@
 import { Bot, Loader2, Pause, AlertTriangle, CircleCheck, CircleDashed } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { AgentRuntimeState } from "@/types/workspace";
-import type { AgentActivityEvent } from "@/types/workflow";
+import type { AgentActivityEvent, ExecutionTrace } from "@/types/workflow";
 
 interface AgentActivityPanelProps {
   activeAgents: AgentRuntimeState[];
   events: AgentActivityEvent[];
+  traces: ExecutionTrace[];
 }
 
 const eventStyles: Record<string, string> = {
@@ -14,7 +15,7 @@ const eventStyles: Record<string, string> = {
   info: "text-primary",
 };
 
-export function AgentActivityPanel({ activeAgents, events }: AgentActivityPanelProps) {
+export function AgentActivityPanel({ activeAgents, events, traces }: AgentActivityPanelProps) {
   const { t } = useI18n();
   const latestEvents = [...events].sort((a, b) => b.createdAtIso.localeCompare(a.createdAtIso)).slice(0, 5);
 

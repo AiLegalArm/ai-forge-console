@@ -472,6 +472,17 @@ export type ExecutionTraceStatus =
   | "failed"
   | "interrupted";
 
+export type AgentRunLiveState =
+  | "idle"
+  | "preparing"
+  | "streaming"
+  | "waiting_for_tool"
+  | "waiting_for_approval"
+  | "blocked"
+  | "fallback_running"
+  | "completed"
+  | "failed";
+
 export type ExecutionFailureType =
   | "provider_failure"
   | "timeout"
@@ -503,6 +514,9 @@ export interface ExecutionTraceStep {
   title: string;
   details?: string;
   status: ExecutionTraceStatus;
+  liveState?: AgentRunLiveState;
+  phaseLabel?: string;
+  partialOutput?: string;
   provider?: string;
   model?: string;
   failureType?: ExecutionFailureType;
@@ -532,6 +546,11 @@ export interface ExecutionTrace {
   evidenceIds: string[];
   provider?: string;
   model?: string;
+  liveState: AgentRunLiveState;
+  currentPhase?: string;
+  currentSubtask?: string;
+  latestPartialOutput?: string;
+  blockedReason?: string;
   routingDecision?: string;
   fallbackUsed: boolean;
   status: ExecutionTraceStatus;
