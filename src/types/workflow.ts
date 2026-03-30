@@ -236,6 +236,27 @@ export type TaskStatus = "queued" | "in_progress" | "blocked" | "awaiting_approv
 
 export type TaskPhase = "planning" | "implementation" | "audit" | "review" | "release";
 
+export interface WorkflowSubtask {
+  id: string;
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  linkedAgentId?: string;
+  linkedFindingIds: string[];
+  evidenceIds: string[];
+  criticalPath: boolean;
+  updatedAtIso: string;
+}
+
+export interface WorkflowTaskRollup {
+  totalSubtasks: number;
+  completedSubtasks: number;
+  blockedSubtasks: number;
+  criticalBlockedSubtasks: number;
+  blockerIds: string[];
+  gateStatus: "ready" | "warning" | "blocked";
+}
+
 export interface WorkflowTask {
   id: string;
   title: string;
@@ -255,11 +276,14 @@ export interface WorkflowTask {
   auditFindingCount?: number;
   designBrowserBlockers?: number;
   updatedAtIso: string;
+  parentTaskId?: string;
+  rollup?: WorkflowTaskRollup;
   github?: TaskGitHubState;
 }
 
 export interface WorkflowState {
   tasks: WorkflowTask[];
+  subtasks: WorkflowSubtask[];
   activityEvents: AgentActivityEvent[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];

@@ -112,8 +112,16 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
                 <span className="text-[10px] text-foreground truncate">{task.title}</span>
               </div>
               <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
+              {task.rollup ? (
+                <div className="text-[9px] font-mono pl-4 text-muted-foreground">
+                  subtasks {task.rollup.completedSubtasks}/{task.rollup.totalSubtasks} • blocked {task.rollup.blockedSubtasks}
+                </div>
+              ) : null}
               {task.designBrowserBlockers ? (
                 <div className="text-[9px] text-warning font-mono pl-4">{t("rail.design_blockers" as never)} {task.designBrowserBlockers}</div>
+              ) : null}
+              {task.rollup?.blockerIds.length ? (
+                <div className="text-[9px] text-destructive font-mono pl-4">audit blockers: {task.rollup.blockerIds.length}</div>
               ) : null}
             </div>
           ))}

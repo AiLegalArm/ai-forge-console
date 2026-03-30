@@ -1,4 +1,4 @@
-import type { AuditorVerdict, AuditorType } from "@/types/audits";
+import type { AuditBlockerCondition, AuditorVerdict, AuditorType } from "@/types/audits";
 import type { WorkflowApproval, TaskStatus, GitHubConnectionState } from "@/types/workflow";
 
 export type DeploymentEnvironment = "preview" | "staging" | "production";
@@ -83,8 +83,12 @@ export interface ReleaseCandidate {
 
 export interface GoNoGoInputs {
   auditors: AuditorVerdict[];
+  releaseAuditorVerdict: AuditorVerdict;
   reviewState: ReviewState;
   taskStatuses: TaskStatus[];
+  subtaskStatuses: TaskStatus[];
+  auditBlockers: AuditBlockerCondition[];
+  agentOutcomeSignals: Array<{ source: string; status: "ready" | "warning" | "blocked"; detail: string }>;
   githubSyncStatus: GitHubConnectionState;
   browserEvidenceResolved: boolean;
   designEvidenceResolved: boolean;
@@ -95,9 +99,12 @@ export interface GoNoGoInputs {
 
 export interface GoNoGoDecision {
   status: GoNoGoStatus;
+  readiness: ReleaseReadiness;
   blockers: string[];
   warnings: string[];
   approvalsPending: WorkflowApproval["category"][];
+  goSignals: string[];
+  noGoSignals: string[];
   summary: string;
 }
 

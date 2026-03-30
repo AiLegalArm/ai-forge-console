@@ -80,7 +80,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
       case "providers": return <ProviderHubView workspaceState={workspaceState} onRefreshLocalInference={onRefreshLocalInference} />;
       case "audits": return <AuditsView workspaceState={workspaceState} />;
       case "supabase-import": return <SupabaseImportView />;
-      case "release": return <ReleaseCenterView />;
+      case "release": return <ReleaseCenterView workspaceState={workspaceState} />;
       case "settings": return <SettingsView />;
       default: return null;
     }
