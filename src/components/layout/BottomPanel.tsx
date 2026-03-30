@@ -50,6 +50,11 @@ export function BottomPanel({ expanded, onToggle, terminal }: BottomPanelProps) 
         {activeTab === "terminal" && (
           <div className="space-y-0.5">
             <div className="text-muted-foreground mb-1">session {terminal.sessionId} · cwd {terminal.workingDirectory}</div>
+            {latestCommand ? (
+              <div className="text-[10px] text-muted-foreground mb-1">
+                origin {latestCommand.origin ?? "user"} {latestCommand.linkedAgentId ? `• agent ${latestCommand.linkedAgentId}` : ""} {latestCommand.linkedAgentCommandRequestId ? `• request ${latestCommand.linkedAgentCommandRequestId}` : ""}
+              </div>
+            ) : null}
             {terminal.output.map((line) => (
               <div key={line.id} className="flex gap-2">
                 <span className="text-muted-foreground shrink-0">{new Date(line.timestampIso).toLocaleTimeString()}</span>

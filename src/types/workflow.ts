@@ -22,7 +22,11 @@ export type AgentActivityEventType =
   | "browser_step_failed"
   | "evidence_attached"
   | "review_triggered"
-  | "deploy_triggered";
+  | "deploy_triggered"
+  | "command_proposed"
+  | "command_execution_requested"
+  | "command_executed"
+  | "command_blocked";
 
 export interface AgentActivityEvent {
   id: string;
@@ -52,7 +56,8 @@ export type ApprovalCategory =
   | "release_go_no_go"
   | "release_approval"
   | "destructive_file_operations"
-  | "sensitive_provider_usage";
+  | "sensitive_provider_usage"
+  | "agent_command_execution";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "dismissed";
 
@@ -68,6 +73,50 @@ export interface WorkflowApproval {
   requestedBy: string;
   requestedAtIso: string;
   expiresAtIso?: string;
+  linkedAgentCommandRequestId?: string;
+}
+
+
+export type AgentCommandOrigin =
+  | "user_triggered_command"
+  | "agent_suggested_command"
+  | "agent_approved_to_run_command"
+  | "blocked_command_request";
+
+export type AgentCommandSafetyLevel = "safe" | "caution" | "risky";
+export type AgentCommandApprovalRequirement = "not_required" | "required" | "policy_blocked";
+export type AgentCommandExecutionState =
+  | "proposed"
+  | "awaiting_approval"
+  | "approved"
+  | "executing"
+  | "executed"
+  | "rejected"
+  | "blocked"
+  | "expired"
+  | "abandoned";
+export type AgentCommandResultState = "none" | "success" | "failed" | "blocked" | "rejected" | "expired" | "abandoned";
+
+export interface AgentCommandRequest {
+  id: string;
+  origin: AgentCommandOrigin;
+  linkedAgentId: string;
+  linkedTaskId: string;
+  linkedChatId: string;
+  commandId: string;
+  rawCommand: string;
+  commandSource: string;
+  reason: string;
+  intent: string;
+  safetyLevel: AgentCommandSafetyLevel;
+  approvalRequirement: AgentCommandApprovalRequirement;
+  executionState: AgentCommandExecutionState;
+  resultState: AgentCommandResultState;
+  linkedApprovalId?: string;
+  linkedTerminalCommandId?: string;
+  requestedAtIso: string;
+  updatedAtIso: string;
+  executedAtIso?: string;
 }
 
 export type GitHubConnectionState = SyncStatus;
@@ -213,5 +262,6 @@ export interface WorkflowState {
   tasks: WorkflowTask[];
   activityEvents: AgentActivityEvent[];
   approvals: WorkflowApproval[];
+  agentCommandRequests: AgentCommandRequest[];
   github: GitHubSyncState;
 }

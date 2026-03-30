@@ -23,7 +23,7 @@ import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
 import type { LocalInferenceRuntimeState } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
-import type { WorkflowState } from "@/types/workflow";
+import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
 import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 import type { ProjectCommandRegistry } from "@/types/project-commands";
@@ -537,6 +537,165 @@ export function useChatWorkspaceState() {
     });
   };
 
+  const pickAgentSuggestedCommand = (chatType: ChatType, agentId?: string) => {
+    const commands = projectCommandRegistry.commands.filter((command) => command.availability !== "invalid" && command.availability !== "unavailable");
+    const selectByCategories = (categories: string[]) => commands.find((command) => categories.includes(command.category));
+
+    if (chatType === "audit") return selectByCategories(["test", "lint", "typecheck"]);
+    if (chatType === "review") return selectByCategories(["lint", "typecheck", "build"]);
+    if (agentId?.includes("frontend")) return selectByCategories(["dev", "build"]);
+    if (agentId?.includes("backend")) return selectByCategories(["test", "build"]);
+    return selectByCategories(["test", "build", "dev"]);
+  };
+
+  const executeAgentCommandRequest = async (requestId: string, approved: boolean, requestOverride?: AgentCommandRequest) => {
+    const request = requestOverride ?? workflow.agentCommandRequests.find((entry) => entry.id === requestId);
+    if (!request) return;
+
+    const activeTerminal = terminalService.getSelectedSession() ?? terminalService.createSession({
+      workingDirectory: localShell.project.activeProjectRoot,
+      linkedTaskId: request.linkedTaskId,
+      linkedChatSessionId: request.linkedChatId,
+    });
+    terminalService.selectSession(activeTerminal.id);
+
+    const terminalResult = await terminalService.execute(activeTerminal.id, {
+      command: request.rawCommand,
+      linkedTaskId: request.linkedTaskId,
+      linkedChatSessionId: request.linkedChatId,
+      approved,
+      origin: approved ? "agent_approved" : "agent_suggested",
+      linkedAgentId: request.linkedAgentId,
+      linkedAgentCommandRequestId: request.id,
+      commandSource: request.commandSource,
+      originReason: request.reason,
+    });
+
+    dispatch({
+      type: "set_local_shell",
+      localShell: {
+        ...localShellRef.current,
+        terminal: terminalService.getSessionState(),
+      },
+    });
+    appendTerminalMessage(terminalResult.command);
+
+    const succeeded = terminalResult.command.state === "completed";
+    const nextIso = new Date().toISOString();
+    dispatch({
+      type: "set_workflow",
+      workflow: {
+        ...workflow,
+        agentCommandRequests: workflow.agentCommandRequests.map((entry) =>
+          entry.id === request.id
+            ? {
+                ...entry,
+                origin: approved ? "agent_approved_to_run_command" : entry.origin,
+                executionState: succeeded ? "executed" : terminalResult.command.state === "approval_required" ? "awaiting_approval" : "blocked",
+                resultState: succeeded ? "success" : terminalResult.command.state === "approval_required" ? "none" : "failed",
+                linkedTerminalCommandId: terminalResult.command.id,
+                executedAtIso: succeeded ? nextIso : entry.executedAtIso,
+                updatedAtIso: nextIso,
+              }
+            : entry,
+        ),
+        activityEvents: [
+          {
+            id: `activity-agent-command-${request.id}`,
+            type: succeeded ? "command_executed" : "command_blocked",
+            title: succeeded ? "Agent command executed" : "Agent command blocked",
+            details: request.rawCommand,
+            taskId: request.linkedTaskId,
+            chatId: request.linkedChatId,
+            agentId: request.linkedAgentId,
+            severity: succeeded ? "info" : "warning",
+            createdAtIso: nextIso,
+          },
+          ...workflow.activityEvents,
+        ],
+      },
+    });
+  };
+
+  const proposeAgentCommand = async (chatType: ChatType, chatSessionId: string, reason: string, agentId?: string) => {
+    const suggestion = pickAgentSuggestedCommand(chatType, agentId);
+    if (!suggestion || !activeWorkflowTask) return;
+
+    const existingPending = workflow.agentCommandRequests.some(
+      (request) => request.linkedChatId === chatSessionId && request.executionState !== "executed" && request.resultState === "none",
+    );
+    if (existingPending) return;
+
+    const requestId = `acr-${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    const requiresApproval = suggestion.runSafety !== "safe";
+    const approvalId = requiresApproval ? `approval-agent-command-${requestId}` : undefined;
+
+    const nextRequest: AgentCommandRequest = {
+      id: requestId,
+      origin: "agent_suggested_command",
+      linkedAgentId: agentId ?? activeWorkflowTask.ownerAgentId ?? "agent-system",
+      linkedTaskId: activeWorkflowTask.id,
+      linkedChatId: chatSessionId,
+      commandId: suggestion.id,
+      rawCommand: suggestion.rawCommand,
+      commandSource: suggestion.source,
+      reason,
+      intent: `agent_requested_${suggestion.category}`,
+      safetyLevel: suggestion.runSafety,
+      approvalRequirement: requiresApproval ? "required" : "not_required",
+      executionState: requiresApproval ? "awaiting_approval" : "proposed",
+      resultState: "none",
+      linkedApprovalId: approvalId,
+      requestedAtIso: nowIso,
+      updatedAtIso: nowIso,
+    };
+
+    dispatch({
+      type: "set_workflow",
+      workflow: {
+        ...workflow,
+        approvals: approvalId
+          ? [
+              ...workflow.approvals,
+              {
+                id: approvalId,
+                category: "agent_command_execution",
+                title: `Approve agent command: ${suggestion.displayName}`,
+                reason: `${reason} (${suggestion.rawCommand})`,
+                status: "pending",
+                taskId: activeWorkflowTask.id,
+                chatId: chatSessionId,
+                agentId: nextRequest.linkedAgentId,
+                requestedBy: "agent-command-orchestrator",
+                requestedAtIso: nowIso,
+                linkedAgentCommandRequestId: requestId,
+              },
+            ]
+          : workflow.approvals,
+        agentCommandRequests: [nextRequest, ...workflow.agentCommandRequests],
+        activityEvents: [
+          {
+            id: `activity-agent-command-proposed-${requestId}`,
+            type: "command_proposed",
+            title: "Agent proposed command",
+            details: `${suggestion.displayName}: ${suggestion.rawCommand}`,
+            taskId: activeWorkflowTask.id,
+            chatId: chatSessionId,
+            agentId: nextRequest.linkedAgentId,
+            severity: requiresApproval ? "warning" : "info",
+            createdAtIso: nowIso,
+          },
+          ...workflow.activityEvents,
+        ],
+      },
+    });
+
+    if (!requiresApproval) {
+      await executeAgentCommandRequest(requestId, true, nextRequest);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -675,7 +834,13 @@ export function useChatWorkspaceState() {
     setConversationType: (chatType: ChatType) => dispatch({ type: "set_active_chat_type", chatType }),
     setDraft: (sessionId: string, value: string) => dispatch({ type: "update_draft", sessionId, value }),
     clearApproval: (sessionId: string) => dispatch({ type: "clear_approval", sessionId }),
-    approveWorkflowApproval: (approvalId: string) => dispatch({ type: "approve_workflow_approval", approvalId }),
+    approveWorkflowApproval: async (approvalId: string) => {
+      dispatch({ type: "approve_workflow_approval", approvalId });
+      const approval = workflow.approvals.find((entry) => entry.id === approvalId);
+      if (approval?.linkedAgentCommandRequestId) {
+        await executeAgentCommandRequest(approval.linkedAgentCommandRequestId, true);
+      }
+    },
     setProviderSource: (nextSource: "openrouter" | "ollama") => {
       setProviderSource(nextSource);
       const nextModel = lastUsedModelByProvider[nextSource];
@@ -1246,6 +1411,14 @@ export function useChatWorkspaceState() {
       };
 
       void executeProviderRequest();
+      if (chatType !== "main") {
+        void proposeAgentCommand(
+          chatType,
+          sessionId,
+          `Requested from ${chatType} chat to support task execution and validation context.`,
+          activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId,
+        );
+      }
     },
     runBrowserScenario: async () => {
       const output = await browserAutomationService.executeScenario({
