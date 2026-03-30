@@ -5,6 +5,7 @@ import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
 
 const modeKeys = {
+  operator: "operator" as const,
   plan: "plan" as const,
   build: "build" as const,
   audit: "audit" as const,
@@ -12,6 +13,7 @@ const modeKeys = {
 };
 
 const modeColors: Record<AppMode, string> = {
+  operator: "bg-primary",
   plan: "bg-info",
   build: "bg-primary",
   audit: "bg-warning",
