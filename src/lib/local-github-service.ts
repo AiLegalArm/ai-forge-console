@@ -43,6 +43,11 @@ export interface PullRequestCreationResult {
   details?: string;
 }
 
+export interface PullRequestDraftValidationResult {
+  ok: boolean;
+  details?: string;
+}
+
 async function loadExecAdapter(): Promise<ShellExecAdapter | null> {
   const hasNode = typeof process !== "undefined" && Boolean(process.versions?.node);
   if (!hasNode) return null;
@@ -91,6 +96,31 @@ export class LocalGitHubService {
       ok: result.exitCode === 0,
       details: result.stderr || result.stdout || undefined,
     };
+  }
+
+  async validatePullRequestReadiness(input: { sourceBranch: string; targetBranch: string }): Promise<PullRequestDraftValidationResult> {
+    if (!input.sourceBranch || !input.targetBranch) {
+      return { ok: false, details: "Source and target branches are required." };
+    }
+    if (input.sourceBranch === input.targetBranch) {
+      return { ok: false, details: "Source and target branches must be different for a pull request." };
+    }
+
+    const headResult = await this.run("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+    if (headResult.exitCode !== 0) {
+      return { ok: false, details: headResult.stderr || headResult.stdout || "Unable to determine current branch." };
+    }
+    const activeBranch = headResult.stdout.trim();
+    if (activeBranch !== input.sourceBranch) {
+      return { ok: false, details: `Branch mismatch: active branch is ${activeBranch}, expected ${input.sourceBranch}.` };
+    }
+
+    const remoteResult = await this.run("git", ["remote", "get-url", "origin"]);
+    if (remoteResult.exitCode !== 0) {
+      return { ok: false, details: "Git origin remote is not configured." };
+    }
+
+    return { ok: true };
   }
 
   preparePullRequestDraft(input: PullRequestDraftInput): PullRequestDraftMetadata {

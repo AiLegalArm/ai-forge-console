@@ -3137,6 +3137,16 @@ export function useChatWorkspaceState() {
         linkedChatSessionId: task.linkedChatSessionId,
       });
       terminalService.selectSession(activeTerminal.id);
+      setRepository((prev) => ({
+        ...prev,
+        syncStatus: action === "push" || action === "pull" || action === "prepare_pr" || action === "create_pr" ? "syncing" : prev.syncStatus,
+      }));
+
+      const snapshotBeforeAction = await gitService.getSnapshot();
+      if (snapshotBeforeAction.branch === "unknown") {
+        setRepository((prev) => ({ ...prev, syncStatus: "idle" }));
+        return;
+      }
 
       const pendingPushApproval = workflow.approvals.find(
         (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "pending",
@@ -3271,6 +3281,48 @@ export function useChatWorkspaceState() {
           });
           return;
         }
+        const draftValidation = await githubService.validatePullRequestReadiness({
+          sourceBranch: taskBranch,
+          targetBranch: defaultTargetBranch,
+        });
+        if (!draftValidation.ok) {
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflow,
+              tasks: workflow.tasks.map((entry) =>
+                entry.id === task.id && entry.github
+                  ? {
+                      ...entry,
+                      github: {
+                        ...entry.github,
+                        pullRequest: {
+                          ...(entry.github.pullRequest ?? {
+                            id: `pr-${task.id}`,
+                            title: "",
+                            status: "draft_review",
+                            linkedAuditorIds: entry.linkedAuditorTypes ?? [],
+                            findings: [],
+                            mergeReadiness: "not_ready",
+                            releaseGateReadiness: "not_ready",
+                            linkedTaskIds: [],
+                            linkedSubtaskIds: [],
+                            draftPreparationStatus: "idle",
+                            creationStatus: "idle",
+                          }),
+                          pendingError: draftValidation.details ?? "PR draft preparation failed.",
+                          draftPreparationStatus: "failed",
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            },
+          });
+          setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+          return;
+        }
+
         const draft = githubService.preparePullRequestDraft({
           taskId: task.id,
           taskTitle: task.title,
@@ -3332,6 +3384,7 @@ export function useChatWorkspaceState() {
             ),
           },
         });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
         return;
       }
 
@@ -3389,6 +3442,28 @@ export function useChatWorkspaceState() {
           return;
         }
 
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            tasks: workflow.tasks.map((entry) =>
+              entry.id === task.id && entry.github && entry.github.pullRequest
+                ? {
+                    ...entry,
+                    github: {
+                      ...entry.github,
+                      pullRequest: {
+                        ...entry.github.pullRequest,
+                        creationStatus: "creating",
+                        pendingError: undefined,
+                      },
+                    },
+                  }
+                : entry,
+            ),
+          },
+        });
+
         const prCreateResult = await githubService.createPullRequest({
           title: existingDraft.title,
           body: existingDraft.body || "",
@@ -3428,6 +3503,7 @@ export function useChatWorkspaceState() {
                         status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
                         creationStatus: prCreateResult.ok ? "created" : "failed",
                         pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
+                        reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
                       },
                     },
                   }
@@ -3435,6 +3511,55 @@ export function useChatWorkspaceState() {
             ),
           },
         });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+        return;
+      }
+
+      if (action === "commit" && !snapshotBeforeAction.hasStagedChanges) {
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-git-commit-no-staged-${task.id}-${Date.now().toString(36)}`,
+                type: "blocked",
+                title: "Commit blocked",
+                details: "No staged changes. Stage files before committing.",
+                severity: "warning",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+        return;
+      }
+
+      if (action === "push" && snapshotBeforeAction.branch !== (task.github.branch?.localBranchName ?? snapshotBeforeAction.branch)) {
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-git-push-branch-mismatch-${task.id}-${Date.now().toString(36)}`,
+                type: "blocked",
+                title: "Push blocked",
+                details: `Branch mismatch: active branch is ${snapshotBeforeAction.branch}, expected ${task.github.branch?.localBranchName ?? snapshotBeforeAction.branch}.`,
+                severity: "critical",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        setRepository((prev) => ({ ...prev, syncStatus: snapshotBeforeAction.behindBy > 0 ? "behind" : "up_to_date" }));
         return;
       }
 
@@ -3504,16 +3629,22 @@ export function useChatWorkspaceState() {
         return;
       }
 
-      const result =
-        action === "stage_all"
-          ? await gitService.stageAll()
-          : action === "unstage_all"
-            ? await gitService.unstageAll()
-            : action === "commit"
-              ? await gitService.commit(task.github.commitWorkflow.draftMessage || `chore(${task.id}): update task changes`)
-              : action === "push"
-                ? await gitService.push(task.github.branch?.localBranchName)
-                : await gitService.pull();
+      const result = {
+        ok: terminalResult.command.state === "completed" && (terminalResult.command.exitCode ?? 1) === 0,
+        message:
+          terminalResult.command.state === "completed" ? "Command completed" : terminalResult.command.state === "failed" ? "Command failed" : "Command blocked",
+        details: terminalResult.command.failureDetail || terminalResult.command.failureReason || undefined,
+      };
+      const snapshotAfterAction = await gitService.getSnapshot();
+      setRepository((prev) => ({
+        ...prev,
+        branch: snapshotAfterAction.branch,
+        clean: snapshotAfterAction.clean,
+        aheadBy: snapshotAfterAction.aheadBy,
+        behindBy: snapshotAfterAction.behindBy,
+        syncStatus: snapshotAfterAction.behindBy > 0 ? "behind" : "up_to_date",
+        lastValidatedAtIso: new Date().toISOString(),
+      }));
 
       const nextWorkflow: WorkflowState = {
         ...workflow,
@@ -3551,6 +3682,7 @@ export function useChatWorkspaceState() {
                       status: result.ok ? "pushed" : "failed",
                       pendingError: result.ok ? undefined : result.details,
                       lastPushedAtIso: result.ok ? new Date().toISOString() : entry.github.pushWorkflow.lastPushedAtIso,
+                      behindRemoteByCommits: snapshotAfterAction.behindBy,
                     }
                   : entry.github.pushWorkflow,
             },

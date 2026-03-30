@@ -23,6 +23,8 @@ export interface GitRepositorySnapshot {
   stagedSummary: StagedChangesSummary;
   fileChanges: GitFileChange[];
   clean: boolean;
+  hasStagedChanges: boolean;
+  hasUnstagedChanges: boolean;
   aheadBy: number;
   behindBy: number;
 }
@@ -78,9 +80,10 @@ function parseTrackingStatus(aheadBy: number, behindBy: number): RepoBranchState
 }
 
 function summarizeChanges(fileChanges: GitFileChange[]): StagedChangesSummary {
-  const filesChanged = fileChanges.length;
-  const notablePaths = fileChanges.slice(0, 5).map((entry) => entry.path);
-  const hasUncommittedChanges = filesChanged > 0;
+  const staged = fileChanges.filter((entry) => entry.indexStatus !== " " && entry.indexStatus !== "?");
+  const filesChanged = staged.length;
+  const notablePaths = staged.slice(0, 5).map((entry) => entry.path);
+  const hasUncommittedChanges = fileChanges.length > 0;
 
   return {
     filesChanged,
@@ -123,6 +126,9 @@ export class LocalGitService {
       path: line.slice(3).trim(),
     }));
 
+    const hasStagedChanges = fileChanges.some((entry) => entry.indexStatus !== " " && entry.indexStatus !== "?");
+    const hasUnstagedChanges = fileChanges.some((entry) => entry.workTreeStatus !== " " || entry.indexStatus === "?");
+
     const branchState: RepoBranchState = {
       localBranchName: branch,
       remoteBranchName: branchLine.includes("...") ? `origin/${branch}` : undefined,
@@ -138,6 +144,8 @@ export class LocalGitService {
       stagedSummary: summarizeChanges(fileChanges),
       fileChanges,
       clean: fileChanges.length === 0,
+      hasStagedChanges,
+      hasUnstagedChanges,
       aheadBy,
       behindBy,
     };
@@ -173,6 +181,14 @@ export class LocalGitService {
   }
 
   async commit(message: string): Promise<GitOperationResult> {
+    const snapshot = await this.getSnapshot();
+    if (!snapshot.hasStagedChanges) {
+      return {
+        ok: false,
+        message: "Commit failed",
+        details: "No staged changes to commit.",
+      };
+    }
     const result = await this.run(["commit", "-m", message]);
     return {
       ok: result.exitCode === 0,
@@ -182,6 +198,21 @@ export class LocalGitService {
   }
 
   async push(branchName?: string): Promise<GitOperationResult> {
+    const snapshot = await this.getSnapshot();
+    if (branchName && snapshot.branch !== "unknown" && snapshot.branch !== branchName) {
+      return {
+        ok: false,
+        message: "Push failed",
+        details: `Branch mismatch: currently on ${snapshot.branch}, expected ${branchName}.`,
+      };
+    }
+    if (snapshot.aheadBy <= 0) {
+      return {
+        ok: false,
+        message: "Push failed",
+        details: "No local commits to push.",
+      };
+    }
     const args = branchName ? ["push", "-u", "origin", branchName] : ["push"];
     const result = await this.run(args);
     return {
