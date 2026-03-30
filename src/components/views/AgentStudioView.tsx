@@ -3,13 +3,14 @@ import { workerAgents, auditorAgents, remediatorAgents, type Agent, type AgentSt
 import { Bot, Shield, Wrench, ActivitySquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { Badge } from "@/components/ui/badge";
 
-const statusStyles: Record<AgentStatus, string> = {
-  idle: "bg-muted text-muted-foreground",
-  running: "bg-primary/20 text-primary",
-  completed: "bg-success/20 text-success",
-  error: "bg-destructive/20 text-destructive",
-  queued: "bg-warning/20 text-warning",
+const statusVariant: Record<AgentStatus, "neutral" | "default" | "success" | "destructive" | "warning"> = {
+  idle: "neutral",
+  running: "default",
+  completed: "success",
+  error: "destructive",
+  queued: "warning",
 };
 
 export function AgentStudioView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
@@ -26,65 +27,68 @@ export function AgentStudioView({ workspaceState }: { workspaceState: WorkspaceR
   const runtimeByName = useMemo(() => Object.fromEntries(activeRuntimeAgents.map((agent) => [agent.name.toLowerCase(), agent])), [activeRuntimeAgents]);
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-3 space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Bot className="h-4 w-4 text-primary" /> {t("as.title")}
+        <h1 className="text-xs font-semibold text-foreground flex items-center gap-2">
+          <Bot className="h-3.5 w-3.5 text-primary" /> {t("as.title")}
         </h1>
-        <div className="flex gap-1.5">
-          <button className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("as.custom")}</button>
-          <button className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("as.templates")}</button>
+        <div className="flex gap-1">
+          <button className="px-2 py-1 text-2xs font-mono bg-primary text-primary-foreground rounded-md">{t("as.custom")}</button>
+          <button className="px-2 py-1 text-2xs font-mono bg-surface text-muted-foreground rounded-md hover:bg-surface-hover transition-colors">{t("as.templates")}</button>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-2 text-[11px] grid md:grid-cols-3 gap-2">
-        <div className="text-muted-foreground">active provider <span className="font-mono text-foreground">{workspaceState.activeProvider}</span></div>
-        <div className="text-muted-foreground">active model <span className="font-mono text-foreground">{workspaceState.activeModel}</span></div>
-        <div className="text-muted-foreground">task context <span className="font-mono text-foreground">{workspaceState.currentTask}</span></div>
-        <div className="text-muted-foreground">budget pressure <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.budgetPressure}</span></div>
-        <div className="text-muted-foreground">provider pressure <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.providerHealth.openrouter}</span></div>
-        <div className="text-muted-foreground">fallback activity <span className="font-mono text-foreground">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
+      <div className="border border-border-subtle rounded-md p-2 text-2xs grid md:grid-cols-3 gap-2">
+        <div className="text-muted-foreground">provider <span className="font-mono text-foreground">{workspaceState.activeProvider}</span></div>
+        <div className="text-muted-foreground">model <span className="font-mono text-foreground">{workspaceState.activeModel}</span></div>
+        <div className="text-muted-foreground">task <span className="font-mono text-foreground">{workspaceState.currentTask}</span></div>
+        <div className="text-muted-foreground">budget <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.budgetPressure}</span></div>
+        <div className="text-muted-foreground">health <span className="font-mono text-foreground uppercase">{workspaceState.localInference.operational.providerHealth.openrouter}</span></div>
+        <div className="text-muted-foreground">fallbacks <span className="font-mono text-foreground">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
       </div>
 
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
+      <div className="flex gap-0 border-b border-border overflow-x-auto">
         {tabs.map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-b-2 transition shrink-0 ${activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-2xs font-mono border-b-2 transition-colors shrink-0 ${activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
           >
             <tab.icon className="h-3 w-3" />
             {tab.label}
-            <span className="font-mono text-[10px] bg-muted px-1 rounded">{tab.agents.length}</span>
+            <span className="text-2xs bg-surface px-1 rounded">{tab.agents.length}</span>
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+      <div className="space-y-0">
         {current.agents.map((a) => (
-          <AgentCard key={a.id} agent={a} runtimeMatch={runtimeByName[a.name.toLowerCase()]} />
+          <AgentRow key={a.id} agent={a} runtimeMatch={runtimeByName[a.name.toLowerCase()]} />
         ))}
       </div>
     </div>
   );
 }
 
-function AgentCard({ agent, runtimeMatch }: { agent: Agent; runtimeMatch?: WorkspaceRuntimeState["activeAgents"][number] }) {
-  const { t } = useI18n();
+function AgentRow({ agent, runtimeMatch }: { agent: Agent; runtimeMatch?: WorkspaceRuntimeState["activeAgents"][number] }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-3 hover:border-primary/30 transition cursor-pointer">
-      <div className="flex items-start justify-between mb-1.5 gap-2">
-        <h3 className="text-xs font-semibold text-foreground leading-tight">{agent.name}</h3>
-        <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${statusStyles[agent.status]}`}>{agent.status}</span>
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border-subtle hover:bg-surface-hover transition-colors cursor-pointer group">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
+          <Badge variant={statusVariant[agent.status]} size="sm">{agent.status}</Badge>
+        </div>
+        <p className="text-2xs text-muted-foreground truncate mt-0.5">{agent.description}</p>
       </div>
-      <p className="text-[10px] text-muted-foreground mb-2 line-clamp-2">{agent.description}</p>
-      <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-        <span className="font-mono">{agent.model}</span><span>•</span><span>{agent.provider}</span><span>•</span><span>{agent.successRate}%</span>
+      <div className="flex items-center gap-3 text-2xs text-muted-foreground font-mono shrink-0">
+        <span>{agent.model}</span>
+        <span>{agent.successRate}%</span>
+        <span className={runtimeMatch ? "text-success" : ""}>{runtimeMatch ? runtimeMatch.status : "inactive"}</span>
       </div>
-      <div className="mt-1.5 text-[10px] text-muted-foreground space-y-0.5">
-        <div>state: <span className={runtimeMatch ? "text-success font-mono" : "font-mono"}>{runtimeMatch ? runtimeMatch.status : "inactive"}</span></div>
-        <div>backend/provider: <span className="font-mono text-foreground">{runtimeMatch?.backend ?? agent.provider}</span></div>
-        <div>task: <span className="font-mono text-foreground">{runtimeMatch?.task ?? "none"}</span></div>
-      </div>
-      {agent.lastRun && <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><ActivitySquare className="h-3 w-3" /> {t("as.last")} {agent.lastRun} • {agent.tasksCompleted} {t("as.tasks")}</div>}
+      {agent.lastRun && (
+        <div className="text-2xs text-muted-foreground flex items-center gap-1 shrink-0">
+          <ActivitySquare className="h-3 w-3" />
+          {agent.tasksCompleted}
+        </div>
+      )}
     </div>
   );
 }

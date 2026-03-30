@@ -30,6 +30,11 @@ interface AppendTraceStepInput {
   type: ExecutionTraceEventType;
   title: string;
   details?: string;
+  phaseLabel?: string;
+  partialOutput?: string;
+  liveState?: ExecutionTrace["liveState"];
+  currentSubtask?: string;
+  blockedReason?: string;
   provider?: string;
   model?: string;
   failureType?: ExecutionFailureType;
@@ -49,6 +54,9 @@ const buildStep = (input: AppendTraceStepInput, status: ExecutionTraceStatus): E
   title: input.title,
   details: input.details,
   status,
+  liveState: input.liveState,
+  phaseLabel: input.phaseLabel,
+  partialOutput: input.partialOutput,
   provider: input.provider,
   model: input.model,
   failureType: input.failureType,
@@ -74,6 +82,11 @@ export function createExecutionTrace(input: CreateTraceInput): ExecutionTrace {
     evidenceIds: input.evidenceIds ?? [],
     provider: input.provider,
     model: input.model,
+    liveState: "preparing",
+    currentPhase: "Initializing run",
+    currentSubtask: undefined,
+    latestPartialOutput: undefined,
+    blockedReason: undefined,
     routingDecision: routingSummary,
     fallbackUsed: input.routingDecision?.usedFallback ?? false,
     status: "queued",
@@ -88,6 +101,8 @@ export function createExecutionTrace(input: CreateTraceInput): ExecutionTrace {
         title: "Run created",
         details: "Execution run was created and linked to workflow context.",
         status: "in_progress",
+        liveState: "preparing",
+        phaseLabel: "Preparing run",
         provider: input.provider,
         model: input.model,
         createdAtIso: input.nowIso,
@@ -132,6 +147,11 @@ export function appendExecutionTraceStep(workflow: WorkflowState, input: AppendT
         ...trace,
         provider: input.provider ?? trace.provider,
         model: input.model ?? trace.model,
+        liveState: input.liveState ?? trace.liveState,
+        currentPhase: input.phaseLabel ?? trace.currentPhase,
+        currentSubtask: input.currentSubtask ?? trace.currentSubtask,
+        latestPartialOutput: input.partialOutput ?? trace.latestPartialOutput,
+        blockedReason: input.blockedReason ?? trace.blockedReason,
         updatedAtIso: input.nowIso,
         status: nextStatus,
         steps: nextSteps,
@@ -181,6 +201,8 @@ export function completeExecutionTrace(
         updatedAtIso: input.nowIso,
         completedAtIso: input.nowIso,
         status: completedStatus,
+        liveState: input.outcome === "success" ? "completed" : input.outcome === "failed" ? "failed" : input.outcome === "blocked" ? "waiting_for_approval" : "idle",
+        blockedReason: input.outcome === "blocked" ? input.failureMessage ?? trace.blockedReason : undefined,
         finalResultState: input.outcome,
         statusTransitions: transitions,
         error:

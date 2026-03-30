@@ -201,6 +201,50 @@ export interface PullRequestReviewFinding {
   status: "open" | "resolved";
 }
 
+export type PullRequestReviewReadinessState = "draft" | "in_review" | "blocked" | "ready_for_review" | "ready_to_merge" | "not_ready";
+
+export type PullRequestMergeReadinessState = "not_ready" | "ready" | "blocked";
+
+export interface PullRequestReviewBlocker {
+  id: string;
+  category: "audit" | "test_build" | "browser_design" | "approval" | "repo_branch" | "release_policy" | "task_completion" | "pr_context";
+  message: string;
+  severity: "warning" | "critical";
+  linkedEntityId?: string;
+}
+
+export interface PullRequestReviewOperations {
+  identity: {
+    pullRequestId: string;
+    number?: number;
+    sourceBranch?: string;
+    targetBranch?: string;
+  };
+  linkage: {
+    taskIds: string[];
+    subtaskIds: string[];
+    reviewChatSessionId?: string;
+    linkedAuditId?: string;
+  };
+  reviewReadiness: {
+    state: PullRequestReviewReadinessState;
+    summary: string;
+  };
+  blockers: PullRequestReviewBlocker[];
+  auditBlockers: PullRequestReviewBlocker[];
+  mergeReadiness: {
+    state: PullRequestMergeReadinessState;
+    summary: string;
+  };
+  releaseHandoff: {
+    state: "not_ready" | "carryover_blockers" | "ready";
+    summary: string;
+    carryoverBlockers: string[];
+  };
+  recommendedNextSteps: string[];
+  evaluatedAtIso: string;
+}
+
 export interface PullRequestState {
   id: string;
   number?: number;
@@ -223,6 +267,7 @@ export interface PullRequestState {
   mergeReadiness: "not_ready" | "ready" | "blocked";
   releaseGateReadiness: "not_ready" | "ready" | "blocked";
   auditGate?: AuditGateDecision;
+  reviewOperations?: PullRequestReviewOperations;
 }
 
 export interface TaskGitHubState {
@@ -427,6 +472,17 @@ export type ExecutionTraceStatus =
   | "failed"
   | "interrupted";
 
+export type AgentRunLiveState =
+  | "idle"
+  | "preparing"
+  | "streaming"
+  | "waiting_for_tool"
+  | "waiting_for_approval"
+  | "blocked"
+  | "fallback_running"
+  | "completed"
+  | "failed";
+
 export type ExecutionFailureType =
   | "provider_failure"
   | "timeout"
@@ -458,6 +514,9 @@ export interface ExecutionTraceStep {
   title: string;
   details?: string;
   status: ExecutionTraceStatus;
+  liveState?: AgentRunLiveState;
+  phaseLabel?: string;
+  partialOutput?: string;
   provider?: string;
   model?: string;
   failureType?: ExecutionFailureType;
@@ -487,6 +546,11 @@ export interface ExecutionTrace {
   evidenceIds: string[];
   provider?: string;
   model?: string;
+  liveState: AgentRunLiveState;
+  currentPhase?: string;
+  currentSubtask?: string;
+  latestPartialOutput?: string;
+  blockedReason?: string;
   routingDecision?: string;
   fallbackUsed: boolean;
   status: ExecutionTraceStatus;

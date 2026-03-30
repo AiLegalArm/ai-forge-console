@@ -7,6 +7,8 @@ import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
+import { createDeployProviderClientFromEnv, RealDeployIntegrationService } from "@/lib/deploy-integration-service";
+import { deriveReleaseControlState, upsertApproval, upsertDeployment } from "@/lib/release-control-state";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalGitHubService } from "@/lib/local-github-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
@@ -25,8 +27,7 @@ import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-pol
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
 import { buildOperatorDashboard, type OperatorDashboardWorkspaceInput, type OperatorProjectSnapshot } from "@/lib/operator-dashboard";
-import { buildAuditorControlStateFromSignals } from "@/lib/auditor-execution-engine";
-import { evaluateGoNoGo } from "@/lib/release-go-no-go";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -336,6 +337,14 @@ export function useChatWorkspaceState() {
     Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>
   >({});
   const [policyState, setPolicyState] = useState<ExecutionPolicyState>({ recentDecisions: [] });
+  const [releaseControl, setReleaseControl] = useState(releaseControlState);
+  const deployIntegrationService = useMemo(
+    () => new RealDeployIntegrationService(createDeployProviderClientFromEnv()),
+    [],
+  );
+  useEffect(() => {
+    setReleaseControl((prev) => deriveReleaseControlState(prev, workflow, auditorControlState, activeEvidenceFlow));
+  }, [workflow, activeEvidenceFlow]);
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -699,7 +708,7 @@ export function useChatWorkspaceState() {
         ],
         workflow,
         auditors: auditorControlState,
-        releaseControl,
+        releaseControl: releaseControl,
         chatState,
         currentChatType,
         currentChatSessionId,
@@ -854,7 +863,7 @@ export function useChatWorkspaceState() {
     designSession,
     browserSession: activeBrowserSession,
     evidenceFlow: activeEvidenceFlow,
-    releaseControl,
+    releaseControl: releaseControl,
     localInference,
     localShell,
     projects,
@@ -935,7 +944,7 @@ export function useChatWorkspaceState() {
   const operatorDashboardInput = useMemo<OperatorDashboardWorkspaceInput>(() => ({
     workflow,
     auditors: auditorControlState,
-    releaseControl,
+    releaseControl: releaseControl,
     pendingApprovals,
     localInference,
     activeAgents,
@@ -2280,6 +2289,8 @@ export function useChatWorkspaceState() {
               : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
         status: "pending" as const,
+        liveState: "preparing" as const,
+        phaseLabel: "Building context",
         linked: mockResponse.linked,
         providerMeta: {
           ...mockResponse.providerMeta,
@@ -2343,6 +2354,10 @@ export function useChatWorkspaceState() {
         evidenceIds: linkedTask?.linkedEvidenceIds ?? [],
       });
       const traceId = trace.traceId;
+      pendingResponse.linked = {
+        ...pendingResponse.linked,
+        executionContextId: traceId,
+      };
       const tracedWorkflow = appendExecutionTraceStep(
         {
           ...workflowRef.current,
@@ -2354,6 +2369,8 @@ export function useChatWorkspaceState() {
           type: "context_built",
           title: "Context built",
           details: budgetDecision.warning ? `${chatContextPacket.summary} • ${budgetDecision.warning}` : chatContextPacket.summary,
+          phaseLabel: "Building context",
+          liveState: "preparing",
           nextStatus: "in_progress",
         },
       );
@@ -2365,6 +2382,8 @@ export function useChatWorkspaceState() {
           type: "routing_selected",
           title: "Routing selected",
           details: `${routingDecision.reason} • budget:${budgetDecision.pressure} • degraded:${localInference.operational.degradedMode ? "yes" : "no"}`,
+          phaseLabel: "Choosing model/provider",
+          liveState: "preparing",
           provider: selectedProviderLabel,
           model: selectedProviderModel,
           nextStatus: "waiting_provider",
@@ -2393,6 +2412,8 @@ export function useChatWorkspaceState() {
                 type: "run_completed",
                 title: "Orchestration completed",
                 details: "Main orchestrator handled request and updated workflow graph.",
+                phaseLabel: "Finalizing result",
+                liveState: "completed",
                 provider: selectedProviderLabel,
                 model: selectedProviderModel,
                 nextStatus: "completed",
@@ -2427,6 +2448,8 @@ export function useChatWorkspaceState() {
                         authorLabel: "Orchestrator",
                         content: orchestration.response,
                         status: "completed" as const,
+                        liveState: "completed" as const,
+                        phaseLabel: "Completed",
                         createdAtIso: new Date().toISOString(),
                         linked: {
                           taskId: updatedTask?.id,
@@ -2483,10 +2506,31 @@ export function useChatWorkspaceState() {
               nowIso: new Date().toISOString(),
               type: "provider_called",
               title: "Primary provider called",
+              phaseLabel: "Waiting for provider response",
+              liveState: "waiting_for_tool",
               provider: "OpenRouter",
               model: selectedProviderModel,
               nextStatus: "waiting_provider",
             }),
+          });
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...chatStateRef.current,
+              messagesBySessionId: {
+                ...chatStateRef.current.messagesBySessionId,
+                [sessionId]: (chatStateRef.current.messagesBySessionId[sessionId] ?? []).map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        status: "streaming" as const,
+                        liveState: "waiting_for_tool" as const,
+                        phaseLabel: "Waiting for provider",
+                      }
+                    : message,
+                ),
+              },
+            },
           });
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
             model: selectedProviderModel,
@@ -2511,6 +2555,9 @@ export function useChatWorkspaceState() {
                   type: "result_received",
                   title: "Provider result received",
                   details: "Primary provider returned output.",
+                  phaseLabel: "Streaming partial output",
+                  liveState: "streaming",
+                  partialOutput: openRouterResult.outputText.slice(0, 220),
                   provider: "OpenRouter",
                   model: openRouterResult.model,
                   nextStatus: "completed",
@@ -2537,7 +2584,10 @@ export function useChatWorkspaceState() {
                       ? {
                           ...message,
                           content: openRouterResult.outputText,
+                          partialContent: openRouterResult.outputText.slice(0, 220),
                           status: "completed" as const,
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed",
                           createdAtIso: openRouterResult.receivedAtIso,
                           providerMeta: {
                             provider: "OpenRouter",
@@ -2585,6 +2635,8 @@ export function useChatWorkspaceState() {
                     type: "provider_failed",
                     title: "Primary provider failed",
                     details: openRouterResult.errorMessage,
+                    phaseLabel: "Primary provider failed",
+                    liveState: "fallback_running",
                     failureType: openRouterResult.errorCode === "rate_limited" ? "timeout" : "provider_failure",
                     provider: "OpenRouter",
                     model: selectedProviderModel,
@@ -2596,6 +2648,8 @@ export function useChatWorkspaceState() {
                     type: "fallback_selected",
                     title: "Fallback selected",
                     details: `Fallback executed due to ${fallbackReason}.`,
+                    phaseLabel: "Fallback activated",
+                    liveState: "fallback_running",
                     provider: "Ollama",
                     model: routingDecision.fallbackModelId ?? undefined,
                     nextStatus: "fallback_in_progress",
@@ -2607,6 +2661,9 @@ export function useChatWorkspaceState() {
                   type: "result_received",
                   title: "Fallback result received",
                   details: "Local fallback completed successfully.",
+                  phaseLabel: "Fallback streaming output",
+                  liveState: "streaming",
+                  partialOutput: fallbackText.slice(0, 220),
                   provider: "Ollama",
                   model: routingDecision.fallbackModelId ?? undefined,
                   nextStatus: "completed",
@@ -2664,6 +2721,9 @@ export function useChatWorkspaceState() {
                           ...message,
                           content: fallbackText,
                           status: "completed" as const,
+                          partialContent: fallbackText.slice(0, 220),
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed via fallback",
                           createdAtIso: fallbackIso,
                         }
                       : message,
@@ -2681,6 +2741,9 @@ export function useChatWorkspaceState() {
             type: "provider_failed",
             title: "Primary provider failed",
             details: openRouterResult.errorMessage,
+            phaseLabel: "Primary provider failed",
+            liveState: "blocked",
+            blockedReason: openRouterResult.errorMessage,
             failureType: "provider_failure",
             provider: "OpenRouter",
             model: selectedProviderModel,
@@ -2693,6 +2756,8 @@ export function useChatWorkspaceState() {
               type: "fallback_selected",
               title: "Fallback selected",
               details: `Fallback provider ${routingDecision.fallbackProvider} selected by routing.`,
+              phaseLabel: "Fallback selected",
+              liveState: "fallback_running",
               provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
               model: routingDecision.fallbackModelId ?? undefined,
               nextStatus: "fallback_in_progress",
@@ -2703,6 +2768,8 @@ export function useChatWorkspaceState() {
               type: "fallback_called",
               title: "Fallback invoked",
               details: "Fallback execution attempted after primary provider failure.",
+              phaseLabel: "Fallback running",
+              liveState: "fallback_running",
               provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
               model: routingDecision.fallbackModelId ?? undefined,
               nextStatus: "fallback_in_progress",
@@ -2717,6 +2784,9 @@ export function useChatWorkspaceState() {
                 type: "run_failed",
                 title: "Run failed",
                 details: openRouterResult.errorMessage,
+                phaseLabel: "Execution failed",
+                liveState: "failed",
+                blockedReason: openRouterResult.errorMessage,
                 failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
                 nextStatus: "failed",
               }),
@@ -2747,15 +2817,17 @@ export function useChatWorkspaceState() {
                   message.id === responseId
                     ? {
                         ...message,
-                        content: runOutput.outputText,
+                        content: `Execution failed before completion.\n\n${openRouterResult.errorMessage}`,
                         role: chatType === "audit" ? "auditor" : chatType === "review" ? "reviewer" : chatType === "agent" ? "agent" : "orchestrator",
-                        status: "completed" as const,
-                        createdAtIso: runOutput.run.endedAtIso,
+                        status: "failed" as const,
+                        liveState: "failed" as const,
+                        phaseLabel: "Blocked",
+                        createdAtIso: failureIso,
                         providerMeta: {
-                          provider: usedProvider,
-                          model: runOutput.run.providerModelId,
-                          backend: runOutput.run.backend,
-                          routingKey: runOutput.run.routingDecision.profile,
+                          provider: "OpenRouter",
+                          model: selectedProviderModel,
+                          backend: "cloud",
+                          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                         },
                       }
                     : message,
@@ -2765,13 +2837,13 @@ export function useChatWorkspaceState() {
                 session.id === sessionId
                   ? {
                       ...session,
-                      lastMessageAtIso: runOutput.run.endedAtIso,
+                      lastMessageAtIso: failureIso,
                       unreadCount: 0,
                       providerMeta: {
-                        provider: usedProvider,
-                        model: runOutput.run.providerModelId,
-                        backend: runOutput.run.backend,
-                        routingKey: runOutput.run.routingDecision.profile,
+                        provider: "OpenRouter",
+                        model: selectedProviderModel,
+                        backend: "cloud",
+                        routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                       },
                     }
                   : session,
@@ -2782,33 +2854,20 @@ export function useChatWorkspaceState() {
             type: "set_workflow",
             workflow: {
               ...workflowRef.current,
-              executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
               activityEvents: [
                 {
-                  id: `activity-${runOutput.run.id}`,
-                  type: "execution_started",
-                  title: `${activeAgent?.name ?? "Agent"} executed via ${usedProvider}`,
-                  details: `${runOutput.run.providerModelId}${runOutput.run.usedFallback ? " (fallback)" : ""}`,
-                  taskId: runOutput.run.taskId,
-                  chatId: runOutput.run.chatSessionId,
-                  agentId: runOutput.run.agentId,
-                  agentRole: runOutput.run.agentRole,
-                  provider: usedProvider,
-                  backend: runOutput.run.backend,
-                  createdAtIso: runOutput.run.startedAtIso,
-                },
-                {
-                  id: `activity-${runOutput.run.id}-done`,
-                  type: "completed",
-                  title: `${activeAgent?.name ?? "Agent"} response completed`,
-                  details: runOutput.run.usedFallback ? "Completed with fallback route." : "Completed with primary route.",
-                  taskId: runOutput.run.taskId,
-                  chatId: runOutput.run.chatSessionId,
-                  agentId: runOutput.run.agentId,
-                  agentRole: runOutput.run.agentRole,
-                  provider: usedProvider,
-                  backend: runOutput.run.backend,
-                  createdAtIso: runOutput.run.endedAtIso,
+                  id: `activity-${traceId}-blocked`,
+                  type: "blocked",
+                  title: `${activeAgent?.name ?? "Agent"} execution blocked`,
+                  details: openRouterResult.errorMessage,
+                  taskId: linkedTask?.id,
+                  chatId: sessionId,
+                  agentId: activeSession?.linked.agentId ?? linkedTask?.ownerAgentId,
+                  provider: "OpenRouter",
+                  backend: "cloud",
+                  severity: "critical",
+                  traceId,
+                  createdAtIso: failureIso,
                 },
                 ...workflowRef.current.activityEvents,
               ],
@@ -2818,35 +2877,101 @@ export function useChatWorkspaceState() {
           return;
         }
 
-        setTimeout(() => {
-          const completionIso = new Date(Date.now()).toISOString();
+        const previewSegments = [
+          "Building context",
+          "Delegating subtasks",
+          "Running audit",
+          "Finalizing result",
+        ];
+        let segmentIndex = 0;
+        const partialInterval = setInterval(() => {
+          if (segmentIndex >= previewSegments.length) {
+            clearInterval(partialInterval);
+            const completionIso = new Date(Date.now()).toISOString();
+            dispatch({
+              type: "set_workflow",
+              workflow: completeExecutionTrace(
+                appendExecutionTraceStep(workflowRef.current, {
+                  traceId,
+                  nowIso: completionIso,
+                  type: "result_received",
+                  title: "Result received",
+                  details: "Local/mock execution completed.",
+                  phaseLabel: "Finalizing result",
+                  liveState: "completed",
+                  partialOutput: mockResponse.content.slice(0, 280),
+                  provider: selectedProviderLabel,
+                  model: selectedProviderModel,
+                  nextStatus: "completed",
+                }),
+                traceId,
+                {
+                  nowIso: completionIso,
+                  outcome: "success",
+                  usage: {
+                    executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
+                    executionWeight: "light",
+                  },
+                },
+              ),
+            });
+            const latestChat = chatStateRef.current;
+            const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: mockResponse.content,
+                          partialContent: mockResponse.content.slice(0, 280),
+                          status: "completed" as const,
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed",
+                          createdAtIso: completionIso,
+                        }
+                      : message,
+                  ),
+                },
+                sessions: latestChat.sessions.map((session) =>
+                  session.id === sessionId
+                    ? {
+                        ...session,
+                        lastMessageAtIso: completionIso,
+                        unreadCount: 0,
+                      }
+                    : session,
+                ),
+              },
+            });
+            return;
+          }
+          const nowIsoTick = new Date().toISOString();
+          const phaseLabel = previewSegments[segmentIndex];
+          const chunkSize = Math.ceil(mockResponse.content.length * ((segmentIndex + 1) / previewSegments.length));
+          const partialOutput = mockResponse.content.slice(0, chunkSize);
           dispatch({
             type: "set_workflow",
-            workflow: completeExecutionTrace(
-              appendExecutionTraceStep(workflowRef.current, {
-                traceId,
-                nowIso: completionIso,
-                type: "result_received",
-                title: "Result received",
-                details: "Local/mock execution completed.",
-                provider: selectedProviderLabel,
-                model: selectedProviderModel,
-                nextStatus: "completed",
-              }),
+            workflow: appendExecutionTraceStep(workflowRef.current, {
               traceId,
-              {
-                nowIso: completionIso,
-                outcome: "success",
-                usage: {
-                  executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
-                  executionWeight: "light",
-                },
-              },
-            ),
+              nowIso: nowIsoTick,
+              type: "provider_called",
+              title: phaseLabel,
+              details: "Partial update emitted while execution is in-flight.",
+              phaseLabel,
+              liveState: "streaming",
+              partialOutput,
+              provider: selectedProviderLabel,
+              model: selectedProviderModel,
+              nextStatus: "in_progress",
+            }),
           });
           const latestChat = chatStateRef.current;
           const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
-
           dispatch({
             type: "set_chat",
             chat: {
@@ -2857,26 +2982,20 @@ export function useChatWorkspaceState() {
                   message.id === responseId
                     ? {
                         ...message,
-                        content: mockResponse.content,
-                        status: "completed" as const,
-                        createdAtIso: completionIso,
+                        partialContent: partialOutput,
+                        content: partialOutput,
+                        status: "streaming" as const,
+                        liveState: "streaming" as const,
+                        phaseLabel,
+                        createdAtIso: nowIsoTick,
                       }
                     : message,
                 ),
               },
-              sessions: latestChat.sessions.map((session) =>
-                session.id === sessionId
-                  ? {
-                      ...session,
-                      lastMessageAtIso: completionIso,
-                      unreadCount: 0,
-                    }
-                  : session,
-              ),
             },
           });
-          setProviderExecutionState("completed");
-        }, 600);
+          segmentIndex += 1;
+        }, 450);
       };
 
       void executeProviderRequest();
@@ -3078,6 +3197,96 @@ export function useChatWorkspaceState() {
         sessionId: targetSession.id,
       });
     },
+    triggerDeploy: async (environment: "preview" | "production") => {
+      const activeCandidate = releaseControl.releaseCandidates.find((candidate) => candidate.id === releaseControl.activeCandidateId);
+      const branch = activeCandidate?.linkedBranch ?? repository.branch ?? "main";
+      const taskId = activeCandidate?.linkedTaskId;
+      const policyDecision = evaluatePolicy({
+        actionType: "deploy_action",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "release_action", id: activeCandidate?.id, label: `deploy:${environment}` },
+      });
+      if (policyDecision.blocked) {
+        return { ok: false, message: policyDecision.rationale };
+      }
+      if (policyDecision.requiresApproval && environment === "production") {
+        const approval = deployIntegrationService.buildDeployApproval(taskId, currentChatSessionId, environment);
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            approvals: upsertApproval(workflow.approvals, approval),
+            activityEvents: [
+              {
+                id: `activity-${approval.id}`,
+                type: "waiting_for_approval",
+                title: "Production deploy awaiting approval",
+                details: approval.reason,
+                taskId,
+                chatId: currentChatSessionId,
+                severity: "warning",
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        return { ok: false, message: "Approval required", approvalId: approval.id };
+      }
+
+      const result = await deployIntegrationService.triggerDeploy({
+        releaseControl,
+        projectId: activeProjectId,
+        repository: repository.name ?? localShell.project.repositoryName ?? activeProject?.name ?? "workspace",
+        branch,
+        taskId,
+        chatId: currentChatSessionId,
+        releaseCandidateId: activeCandidate?.id,
+        environment,
+        approvals: workflow.approvals,
+        releaseState: releaseControl.finalDecision.status === "go" ? "go" : releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go" ? "blocked" : "warning",
+      });
+
+      if (!result.ok || !result.deployment) {
+        return result;
+      }
+
+      setReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...workflow,
+          activityEvents: [
+            {
+              id: `activity-deploy-${result.deployment.id}`,
+              type: "deploy_triggered",
+              title: `${environment} deploy triggered`,
+              details: `${result.deployment.id} (${result.deployment.status})`,
+              taskId,
+              chatId: currentChatSessionId,
+              severity: "info",
+              createdAtIso: new Date().toISOString(),
+            },
+            ...workflow.activityEvents,
+          ],
+        },
+      });
+      return result;
+    },
+    refreshDeployStatus: async (deploymentId: string) => {
+      const deployment = releaseControl.deployments.find((entry) => entry.id === deploymentId);
+      if (!deployment) return { ok: false, message: "Deployment not found." };
+      const result = await deployIntegrationService.refreshDeploymentStatus(deployment);
+      if (!result.ok || !result.deployment) return result;
+      setReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      return result;
+    },
     refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
@@ -3118,6 +3327,16 @@ export function useChatWorkspaceState() {
         linkedChatSessionId: task.linkedChatSessionId,
       });
       terminalService.selectSession(activeTerminal.id);
+      setRepository((prev) => ({
+        ...prev,
+        syncStatus: action === "push" || action === "pull" || action === "prepare_pr" || action === "create_pr" ? "syncing" : prev.syncStatus,
+      }));
+
+      const snapshotBeforeAction = await gitService.getSnapshot();
+      if (snapshotBeforeAction.branch === "unknown") {
+        setRepository((prev) => ({ ...prev, syncStatus: "idle" }));
+        return;
+      }
 
       const pendingPushApproval = workflow.approvals.find(
         (approval) => approval.taskId === taskId && approval.category === "push_approval" && approval.status === "pending",
@@ -3252,6 +3471,48 @@ export function useChatWorkspaceState() {
           });
           return;
         }
+        const draftValidation = await githubService.validatePullRequestReadiness({
+          sourceBranch: taskBranch,
+          targetBranch: defaultTargetBranch,
+        });
+        if (!draftValidation.ok) {
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflow,
+              tasks: workflow.tasks.map((entry) =>
+                entry.id === task.id && entry.github
+                  ? {
+                      ...entry,
+                      github: {
+                        ...entry.github,
+                        pullRequest: {
+                          ...(entry.github.pullRequest ?? {
+                            id: `pr-${task.id}`,
+                            title: "",
+                            status: "draft_review",
+                            linkedAuditorIds: entry.linkedAuditorTypes ?? [],
+                            findings: [],
+                            mergeReadiness: "not_ready",
+                            releaseGateReadiness: "not_ready",
+                            linkedTaskIds: [],
+                            linkedSubtaskIds: [],
+                            draftPreparationStatus: "idle",
+                            creationStatus: "idle",
+                          }),
+                          pendingError: draftValidation.details ?? "PR draft preparation failed.",
+                          draftPreparationStatus: "failed",
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            },
+          });
+          setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+          return;
+        }
+
         const draft = githubService.preparePullRequestDraft({
           taskId: task.id,
           taskTitle: task.title,
@@ -3285,8 +3546,9 @@ export function useChatWorkspaceState() {
                     github: {
                       ...entry.github,
                       branchLifecycle: "review_opened",
-                      pullRequest: {
-                        ...(entry.github.pullRequest ?? {
+                      pullRequest: (() => {
+                        const nextPullRequest = {
+                          ...(entry.github.pullRequest ?? {
                           id: `pr-${task.id}`,
                           status: "draft_review",
                           reviewChatSessionId: task.linkedChatSessionId,
@@ -3306,13 +3568,30 @@ export function useChatWorkspaceState() {
                         draftPreparationStatus: "ready",
                         creationStatus: "ready",
                         pendingError: undefined,
-                      },
+                        };
+                        const reviewOps = evaluatePullRequestReviewOperations({
+                          task: entry,
+                          pullRequest: nextPullRequest,
+                          workflow,
+                          auditors: auditorControlState,
+                          evidenceFlow: activeEvidenceFlow,
+                          defaultBranch: workflow.github.repositories.find((repo) => repo.id === entry.github?.repositoryId)?.defaultBranch,
+                          releaseGateBlocked: releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go",
+                        });
+                        return {
+                          ...nextPullRequest,
+                          mergeReadiness: reviewOps?.mergeReadiness.state ?? "not_ready",
+                          releaseGateReadiness: reviewOps?.releaseHandoff.state === "ready" ? "ready" : reviewOps?.releaseHandoff.state === "carryover_blockers" ? "blocked" : "not_ready",
+                          reviewOperations: reviewOps,
+                        };
+                      })(),
                     },
                   }
                 : entry,
             ),
           },
         });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
         return;
       }
 
@@ -3370,6 +3649,28 @@ export function useChatWorkspaceState() {
           return;
         }
 
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            tasks: workflow.tasks.map((entry) =>
+              entry.id === task.id && entry.github && entry.github.pullRequest
+                ? {
+                    ...entry,
+                    github: {
+                      ...entry.github,
+                      pullRequest: {
+                        ...entry.github.pullRequest,
+                        creationStatus: "creating",
+                        pendingError: undefined,
+                      },
+                    },
+                  }
+                : entry,
+            ),
+          },
+        });
+
         const prCreateResult = await githubService.createPullRequest({
           title: existingDraft.title,
           body: existingDraft.body || "",
@@ -3402,20 +3703,87 @@ export function useChatWorkspaceState() {
                     github: {
                       ...entry.github,
                       branchLifecycle: prCreateResult.ok ? "review_opened" : entry.github.branchLifecycle,
-                      pullRequest: {
-                        ...entry.github.pullRequest,
-                        number: prCreateResult.number ?? entry.github.pullRequest.number,
-                        url: prCreateResult.url ?? entry.github.pullRequest.url,
-                        status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
-                        creationStatus: prCreateResult.ok ? "created" : "failed",
-                        pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
-                      },
+                      pullRequest: (() => {
+                        const nextPullRequest = {
+                          ...entry.github.pullRequest,
+                          number: prCreateResult.number ?? entry.github.pullRequest.number,
+                          url: prCreateResult.url ?? entry.github.pullRequest.url,
+                          status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
+                          creationStatus: prCreateResult.ok ? "created" : "failed",
+                          pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
+                          reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
+                        };
+                        const reviewOps = evaluatePullRequestReviewOperations({
+                          task: entry,
+                          pullRequest: nextPullRequest,
+                          workflow,
+                          auditors: auditorControlState,
+                          evidenceFlow: activeEvidenceFlow,
+                          defaultBranch: workflow.github.repositories.find((repo) => repo.id === entry.github?.repositoryId)?.defaultBranch,
+                          releaseGateBlocked: releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go",
+                        });
+                        return {
+                          ...nextPullRequest,
+                          mergeReadiness: reviewOps?.mergeReadiness.state ?? "not_ready",
+                          releaseGateReadiness: reviewOps?.releaseHandoff.state === "ready" ? "ready" : reviewOps?.releaseHandoff.state === "carryover_blockers" ? "blocked" : "not_ready",
+                          reviewOperations: reviewOps,
+                        };
+                      })(),
                     },
                   }
                 : entry,
             ),
           },
         });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+        return;
+      }
+
+      if (action === "commit" && !snapshotBeforeAction.hasStagedChanges) {
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-git-commit-no-staged-${task.id}-${Date.now().toString(36)}`,
+                type: "blocked",
+                title: "Commit blocked",
+                details: "No staged changes. Stage files before committing.",
+                severity: "warning",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        setRepository((prev) => ({ ...prev, syncStatus: "up_to_date" }));
+        return;
+      }
+
+      if (action === "push" && snapshotBeforeAction.branch !== (task.github.branch?.localBranchName ?? snapshotBeforeAction.branch)) {
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-git-push-branch-mismatch-${task.id}-${Date.now().toString(36)}`,
+                type: "blocked",
+                title: "Push blocked",
+                details: `Branch mismatch: active branch is ${snapshotBeforeAction.branch}, expected ${task.github.branch?.localBranchName ?? snapshotBeforeAction.branch}.`,
+                severity: "critical",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        setRepository((prev) => ({ ...prev, syncStatus: snapshotBeforeAction.behindBy > 0 ? "behind" : "up_to_date" }));
         return;
       }
 
@@ -3485,16 +3853,22 @@ export function useChatWorkspaceState() {
         return;
       }
 
-      const result =
-        action === "stage_all"
-          ? await gitService.stageAll()
-          : action === "unstage_all"
-            ? await gitService.unstageAll()
-            : action === "commit"
-              ? await gitService.commit(task.github.commitWorkflow.draftMessage || `chore(${task.id}): update task changes`)
-              : action === "push"
-                ? await gitService.push(task.github.branch?.localBranchName)
-                : await gitService.pull();
+      const result = {
+        ok: terminalResult.command.state === "completed" && (terminalResult.command.exitCode ?? 1) === 0,
+        message:
+          terminalResult.command.state === "completed" ? "Command completed" : terminalResult.command.state === "failed" ? "Command failed" : "Command blocked",
+        details: terminalResult.command.failureDetail || terminalResult.command.failureReason || undefined,
+      };
+      const snapshotAfterAction = await gitService.getSnapshot();
+      setRepository((prev) => ({
+        ...prev,
+        branch: snapshotAfterAction.branch,
+        clean: snapshotAfterAction.clean,
+        aheadBy: snapshotAfterAction.aheadBy,
+        behindBy: snapshotAfterAction.behindBy,
+        syncStatus: snapshotAfterAction.behindBy > 0 ? "behind" : "up_to_date",
+        lastValidatedAtIso: new Date().toISOString(),
+      }));
 
       const nextWorkflow: WorkflowState = {
         ...workflow,
@@ -3532,6 +3906,7 @@ export function useChatWorkspaceState() {
                       status: result.ok ? "pushed" : "failed",
                       pendingError: result.ok ? undefined : result.details,
                       lastPushedAtIso: result.ok ? new Date().toISOString() : entry.github.pushWorkflow.lastPushedAtIso,
+                      behindRemoteByCommits: snapshotAfterAction.behindBy,
                     }
                   : entry.github.pushWorkflow,
             },

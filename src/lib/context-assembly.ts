@@ -1,5 +1,6 @@
 import type { ChatType } from "@/types/chat";
 import type { ContextInjectionPacket, ContextSnippet, ContextTarget } from "@/types/context";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import type { MemoryContextEnvelope } from "@/types/memory";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 
@@ -99,6 +100,24 @@ export function assembleContextPacket(input: ContextAssemblyInput): ContextInjec
   if (target === "review_chat" || target === "release_flow") {
     baseSnippets.push(formatSnippet("release_status", workspace.releaseReadinessStatus, "high"));
     baseSnippets.push(formatSnippet("pending_approvals", `${workspace.pendingApprovals.length}`));
+    const reviewOps = evaluatePullRequestReviewOperations({
+      task: activeTask,
+      pullRequest: activeTask?.github?.pullRequest,
+      workflow: workspace.workflow,
+      auditors: workspace.auditors,
+      evidenceFlow: workspace.evidenceFlow,
+      defaultBranch: workspace.workflow.github.repositories.find((repo) => repo.id === activeTask?.github?.repositoryId)?.defaultBranch,
+      releaseGateBlocked: workspace.releaseReadinessStatus === "blocked" || workspace.releaseReadinessStatus === "no_go",
+    });
+    if (reviewOps) {
+      baseSnippets.push(formatSnippet("pr_review_state", reviewOps.reviewReadiness.state, "high"));
+      baseSnippets.push(formatSnippet("merge_readiness", reviewOps.mergeReadiness.state, "high"));
+      baseSnippets.push(formatSnippet("pr_blockers", `${reviewOps.blockers.length}`));
+      baseSnippets.push(formatSnippet("release_handoff", reviewOps.releaseHandoff.state));
+      if (reviewOps.recommendedNextSteps.length > 0) {
+        baseSnippets.push(formatSnippet("review_next", reviewOps.recommendedNextSteps[0]));
+      }
+    }
     if (memoryContext?.auditRelease.releaseDecisions.length) {
       baseSnippets.push(formatSnippet("release_history", `${memoryContext.auditRelease.releaseDecisions.length} prior decisions`));
     }
