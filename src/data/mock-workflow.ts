@@ -7,7 +7,6 @@ import type {
   GitHubRepositoryConnection,
   AgentCommandRequest,
   WorkflowDelegation,
-  WorkflowSubtask,
   WorkflowTaskGraph,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
@@ -334,7 +333,7 @@ const tasks: WorkflowTask[] = [
   },
 ];
 
-const subtasks: WorkflowSubtask[] = [
+const auditSubtasks: WorkflowSubtask[] = [
   {
     id: "subtask-rbac-frontend-browser",
     taskId: "task-rbac-exec",
@@ -782,13 +781,11 @@ const activityEvents: AgentActivityEvent[] = [
   },
 ];
 
-const gatedSubtasks = applySubtaskAuditBlocking(subtasks, auditBlockers);
+const gatedSubtasks = applySubtaskAuditBlocking(auditSubtasks, auditBlockers);
 const gatedTasks = applyParentTaskBlocking(tasks, gatedSubtasks, auditBlockers);
 
 export const workflowState: WorkflowState = {
   tasks: gatedTasks,
-  subtasks: gatedSubtasks,
-  tasks,
   subtasks,
   delegations,
   taskGraphs,
