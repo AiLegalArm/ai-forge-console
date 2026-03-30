@@ -91,6 +91,13 @@ export interface BrowserScenarioStep {
   id: string;
   label: string;
   expected: string;
+  action?:
+    | { kind: "navigate"; url?: string; waitUntil?: "load" | "domcontentloaded" | "networkidle"; timeoutMs?: number }
+    | { kind: "click"; selector: string; timeoutMs?: number }
+    | { kind: "type"; selector: string; value: string; clear?: boolean; timeoutMs?: number }
+    | { kind: "wait_for"; selector?: string; timeoutMs?: number; state?: "visible" | "hidden" | "attached" | "detached" }
+    | { kind: "assert_text"; selector: string; contains: string; timeoutMs?: number }
+    | { kind: "press"; selector: string; key: string; timeoutMs?: number };
   status: "pending" | "passed" | "failed";
   resultNote?: string;
   durationMs?: number;
