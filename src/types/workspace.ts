@@ -12,6 +12,7 @@ import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
 import type { AuditorVerdict } from "@/types/audits";
 import type { ContextInjectionPacket } from "@/types/context";
 import type { ExecutionPolicyState } from "@/types/execution-policy";
+import type { MemoryContextEnvelope, WorkspaceMemoryState } from "@/types/memory";
 
 export type PrivacyMode = "private" | "team";
 export interface AgentRuntimeState {
@@ -117,6 +118,8 @@ export interface WorkspaceRuntimeState {
     auditor: ContextInjectionPacket;
     releaseFlow: ContextInjectionPacket;
   };
+  memory: WorkspaceMemoryState;
+  contextEnvelope: MemoryContextEnvelope;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;
