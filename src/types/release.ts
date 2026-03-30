@@ -60,6 +60,7 @@ export interface DomainRecord {
 export type ReviewState = "not_opened" | "in_review" | "changes_requested" | "approved" | "blocked";
 export type ReleaseReadiness = "ready" | "warning" | "blocked";
 export type GoNoGoStatus = "ready" | "warning" | "blocked" | "go" | "no_go";
+export type ReleaseOperationsSignalState = "ready" | "warning" | "blocked";
 
 export interface ReleaseCandidate {
   id: string;
@@ -108,97 +109,130 @@ export interface GoNoGoDecision {
   summary: string;
 }
 
+export interface ReleaseCandidateLinkage {
+  branch: string;
+  taskId?: string;
+  reviewId?: string;
+  deploymentId?: string;
+  domainIds: string[];
+}
+
 export interface ReleaseBlockerSummary {
   total: number;
   critical: number;
   high: number;
-  mediumOrLower: number;
   unresolved: string[];
 }
 
-export interface ReleaseApprovalStatus {
-  id: string;
-  title: string;
+export interface ReleaseApprovalDetail {
+  approvalId: string;
   category: WorkflowApproval["category"];
+  title: string;
   status: WorkflowApproval["status"];
   requestedBy: string;
   requestedAtIso: string;
-  linkedTaskId?: string;
+  relation: string;
 }
 
 export interface ReleaseApprovalSummary {
-  required: ReleaseApprovalStatus[];
-  completed: ReleaseApprovalStatus[];
-  missing: ReleaseApprovalStatus[];
+  required: ReleaseApprovalDetail[];
+  completed: ReleaseApprovalDetail[];
+  missing: ReleaseApprovalDetail[];
 }
 
 export interface ReleaseAuditSummary {
   verdict: AuditorVerdict;
-  linkedAuditorTypes: AuditorType[];
-  unresolvedBlockers: AuditBlockerCondition[];
-  gateStates: Array<{ auditorType: AuditorType; verdict: AuditorVerdict }>;
+  activeBlockers: number;
+  unresolvedFindings: number;
+  gateSummary: Array<{ stage: string; verdict: "go" | "no_go" | "not_ready" }>;
 }
 
-export interface ReleaseReadinessSnapshot {
-  review: ReleaseReadiness;
-  deploy: ReleaseReadiness;
-  domain: ReleaseReadiness;
-  rollback: ReleaseReadiness;
+export interface ReleaseReviewReadiness {
+  state: ReviewState;
+  status: ReleaseOperationsSignalState;
+  summary: string;
 }
 
 export interface ReleaseDeployReadiness {
   previewStatus: DeploymentStatus | "missing";
   productionStatus: DeploymentStatus | "missing";
-  rolloutState: "not_started" | "in_progress" | "blocked" | "ready";
-  dependencyState: "healthy" | "degraded" | "blocked";
+  rolloutState: string;
+  dependencyState: string[];
   blockers: string[];
+  status: ReleaseOperationsSignalState;
+}
+
+export interface ReleaseDomainReadiness {
+  status: ReleaseOperationsSignalState;
+  summary: string;
+  blockingDomains: string[];
 }
 
 export interface ReleaseRollbackReadiness {
-  rollbackAvailable: boolean;
+  availability: "available" | "limited" | "unavailable";
   rollbackTarget?: string;
-  recommendedAction: "safe_to_promote" | "fallback_plan_required";
-  notes: string[];
+  fallbackPlanRequired: boolean;
+  summary: string;
+  status: ReleaseOperationsSignalState;
 }
 
-export interface ReleaseDecisionFactors {
+export interface ReleaseGoNoGoSurface {
+  status: GoNoGoStatus;
+  blockerSeverity: "none" | "warning" | "critical";
   unresolvedExecutionFailures: number;
-  overrideApplied: boolean;
-  overrideReason?: string;
+  operatorOverrides: string[];
+  summary: string;
+  blockers: string[];
+  warnings: string[];
 }
 
-export interface ReleaseCandidateInspection {
-  candidateId: string;
-  linkedTaskIds: string[];
-  linkedSubtaskIds: string[];
-  unresolvedBlockers: string[];
-  auditFindings: string[];
-  reviewState: ReviewState;
-  executionTraceSummaries: Array<{
-    traceId: string;
-    outcome: "success" | "failed" | "blocked" | "interrupted";
-    summary: string;
-    updatedAtIso: string;
-  }>;
-  evidenceReferences: string[];
+export interface ReleaseInspectionItem {
+  id: string;
+  label: string;
+  status: string;
+  relation?: string;
 }
 
-export interface ReleaseOperationsPanelState {
-  currentReleaseCandidateId: string;
+export interface ReleaseEvidenceReference {
+  evidenceId: string;
+  title: string;
+  severity: string;
+  blocking: boolean;
+}
+
+export interface ReleaseExecutionTraceReference {
+  traceId: string;
+  outcome: "success" | "failed" | "blocked" | "interrupted";
+  summary: string;
+  updatedAtIso: string;
+}
+
+export interface ReleaseOperationsPanel {
+  generatedAtIso: string;
+  candidate: {
+    id: string;
+    label: string;
+    linkage: ReleaseCandidateLinkage;
+  };
   blockerSummary: ReleaseBlockerSummary;
   approvalSummary: ReleaseApprovalSummary;
   auditSummary: ReleaseAuditSummary;
-  readiness: ReleaseReadinessSnapshot;
+  reviewReadiness: ReleaseReviewReadiness;
   deployReadiness: ReleaseDeployReadiness;
+  domainReadiness: ReleaseDomainReadiness;
   rollbackReadiness: ReleaseRollbackReadiness;
-  inspections: Record<string, ReleaseCandidateInspection>;
-  goNoGo: GoNoGoDecision;
-  decisionFactors: ReleaseDecisionFactors;
-  relatedChatSessions: {
-    reviewChatId?: string;
-    auditChatId?: string;
+  decisionSurface: ReleaseGoNoGoSurface;
+  inspection: {
+    tasks: ReleaseInspectionItem[];
+    subtasks: ReleaseInspectionItem[];
+    unresolvedBlockers: string[];
+    auditResults: string[];
+    executionTraces: ReleaseExecutionTraceReference[];
+    evidence: ReleaseEvidenceReference[];
   };
-  relatedActivityEventIds: string[];
+  activityLinks: string[];
+  reviewChatReferences: string[];
+  auditChatReferences: string[];
 }
 
 export interface ReleaseControlState {
@@ -208,5 +242,5 @@ export interface ReleaseControlState {
   releaseHistoryIds: string[];
   activeCandidateId: string;
   finalDecision: GoNoGoDecision;
-  operations: ReleaseOperationsPanelState;
+  operationsPanel: ReleaseOperationsPanel;
 }

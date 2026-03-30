@@ -1,5 +1,17 @@
-import { Package, CheckCircle, XCircle, Clock, AlertTriangle, Shield, ClipboardList, Rocket, Undo2, ListChecks } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  CircleDot,
+  Clock,
+  Package,
+  Rocket,
+  RotateCcw,
+  Shield,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { ReleaseOperationsSignalState } from "@/types/release";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 const stateIcons: Record<string, React.ReactNode> = {
@@ -10,12 +22,17 @@ const stateIcons: Record<string, React.ReactNode> = {
   no_go: <XCircle className="h-3.5 w-3.5 text-destructive" />,
 };
 
+const statusTone: Record<ReleaseOperationsSignalState, string> = {
+  ready: "text-success",
+  warning: "text-warning",
+  blocked: "text-destructive",
+};
+
 export function ReleaseCenterView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
   const releaseControlState = workspaceState.releaseControl;
   const activeCandidate = releaseControlState.releaseCandidates.find((candidate) => candidate.id === releaseControlState.activeCandidateId);
-  const operations = releaseControlState.operations;
-  const inspection = activeCandidate ? operations.inspections[activeCandidate.id] : undefined;
+  const operations = releaseControlState.operationsPanel;
 
   return (
     <div className="p-4 space-y-4">
@@ -25,24 +42,139 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
         </h1>
       </div>
 
-      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-2 mb-2">
           <Shield className="h-5 w-5 text-destructive" />
-          <span className="text-sm font-bold text-destructive uppercase">{operations.goNoGo.status}</span>
+          <span className="text-sm font-bold text-destructive uppercase">{operations.decisionSurface.status}</span>
+          <span className="text-[11px] text-muted-foreground">{operations.decisionSurface.summary}</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div><span className="text-muted-foreground">Blockers</span><div className="font-mono text-lg text-destructive">{operations.blockerSummary.total}</div></div>
-          <div><span className="text-muted-foreground">Warnings</span><div className="font-mono text-lg text-warning">{operations.goNoGo.warnings.length}</div></div>
+          <div><span className="text-muted-foreground">Critical blockers</span><div className="font-mono text-lg text-destructive">{operations.blockerSummary.critical}</div></div>
           <div><span className="text-muted-foreground">Approvals missing</span><div className="font-mono text-lg text-warning">{operations.approvalSummary.missing.length}</div></div>
-          <div><span className="text-muted-foreground">Rollback-ready deploys</span><div className="font-mono text-lg text-success">{releaseControlState.deployments.filter((deployment) => deployment.rollbackAvailable).length}</div></div>
+          <div><span className="text-muted-foreground">Execution failures</span><div className="font-mono text-lg text-warning">{operations.decisionSurface.unresolvedExecutionFailures}</div></div>
         </div>
       </div>
-      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Release context packet</span>
-          <span className="text-primary uppercase">{workspaceState.contextPackets.releaseFlow.target}</span>
+
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        <h2 className="text-xs font-semibold text-foreground">Current release candidate</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Candidate</span><span className="font-mono">{operations.candidate.label}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Branch</span><span className="font-mono">{operations.candidate.linkage.branch}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Task</span><span className="font-mono">{operations.candidate.linkage.taskId ?? "—"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Review</span><span className="font-mono">{operations.candidate.linkage.reviewId ?? "—"}</span></div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Deploy readiness</span><span className={`font-mono uppercase ${statusTone[operations.deployReadiness.status]}`}>{operations.deployReadiness.status}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Domain readiness</span><span className={`font-mono uppercase ${statusTone[operations.domainReadiness.status]}`}>{operations.domainReadiness.status}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Rollback readiness</span><span className={`font-mono uppercase ${statusTone[operations.rollbackReadiness.status]}`}>{operations.rollbackReadiness.status}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Review state</span><span className="font-mono">{operations.reviewReadiness.state}</span></div>
+          </div>
         </div>
-        <p className="text-muted-foreground">{workspaceState.contextPackets.releaseFlow.summary}</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className="bg-card border border-border rounded-lg p-4 space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Approval collection</h3>
+          <div className="text-xs text-muted-foreground">Required: {operations.approvalSummary.required.length} • Completed: {operations.approvalSummary.completed.length} • Missing: {operations.approvalSummary.missing.length}</div>
+          <div className="space-y-1 max-h-48 overflow-auto">
+            {operations.approvalSummary.required.map((approval) => (
+              <div key={approval.approvalId} className="rounded border border-border p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">{approval.title}</span>
+                  <span className={`font-mono uppercase ${approval.status === "approved" ? "text-success" : "text-warning"}`}>{approval.status}</span>
+                </div>
+                <div className="text-muted-foreground">{approval.category} • {approval.requestedBy}</div>
+                <div className="text-muted-foreground">For: {approval.relation}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-card border border-border rounded-lg p-4 space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-2"><Shield className="h-3.5 w-3.5 text-primary" /> Audit and review state</h3>
+          <div className="text-xs space-y-1">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Audit verdict</span><span className="font-mono uppercase">{operations.auditSummary.verdict}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Active blockers</span><span className="font-mono text-destructive">{operations.auditSummary.activeBlockers}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Unresolved findings</span><span className="font-mono">{operations.auditSummary.unresolvedFindings}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Review readiness</span><span className={`font-mono uppercase ${statusTone[operations.reviewReadiness.status]}`}>{operations.reviewReadiness.status}</span></div>
+          </div>
+          <div className="space-y-1">
+            {operations.inspection.auditResults.map((result) => (
+              <div key={result} className="text-[11px] text-muted-foreground">• {result}</div>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-card border border-border rounded-lg p-4 space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-2"><Rocket className="h-3.5 w-3.5 text-primary" /> Deploy readiness surface</h3>
+          <div className="text-xs space-y-1">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Preview deploy</span><span className="font-mono">{operations.deployReadiness.previewStatus}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Production deploy</span><span className="font-mono">{operations.deployReadiness.productionStatus}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Rollout state</span><span className="font-mono">{operations.deployReadiness.rolloutState}</span></div>
+          </div>
+          {operations.deployReadiness.blockers.map((blocker) => (
+            <div key={blocker} className="text-[11px] text-destructive">• {blocker}</div>
+          ))}
+          {operations.deployReadiness.dependencyState.map((dependency) => (
+            <div key={dependency} className="text-[11px] text-muted-foreground">◦ {dependency}</div>
+          ))}
+        </section>
+
+        <section className="bg-card border border-border rounded-lg p-4 space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-2"><RotateCcw className="h-3.5 w-3.5 text-primary" /> Rollback readiness surface</h3>
+          <div className="text-xs space-y-1">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Availability</span><span className="font-mono uppercase">{operations.rollbackReadiness.availability}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Rollback target</span><span className="font-mono">{operations.rollbackReadiness.rollbackTarget ?? "none"}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Fallback planning</span><span className="font-mono">{operations.rollbackReadiness.fallbackPlanRequired ? "required" : "not required"}</span></div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">{operations.rollbackReadiness.summary}</p>
+        </section>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4 space-y-2">
+        <h2 className="text-xs font-semibold text-foreground">Release candidate inspection</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <div className="text-[11px] font-medium text-foreground mb-1">Tasks/Subtasks</div>
+            {operations.inspection.tasks.concat(operations.inspection.subtasks).slice(0, 8).map((item) => (
+              <div key={item.id} className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <CircleDot className="h-3 w-3" /> {item.id} · {item.status}
+              </div>
+            ))}
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-foreground mb-1">Evidence + traces</div>
+            {operations.inspection.evidence.slice(0, 4).map((evidence) => (
+              <div key={evidence.evidenceId} className="text-[11px] text-muted-foreground">• {evidence.title} ({evidence.severity}{evidence.blocking ? ", blocking" : ""})</div>
+            ))}
+            {operations.inspection.executionTraces.slice(0, 3).map((trace) => (
+              <div key={trace.traceId} className="text-[11px] text-muted-foreground">◦ {trace.traceId}: {trace.outcome}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Go / No-Go decision surface</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div><span className="text-muted-foreground">Decision</span><div className="font-mono uppercase text-destructive">{operations.decisionSurface.status}</div></div>
+          <div><span className="text-muted-foreground">Severity</span><div className="font-mono uppercase">{operations.decisionSurface.blockerSeverity}</div></div>
+          <div><span className="text-muted-foreground">Activity refs</span><div className="font-mono">{operations.activityLinks.length}</div></div>
+          <div><span className="text-muted-foreground">Review/Audit chats</span><div className="font-mono">{operations.reviewChatReferences.length + operations.auditChatReferences.length}</div></div>
+        </div>
+        <div className="mt-2 space-y-1">
+          {operations.decisionSurface.blockers.slice(0, 5).map((blocker) => (
+            <div key={blocker} className="text-[11px] text-destructive">• {blocker}</div>
+          ))}
+          {operations.decisionSurface.warnings.slice(0, 3).map((warning) => (
+            <div key={warning} className="text-[11px] text-warning">⚠ {warning}</div>
+          ))}
+          {operations.decisionSurface.operatorOverrides.map((override) => (
+            <div key={override} className="text-[11px] text-muted-foreground">Override: {override}</div>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -116,26 +248,6 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
                 <div key={note} className="text-[11px] text-muted-foreground">• {note}</div>
               ))}
             </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-lg p-4 space-y-2 text-xs">
-            <h3 className="font-semibold flex items-center gap-2"><Shield className="h-3.5 w-3.5 text-primary" /> Final go / no-go decision</h3>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Decision state</span>
-              <span className={`font-mono uppercase ${operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{operations.goNoGo.status}</span>
-            </div>
-            <div className="flex items-center justify-between"><span className="text-muted-foreground">Unresolved execution failures</span><span className="font-mono text-warning">{operations.decisionFactors.unresolvedExecutionFailures}</span></div>
-            <div className="flex items-center justify-between"><span className="text-muted-foreground">Operator override</span><span className="font-mono">{operations.decisionFactors.overrideApplied ? "applied" : "none"}</span></div>
-            <div className="text-muted-foreground">{operations.goNoGo.summary}</div>
-            <div className="space-y-1">
-              {operations.goNoGo.noGoSignals.slice(0, 4).map((signal) => (
-                <div key={signal} className="text-[11px] text-destructive">• {signal}</div>
-              ))}
-              {operations.goNoGo.goSignals.slice(0, 3).map((signal) => (
-                <div key={signal} className="text-[11px] text-success">✓ {signal}</div>
-              ))}
-            </div>
-            <div className="text-[11px] text-muted-foreground">Activity references: {operations.relatedActivityEventIds.slice(0, 5).join(", ")}</div>
           </div>
         </div>
       ) : null}
