@@ -13,6 +13,7 @@ import type { AuditorVerdict } from "@/types/audits";
 import type { ContextInjectionPacket } from "@/types/context";
 import type { ExecutionPolicyState } from "@/types/execution-policy";
 import type { MemoryContextEnvelope, WorkspaceMemoryState } from "@/types/memory";
+import type { OperatorDashboardState } from "@/types/operator-dashboard";
 
 export type PrivacyMode = "private" | "team";
 export interface AgentRuntimeState {
@@ -120,6 +121,7 @@ export interface WorkspaceRuntimeState {
   };
   memory: WorkspaceMemoryState;
   contextEnvelope: MemoryContextEnvelope;
+  operatorDashboard: OperatorDashboardState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;

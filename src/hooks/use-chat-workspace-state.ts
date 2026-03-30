@@ -23,6 +23,7 @@ import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembl
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
+import { buildOperatorDashboard, type OperatorDashboardWorkspaceInput, type OperatorProjectSnapshot } from "@/lib/operator-dashboard";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -728,7 +729,7 @@ export function useChatWorkspaceState() {
     return decision;
   };
 
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope"> = {
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope" | "operatorDashboard"> = {
     // runtime-selected route is reflected in chat/session metadata and surfaced here for badges
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
@@ -835,11 +836,38 @@ export function useChatWorkspaceState() {
     };
   }, [contextEnvelope, workspaceStateBase]);
 
+  const operatorProjectSnapshots = useMemo<OperatorProjectSnapshot[]>(() => projects.map((project) => {
+    const scoped = projectScopedStateById[project.id];
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      providerSource: scoped?.providerSource ?? providerSource,
+      activeModel: scoped?.activeModel ?? activeModel,
+      routingProfile: scoped?.routingProfile ?? routingProfile,
+      workflow: scoped?.workflow ?? workflow,
+      localInference: scoped?.localInference ?? localInference,
+    };
+  }), [projects, projectScopedStateById, providerSource, activeModel, routingProfile, workflow, localInference]);
+
+  const operatorDashboardInput = useMemo<OperatorDashboardWorkspaceInput>(() => ({
+    workflow,
+    auditors: auditorControlState,
+    releaseControl: releaseControlState,
+    pendingApprovals,
+    localInference,
+    activeAgents,
+    activeProjectId,
+    releaseReadinessStatus: releaseControlState.finalDecision.status,
+  }), [workflow, pendingApprovals, localInference, activeProjectId]);
+
+  const operatorDashboard = useMemo(() => buildOperatorDashboard(operatorDashboardInput, operatorProjectSnapshots), [operatorDashboardInput, operatorProjectSnapshots]);
+
   const workspaceState: WorkspaceRuntimeState = {
     ...workspaceStateBase,
     contextPackets,
     memory: workspaceMemory,
     contextEnvelope,
+    operatorDashboard,
   };
 
   useEffect(() => {
