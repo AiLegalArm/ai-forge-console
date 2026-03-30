@@ -167,8 +167,25 @@ export interface HybridModelRegistryEntry {
 export interface RoutingInput {
   agentRole: AgentRole;
   taskType: TaskType;
+  chatType?: "main" | "agent" | "audit" | "review";
   privacyMode: PrivacyRoutingMode;
+  appModeProfile?: AppRoutingModeProfile;
+  routingMode?: RoutingMode;
   preferredBackend?: ProviderBackend;
+  preferredProvider?: ModelProvider;
+  preferredModelId?: string;
+  fallbackProvider?: ModelProvider;
+  fallbackModelId?: string;
+  openRouterAvailable?: boolean;
+  ollamaAvailable?: boolean;
+  localOnly?: boolean;
+  releaseCritical?: boolean;
+  auditorType?: "code" | "security" | "ai" | "prompt" | "tool" | "git" | "test" | "release";
+  operatorOverride?: {
+    provider?: ModelProvider;
+    modelId?: string;
+    allowFallback?: boolean;
+  };
   fallbackRequired?: boolean;
   maxCostTier?: ModelTier;
   latencyPriority?: "low" | "medium" | "high";
@@ -180,6 +197,14 @@ export interface RoutingDecision {
   selectedModelId: string | null;
   fallbackProvider: ModelProvider;
   fallbackModelId: string | null;
+  usedFallback: boolean;
+  deploymentTarget: "local" | "cloud";
+  privacyAffected: boolean;
+  costAffected: boolean;
+  qualityAffected: boolean;
+  overrideApplied: boolean;
+  resolution: "resolved" | "error";
+  errorCode?: "no_available_provider" | "no_available_model";
   reason: string;
 }
 
@@ -247,6 +272,7 @@ export interface BackendRoutingState {
     release: RoutingPresetId;
     cloudAllowed: boolean;
   }>;
+  runtimeDecisionsBySurface?: Record<string, RoutingDecision>;
 }
 
 export interface LocalInferenceRuntimeState {
