@@ -26,12 +26,16 @@ import {
 } from "lucide-react";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
+  proposed: <Clock className="h-3 w-3 text-muted-foreground" />,
+  assigned: <Clock className="h-3 w-3 text-primary" />,
+  accepted: <Clock className="h-3 w-3 text-primary" />,
   completed: <CheckCircle className="h-3 w-3 text-success" />,
   in_progress: <Play className="h-3 w-3 text-primary animate-pulse" />,
   queued: <Clock className="h-3 w-3 text-muted-foreground" />,
   blocked: <XCircle className="h-3 w-3 text-destructive" />,
   awaiting_approval: <Clock className="h-3 w-3 text-warning" />,
   failed: <XCircle className="h-3 w-3 text-destructive" />,
+  cancelled: <XCircle className="h-3 w-3 text-muted-foreground" />,
 };
 
 interface WorkspaceViewProps {
@@ -85,12 +89,15 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
 function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void }) {
   const { t } = useI18n();
   const tasks = workspaceState.workflow.tasks;
+  const subtasks = workspaceState.workflow.subtasks;
   const completed = tasks.filter((s) => s.status === "completed").length;
   const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
 
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
   const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
+  const parentTask = tasks.find((task) => task.id === "task-rbac") ?? activeTask;
+  const delegatedSubtasks = subtasks.filter((subtask) => subtask.parentTaskId === parentTask?.id);
   const taskEvidence = activeTask?.id ? workspaceState.evidenceFlow.linkedByTaskId[activeTask.id] ?? [] : [];
   const blockerEvidence = workspaceState.evidenceFlow.records.filter((record) => record.blocking);
 
@@ -105,7 +112,29 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
           <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
-          {tasks.map((task) => (
+          {parentTask ? (
+            <div className="py-1 border-b border-border/30">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[parentTask.status]}
+                <span className="text-[10px] text-foreground truncate font-semibold">{parentTask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                owner {parentTask.ownerAgentId ?? "orchestrator"} • {Math.round(parentTask.completionRate ?? 0)}% rollup
+              </div>
+            </div>
+          ) : null}
+          {delegatedSubtasks.map((subtask) => (
+            <div key={subtask.id} className="py-1 border-b border-border/30 last:border-0 pl-2">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[subtask.status]}
+                <span className="text-[10px] text-foreground truncate">{subtask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                {subtask.assignedAgentId} • {subtask.priority} • {subtask.status}
+              </div>
+            </div>
+          ))}
+          {tasks.filter((task) => !task.parentTaskId).map((task) => (
             <div key={task.id} className="py-1 border-b border-border/30 last:border-0">
               <div className="flex items-center gap-1.5">
                 {taskStatusIcons[task.status]}
@@ -115,6 +144,22 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
               {task.designBrowserBlockers ? (
                 <div className="text-[9px] text-warning font-mono pl-4">{t("rail.design_blockers" as never)} {task.designBrowserBlockers}</div>
               ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">delegations</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.delegations.map((delegation) => (
+            <div key={delegation.id} className="rounded border border-border p-1.5 text-[10px]">
+              <div className="text-foreground font-mono truncate">
+                {delegation.subtaskId} → {delegation.toAgentId}
+              </div>
+              <div className="text-muted-foreground">
+                {delegation.state} • {delegation.assignmentMetadata.expectedOutcome}
+              </div>
             </div>
           ))}
         </div>
