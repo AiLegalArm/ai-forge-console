@@ -44,6 +44,7 @@ import type { ContextInjectionPacket } from "@/types/context";
 import type { ExecutionPolicyAction, ExecutionPolicyContext, ExecutionPolicyState } from "@/types/execution-policy";
 
 type Action =
+  | { type: "set_all_state"; payload: WorkspaceReducerState }
   | { type: "set_active_chat_type"; chatType: ChatType }
   | { type: "select_session"; chatType: ChatType; sessionId: string }
   | { type: "update_draft"; sessionId: string; value: string }
@@ -65,8 +66,33 @@ interface WorkspaceReducerState {
   evidenceFlow: EvidenceFlowState;
 }
 
+interface ProjectScopedWorkspaceState {
+  chat: ChatState;
+  workflow: WorkflowState;
+  localInference: LocalInferenceRuntimeState;
+  localShell: LocalShellWorkspaceState;
+  browserSession: BrowserSession;
+  evidenceFlow: EvidenceFlowState;
+  providerSource: "openrouter" | "ollama";
+  deploymentMode: "local" | "cloud" | "hybrid";
+  activeModel: string;
+  routingProfile: AppRoutingModeProfile;
+  repository: WorkspaceRepositoryState;
+  projectCommandRegistry: ProjectCommandRegistry;
+  pendingCommandLaunchByApprovalId: Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>;
+  policyState: ExecutionPolicyState;
+  routingDecisionsBySession: Record<string, RoutingDecision>;
+  lastUsedModelByProvider: Record<"openrouter" | "ollama", string>;
+}
+
+const cloneSnapshot = <T,>(value: T): T =>
+  typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value)) as T;
+
 function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducerState {
   switch (action.type) {
+    case "set_all_state": {
+      return action.payload;
+    }
     case "set_active_chat_type": {
       return { ...state, chat: { ...state.chat, activeChatType: action.chatType } };
     }
@@ -159,6 +185,58 @@ function reducer(state: WorkspaceReducerState, action: Action): WorkspaceReducer
 }
 
 export function useChatWorkspaceState() {
+  const buildProjectScopedState = (
+    _projectId: string,
+    projectName: string,
+    projectRoot: string,
+    provider: "openrouter" | "ollama" = "ollama",
+  ): ProjectScopedWorkspaceState => ({
+    chat: cloneSnapshot(initialChatState),
+    workflow: cloneSnapshot(initialWorkflowState),
+    localInference: cloneSnapshot(localInferenceRuntime),
+    localShell: {
+      ...cloneSnapshot(localShellState),
+      project: {
+        ...cloneSnapshot(localShellState.project),
+        workspaceName: projectName,
+        activeProjectRoot: projectRoot,
+      },
+    },
+    browserSession: cloneSnapshot(browserSession),
+    evidenceFlow: cloneSnapshot(evidenceFlowState),
+    providerSource: provider,
+    deploymentMode: "hybrid",
+    activeModel: provider === "openrouter" ? "openai/gpt-4.1" : "qwen3-coder:14b",
+    routingProfile: "balanced",
+    repository: {
+      connected: false,
+      syncStatus: "idle",
+      connectionState: "disconnected",
+    },
+    projectCommandRegistry: {
+      projectRoot,
+      generatedAtIso: new Date().toISOString(),
+      commands: [],
+      primaryCommandIds: [],
+      diagnostics: {
+        agentsFileFound: false,
+        agentsCommandsExtracted: 0,
+        packageJsonFound: false,
+        packageScriptsExtracted: 0,
+        makefileFound: false,
+        makeTargetsExtracted: 0,
+        warnings: ["Command registry not loaded yet."],
+      },
+    },
+    pendingCommandLaunchByApprovalId: {},
+    policyState: { recentDecisions: [] },
+    routingDecisionsBySession: {},
+    lastUsedModelByProvider: {
+      openrouter: "openai/gpt-4.1",
+      ollama: "qwen3-coder:14b",
+    },
+  });
+
   const [state, dispatch] = useReducer(reducer, {
     chat: initialChatState,
     workflow: initialWorkflowState,
@@ -191,6 +269,12 @@ export function useChatWorkspaceState() {
     () => new BrowserAutomationService(new RuntimeBridgeBrowserAdapter()),
     [],
   );
+  const defaultProjectId = "project-local-1";
+  const defaultProjectRoot = localShell.project.activeProjectRoot;
+  const defaultProjectName = localShell.project.workspaceName;
+  const [projectScopedStateById, setProjectScopedStateById] = useState<Record<string, ProjectScopedWorkspaceState>>({
+    [defaultProjectId]: buildProjectScopedState(defaultProjectId, defaultProjectName, defaultProjectRoot),
+  });
   const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
   const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
   const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
@@ -221,7 +305,7 @@ export function useChatWorkspaceState() {
       },
     },
   ]);
-  const [activeProjectId, setActiveProjectId] = useState("project-local-1");
+  const [activeProjectId, setActiveProjectId] = useState(defaultProjectId);
   const [repository, setRepository] = useState<WorkspaceRepositoryState>({
     connected: false,
     syncStatus: "idle",
@@ -459,6 +543,30 @@ export function useChatWorkspaceState() {
   };
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const syncProjectScopedSnapshot = (projectId: string) => {
+    setProjectScopedStateById((prev) => ({
+      ...prev,
+      [projectId]: {
+        ...(prev[projectId] ?? buildProjectScopedState(projectId, activeProject?.name ?? localShell.project.workspaceName, activeProject?.projectRoot ?? localShell.project.activeProjectRoot, providerSource)),
+        chat: cloneSnapshot(chatStateRef.current),
+        workflow: cloneSnapshot(workflowRef.current),
+        localInference: cloneSnapshot(localInferenceRef.current),
+        localShell: cloneSnapshot(localShellRef.current),
+        browserSession: cloneSnapshot(state.browserSession),
+        evidenceFlow: cloneSnapshot(state.evidenceFlow),
+        providerSource,
+        deploymentMode,
+        activeModel,
+        routingProfile,
+        repository: cloneSnapshot(repository),
+        projectCommandRegistry: cloneSnapshot(projectCommandRegistry),
+        pendingCommandLaunchByApprovalId: cloneSnapshot(pendingCommandLaunchByApprovalId),
+        policyState: cloneSnapshot(policyState),
+        routingDecisionsBySession: cloneSnapshot(routingDecisionsBySession),
+        lastUsedModelByProvider: cloneSnapshot(lastUsedModelByProvider),
+      },
+    }));
+  };
   const memoryStorageKey = useMemo(
     () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
     [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
@@ -527,102 +635,26 @@ export function useChatWorkspaceState() {
   );
 
   useEffect(() => {
-    persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
-  }, [memoryStorageKey, workspaceMemory]);
-
-  const contextEnvelope = useMemo(
-    () =>
-      retrieveMemoryContext(workspaceMemory, {
-        projectId: activeProject?.id ?? activeProjectId,
-        taskId: activeWorkflowTask?.id,
-        chatSessionId: currentChatSessionId,
-        releaseCandidateId: activeWorkflowTask?.linkedReleaseCandidateId,
-        agentRole: activeWorkflowTask?.ownerAgentId,
-        audience:
-          currentChatType === "agent"
-            ? "agent"
-            : currentChatType === "audit" || currentChatType === "review"
-              ? "auditor"
-              : "main_chat",
-      }),
-    [
-      workspaceMemory,
-      activeProject?.id,
-      activeProjectId,
-      activeWorkflowTask?.id,
-      activeWorkflowTask?.linkedReleaseCandidateId,
-      activeWorkflowTask?.ownerAgentId,
-      currentChatSessionId,
-      currentChatType,
-    ],
-  );
-
-  const memoryStorageKey = useMemo(
-    () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
-    [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
-  );
-  const [persistedMemory, setPersistedMemory] = useState<WorkspaceMemoryState | null>(null);
-
-  useEffect(() => {
-    setPersistedMemory(loadWorkspaceMemory(memoryStorageKey));
-  }, [memoryStorageKey]);
-
-  const workspaceMemorySnapshot = useMemo(
-    () =>
-      buildWorkspaceMemorySnapshot({
-        projectId: activeProject?.id ?? activeProjectId,
-        projectName: activeProject?.name ?? localShell.project.workspaceName,
-        projectPath: activeProject?.projectRoot ?? localShell.project.activeProjectRoot,
-        repositorySummary: repository.connected
-          ? `${repository.name ?? "repo"} @ ${repository.branch ?? "unknown"} (${repository.syncStatus ?? "idle"})`
-          : "Repository disconnected",
-        discoveredInstructions: localShell.project.instructionSources,
-        commandRegistry: projectCommandRegistry,
-        providerSource,
-        activeModel,
-        deploymentMode,
-        localCloudPreference: deploymentMode === "local" ? "local" : deploymentMode === "cloud" ? "cloud" : "hybrid",
-        knownConventions: [
-          ...(projectCommandRegistry.diagnostics.agentsFileFound ? ["AGENTS.md instructions present"] : []),
-          ...(projectCommandRegistry.diagnostics.packageJsonFound ? ["package.json scripts workflow"] : []),
-          ...(projectCommandRegistry.diagnostics.makefileFound ? ["Makefile targets available"] : []),
-        ],
-        workflow,
-        auditors: auditorControlState,
-        releaseControl: releaseControlState,
-        chatState,
-        currentChatType,
-        currentChatSessionId,
-        activeAgentId: activeWorkflowTask?.ownerAgentId ?? currentSession?.linked.agentId,
-      }),
-    [
-      activeModel,
-      activeProject?.id,
-      activeProject?.name,
-      activeProject?.projectRoot,
-      activeProjectId,
-      chatState,
-      currentChatSessionId,
-      currentChatType,
-      currentSession?.linked.agentId,
-      deploymentMode,
-      localShell.project.activeProjectRoot,
-      localShell.project.instructionSources,
-      localShell.project.workspaceName,
-      projectCommandRegistry,
-      providerSource,
-      repository.branch,
-      repository.connected,
-      repository.name,
-      repository.syncStatus,
-      workflow,
-      activeWorkflowTask?.ownerAgentId,
-    ],
-  );
-  const workspaceMemory = useMemo(
-    () => mergeWorkspaceMemory(persistedMemory, workspaceMemorySnapshot),
-    [persistedMemory, workspaceMemorySnapshot],
-  );
+    syncProjectScopedSnapshot(activeProjectId);
+  }, [
+    activeProjectId,
+    activeModel,
+    deploymentMode,
+    pendingCommandLaunchByApprovalId,
+    policyState,
+    projectCommandRegistry,
+    repository,
+    routingDecisionsBySession,
+    routingProfile,
+    providerSource,
+    lastUsedModelByProvider,
+    state.browserSession,
+    state.chat,
+    state.evidenceFlow,
+    state.localInference,
+    state.localShell,
+    state.workflow,
+  ]);
 
   useEffect(() => {
     persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
@@ -1787,6 +1819,10 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [id]: buildProjectScopedState(id, nextName, payload?.projectRoot || normalizedPath, providerSource),
+      }));
       dispatch({
         type: "set_local_shell",
         localShell: {
@@ -1838,6 +1874,10 @@ export function useChatWorkspaceState() {
       ]);
       setActiveProjectId(id);
       setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [id]: buildProjectScopedState(id, payload.name, `manual://${id}`, providerSource),
+      }));
     },
     connectRepository: async (payload: { pathOrUrl: string; name?: string; branch?: string }) => {
       const activeProject = projects.find((project) => project.id === activeProjectId);
@@ -1931,9 +1971,37 @@ export function useChatWorkspaceState() {
       );
     },
     setActiveProject: (projectId: string) => {
+      syncProjectScopedSnapshot(activeProjectId);
+      const selectedProject = projects.find((project) => project.id === projectId);
+      const projectRoot = selectedProject?.localPath || selectedProject?.projectRoot || localShellRef.current.project.activeProjectRoot;
+      const scopedState =
+        projectScopedStateById[projectId] ??
+        buildProjectScopedState(projectId, selectedProject?.name ?? "Project", projectRoot, selectedProject?.provider?.source ?? "ollama");
+
+      dispatch({
+        type: "set_all_state",
+        payload: {
+          chat: cloneSnapshot(scopedState.chat),
+          workflow: cloneSnapshot(scopedState.workflow),
+          localInference: cloneSnapshot(scopedState.localInference),
+          localShell: cloneSnapshot(scopedState.localShell),
+          browserSession: cloneSnapshot(scopedState.browserSession),
+          evidenceFlow: cloneSnapshot(scopedState.evidenceFlow),
+        },
+      });
+      setProviderSource(scopedState.providerSource);
+      setDeploymentMode(scopedState.deploymentMode);
+      setActiveModel(scopedState.activeModel);
+      setRoutingProfile(scopedState.routingProfile);
+      setRepository(cloneSnapshot(scopedState.repository));
+      setProjectCommandRegistry(cloneSnapshot(scopedState.projectCommandRegistry));
+      setPendingCommandLaunchByApprovalId(cloneSnapshot(scopedState.pendingCommandLaunchByApprovalId));
+      setPolicyState(cloneSnapshot(scopedState.policyState));
+      setRoutingDecisionsBySession(cloneSnapshot(scopedState.routingDecisionsBySession));
+      setLastUsedModelByProvider(cloneSnapshot(scopedState.lastUsedModelByProvider));
+
       setActiveProjectId(projectId);
       setProjects((prev) => prev.map((project) => ({ ...project, status: project.id === projectId ? "active" : "idle" })));
-      const selectedProject = projects.find((project) => project.id === projectId);
       if (selectedProject?.source === "local" && (selectedProject.localPath || selectedProject.projectRoot)) {
         const nextPath = selectedProject.localPath || selectedProject.projectRoot || localShellRef.current.project.activeProjectRoot;
         dispatch({
@@ -1950,22 +2018,10 @@ export function useChatWorkspaceState() {
           },
         });
       }
-      if (selectedProject?.repository?.connected) {
-        setRepository({
-          connected: true,
-          name: selectedProject.repository.name,
-          url: selectedProject.repository.url,
-          rootPath: selectedProject.projectRoot ?? selectedProject.localPath,
-          branch: selectedProject.repository.branch,
-          syncStatus: selectedProject.repository.syncStatus,
-          connectionState: "connected",
-          relationToProject: "bound",
-          readyForGitWorkflow: true,
-          source: selectedProject.source === "git" ? "project_bound" : "local_path",
-        });
-      } else {
-        setRepository({ connected: false, syncStatus: "idle", connectionState: "disconnected" });
-      }
+      setProjectScopedStateById((prev) => ({
+        ...prev,
+        [projectId]: scopedState,
+      }));
     },
     sendMessage: (chatType: ChatType) => {
       const currentChat = chatStateRef.current;
