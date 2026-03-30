@@ -44,7 +44,7 @@ interface WorkspaceViewProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve: (approvalId: string) => void;
+  onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
@@ -82,7 +82,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   );
 }
 
-function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void }) {
+function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void> }) {
   const { t } = useI18n();
   const tasks = workspaceState.workflow.tasks;
   const completed = tasks.filter((s) => s.status === "completed").length;

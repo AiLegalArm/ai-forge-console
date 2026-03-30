@@ -46,6 +46,8 @@ export default function AppLayout() {
     connectRepository,
     disconnectRepository,
     setActiveProject,
+    runProjectCommand,
+    runProjectCommandCategory,
   } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
@@ -103,6 +105,8 @@ export default function AppLayout() {
               onConnectRepository={connectRepository}
               onDisconnectRepository={disconnectRepository}
               onActiveProjectChange={setActiveProject}
+              onRunProjectCommand={runProjectCommand}
+              onRunProjectCommandCategory={runProjectCommandCategory}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />
