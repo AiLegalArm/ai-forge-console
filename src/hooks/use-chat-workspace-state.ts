@@ -28,6 +28,7 @@ import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-pol
 import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import { evaluateBudgetGuardrails, shouldEnterDegradedMode } from "@/lib/operational-guardrails";
 import { buildOperatorDashboard, type OperatorDashboardWorkspaceInput, type OperatorProjectSnapshot } from "@/lib/operator-dashboard";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -3356,8 +3357,9 @@ export function useChatWorkspaceState() {
                     github: {
                       ...entry.github,
                       branchLifecycle: "review_opened",
-                      pullRequest: {
-                        ...(entry.github.pullRequest ?? {
+                      pullRequest: (() => {
+                        const nextPullRequest = {
+                          ...(entry.github.pullRequest ?? {
                           id: `pr-${task.id}`,
                           status: "draft_review",
                           reviewChatSessionId: task.linkedChatSessionId,
@@ -3377,7 +3379,23 @@ export function useChatWorkspaceState() {
                         draftPreparationStatus: "ready",
                         creationStatus: "ready",
                         pendingError: undefined,
-                      },
+                        };
+                        const reviewOps = evaluatePullRequestReviewOperations({
+                          task: entry,
+                          pullRequest: nextPullRequest,
+                          workflow,
+                          auditors: auditorControlState,
+                          evidenceFlow: activeEvidenceFlow,
+                          defaultBranch: workflow.github.repositories.find((repo) => repo.id === entry.github?.repositoryId)?.defaultBranch,
+                          releaseGateBlocked: releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go",
+                        });
+                        return {
+                          ...nextPullRequest,
+                          mergeReadiness: reviewOps?.mergeReadiness.state ?? "not_ready",
+                          releaseGateReadiness: reviewOps?.releaseHandoff.state === "ready" ? "ready" : reviewOps?.releaseHandoff.state === "carryover_blockers" ? "blocked" : "not_ready",
+                          reviewOperations: reviewOps,
+                        };
+                      })(),
                     },
                   }
                 : entry,
@@ -3496,15 +3514,32 @@ export function useChatWorkspaceState() {
                     github: {
                       ...entry.github,
                       branchLifecycle: prCreateResult.ok ? "review_opened" : entry.github.branchLifecycle,
-                      pullRequest: {
-                        ...entry.github.pullRequest,
-                        number: prCreateResult.number ?? entry.github.pullRequest.number,
-                        url: prCreateResult.url ?? entry.github.pullRequest.url,
-                        status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
-                        creationStatus: prCreateResult.ok ? "created" : "failed",
-                        pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
-                        reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
-                      },
+                      pullRequest: (() => {
+                        const nextPullRequest = {
+                          ...entry.github.pullRequest,
+                          number: prCreateResult.number ?? entry.github.pullRequest.number,
+                          url: prCreateResult.url ?? entry.github.pullRequest.url,
+                          status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
+                          creationStatus: prCreateResult.ok ? "created" : "failed",
+                          pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
+                          reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
+                        };
+                        const reviewOps = evaluatePullRequestReviewOperations({
+                          task: entry,
+                          pullRequest: nextPullRequest,
+                          workflow,
+                          auditors: auditorControlState,
+                          evidenceFlow: activeEvidenceFlow,
+                          defaultBranch: workflow.github.repositories.find((repo) => repo.id === entry.github?.repositoryId)?.defaultBranch,
+                          releaseGateBlocked: releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go",
+                        });
+                        return {
+                          ...nextPullRequest,
+                          mergeReadiness: reviewOps?.mergeReadiness.state ?? "not_ready",
+                          releaseGateReadiness: reviewOps?.releaseHandoff.state === "ready" ? "ready" : reviewOps?.releaseHandoff.state === "carryover_blockers" ? "blocked" : "not_ready",
+                          reviewOperations: reviewOps,
+                        };
+                      })(),
                     },
                   }
                 : entry,

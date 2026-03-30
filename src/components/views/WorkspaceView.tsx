@@ -8,6 +8,7 @@ import type { AppRoutingModeProfile } from "@/types/local-inference";
 import type { WorkflowApproval, WorkflowTask } from "@/types/workflow";
 import type { NavSection, AppMode } from "@/components/layout/AppLayout";
 import { useI18n } from "@/lib/i18n";
+import { evaluatePullRequestReviewOperations } from "@/lib/pr-review-operations";
 import {
   Files,
   GitBranch,
@@ -581,6 +582,15 @@ function GitView({
   const commitState = activeTask?.github?.commitWorkflow;
   const pushState = activeTask?.github?.pushWorkflow;
   const reviewState = activeTask?.github?.pullRequest;
+  const reviewOps = evaluatePullRequestReviewOperations({
+    task: activeTask,
+    pullRequest: reviewState,
+    workflow: workspaceState.workflow,
+    auditors: workspaceState.auditors,
+    evidenceFlow: workspaceState.evidenceFlow,
+    defaultBranch: workspaceState.workflow.github.repositories.find((repo) => repo.id === activeTask?.github?.repositoryId)?.defaultBranch,
+    releaseGateBlocked: workspaceState.releaseReadinessStatus === "blocked" || workspaceState.releaseReadinessStatus === "no_go",
+  });
   const openFindings = reviewState?.findings.filter((finding) => finding.status === "open") ?? [];
   const repoConnected = workspaceState.repository.connected || Boolean(activeRepo);
   const repoName = workspaceState.repository.name ?? (activeRepo ? `${activeRepo.owner}/${activeRepo.name}` : undefined);
@@ -635,7 +645,12 @@ function GitView({
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.auditors" as never)}</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.merge_readiness" as never)}</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.release_gate" as never)}</span><span className={`font-mono ${reviewState?.releaseGateReadiness === "blocked" ? "text-warning" : "text-success"}`}>{reviewState?.releaseGateReadiness ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review readiness</span><span className={`font-mono ${reviewOps?.reviewReadiness.state === "blocked" ? "text-destructive" : "text-foreground"}`}>{reviewOps?.reviewReadiness.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Merge evaluation</span><span className={`font-mono ${reviewOps?.mergeReadiness.state === "ready" ? "text-success" : reviewOps?.mergeReadiness.state === "blocked" ? "text-destructive" : "text-warning"}`}>{reviewOps?.mergeReadiness.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Release handoff</span><span className={`font-mono ${reviewOps?.releaseHandoff.state === "ready" ? "text-success" : "text-warning"}`}>{reviewOps?.releaseHandoff.state ?? "not_ready"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Review blockers</span><span className="font-mono text-warning">{reviewOps?.blockers.length ?? 0}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.open_findings" as never)}</span><span className="font-mono text-warning">{openFindings.length}</span></div>
+        {reviewOps?.recommendedNextSteps[0] ? <div className="text-[11px] text-muted-foreground">Next: {reviewOps.recommendedNextSteps[0]}</div> : null}
         {openFindings[0] ? (
           <div className="flex items-center gap-1 text-warning">
             <ShieldAlert className="h-3 w-3" />
