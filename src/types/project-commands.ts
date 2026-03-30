@@ -15,6 +15,24 @@ export type ProjectCommandConfidence = "high" | "medium" | "low";
 export type ProjectCommandSafety = "safe" | "caution" | "risky";
 
 export type ProjectCommandAvailability = "discovered" | "likely_valid" | "unknown" | "invalid" | "unavailable";
+export type ProjectCommandExecutionStatus = "queued" | "approval_required" | "running" | "completed" | "failed";
+export type ProjectCommandExecutionApprovalState = "not_required" | "pending" | "approved" | "denied";
+
+export interface ProjectCommandExecutionRecord {
+  executionId: string;
+  commandId: string;
+  rawCommand: string;
+  source: ProjectCommandSource;
+  launchTimestampIso: string;
+  workingDirectory: string;
+  projectId: string;
+  linkedTaskId?: string;
+  linkedChatSessionId?: string;
+  status: ProjectCommandExecutionStatus;
+  approvalState: ProjectCommandExecutionApprovalState;
+  exitCode?: number;
+  failureReason?: string;
+}
 
 export interface ProjectCommandEntry {
   id: string;
@@ -29,6 +47,8 @@ export interface ProjectCommandEntry {
   runSafety: ProjectCommandSafety;
   availability: ProjectCommandAvailability;
   isPrimaryWorkflow?: boolean;
+  lastExecution?: ProjectCommandExecutionRecord;
+  pendingApprovalId?: string;
 }
 
 export interface ProjectCommandRegistryDiagnostics {

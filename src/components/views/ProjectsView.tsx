@@ -7,9 +7,11 @@ interface ProjectsViewProps {
   workspaceState: WorkspaceRuntimeState;
   onAddLocalProject: (payload?: { name?: string; localPath?: string; projectRoot?: string }) => Promise<{ ok: boolean; message: string }>;
   onActiveProjectChange: (projectId: string) => void;
+  onRunProjectCommand: (commandId: string) => Promise<{ ok: boolean; message: string; code?: string }>;
+  onRunProjectCommandCategory: (category: "dev" | "build" | "test" | "lint" | "typecheck") => Promise<{ ok: boolean; message: string; code?: string }>;
 }
 
-export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjectChange }: ProjectsViewProps) {
+export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory }: ProjectsViewProps) {
   const { t } = useI18n();
   const [projectFeedback, setProjectFeedback] = useState<string>("");
   const localCount = workspaceState.projects.filter((project) => project.source === "local").length;
@@ -97,6 +99,17 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-2">
         <div className="text-[11px] font-mono uppercase tracking-wide text-muted-foreground">project command registry</div>
+        <div className="flex flex-wrap gap-1">
+          {(["dev", "build", "test", "lint", "typecheck"] as const).map((category) => (
+            <button
+              key={`quick-${category}`}
+              onClick={() => void onRunProjectCommandCategory(category).then((result) => setProjectFeedback(result.message))}
+              className="px-2 py-1 rounded border border-border text-[10px] font-mono hover:border-primary/50"
+            >
+              Run {category}
+            </button>
+          ))}
+        </div>
         <div className="text-[10px] text-muted-foreground font-mono">
           {workspaceState.projectCommandRegistry.commands.length} commands • {workspaceState.terminalCommandRegistryReady ? "terminal ready" : "terminal not ready"} • {workspaceState.agentCommandRegistryReady ? "agent ready" : "agent not ready"}
         </div>
@@ -114,6 +127,17 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span>{command.category}</span>
                   <span>{command.runSafety} • {command.availability}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">
+                    {command.lastExecution ? `${command.lastExecution.status} @ ${new Date(command.lastExecution.launchTimestampIso).toLocaleTimeString()}` : "not run"}
+                  </span>
+                  <button
+                    onClick={() => void onRunProjectCommand(command.id).then((result) => setProjectFeedback(result.message))}
+                    className="px-1.5 py-0.5 border border-border rounded hover:border-primary/60 text-foreground"
+                  >
+                    Run
+                  </button>
                 </div>
                 {command.description ? <div className="text-muted-foreground">{command.description}</div> : null}
               </div>
