@@ -803,6 +803,8 @@ const activityEvents: AgentActivityEvent[] = [
   },
 ];
 
+const executionRuns: AgentExecutionRun[] = [];
+
 const executionTraces: ExecutionTrace[] = [
   {
     traceId: "trace-run-main-rbac-1",
@@ -816,6 +818,11 @@ const executionTraces: ExecutionTrace[] = [
     evidenceIds: ["ev-browser-step-fail-1", "ev-browser-console-1"],
     provider: "OpenRouter",
     model: "openai/gpt-4.1",
+    liveState: "failed",
+    currentPhase: "Fallback failed",
+    currentSubtask: "subtask-rbac-frontend-browser",
+    latestPartialOutput: "Fallback returned malformed response payload.",
+    blockedReason: "Malformed fallback payload",
     routingDecision: "balanced • openrouter/openai/gpt-4.1",
     fallbackUsed: true,
     status: "failed",

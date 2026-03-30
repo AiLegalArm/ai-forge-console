@@ -143,6 +143,10 @@ export function buildOperatorDashboard(
 
   const routingAnomalies = executionDrillDowns.filter((drill) => drill.routing.contributedToFailure || drill.routing.fallbackUsed).length;
   const executionFailures = executionDrillDowns.filter((drill) => drill.outcome === "failed").length;
+  const liveRuns = workspace.workflow.executionTraces.filter((trace) => trace.liveState === "streaming" || trace.liveState === "preparing" || trace.liveState === "fallback_running").length;
+  const waitingRuns = workspace.workflow.executionTraces.filter((trace) => trace.liveState === "waiting_for_tool" || trace.liveState === "waiting_for_approval").length;
+  const blockedRuns = workspace.workflow.executionTraces.filter((trace) => trace.liveState === "blocked").length;
+  const partialStreamingRuns = workspace.workflow.executionTraces.filter((trace) => Boolean(trace.latestPartialOutput) && trace.liveState !== "completed").length;
 
   return {
     globalSummary: {
@@ -156,6 +160,10 @@ export function buildOperatorDashboard(
       executionFailures,
       routingAnomalies,
       degradedProviderRuntime: workspace.localInference.resources.degradedMode || workspace.localInference.operational.degradedMode,
+      liveRuns,
+      waitingRuns,
+      blockedRuns,
+      partialStreamingRuns,
     },
     projectSummaries,
     executionDrillDowns,

@@ -82,7 +82,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   return (
     <div className="flex flex-col h-full">
       <ChatContextBar workspaceState={workspaceState} chatState={chatState} />
-      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} />
+      <AgentActivityPanel activeAgents={workspaceState.activeAgents} events={workspaceState.workflow.activityEvents} traces={workspaceState.workflow.executionTraces} />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
@@ -151,6 +151,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
             <div className="rounded border border-border p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
             <div className="rounded border border-border p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
             <div className="rounded border border-border p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">live runs</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.liveRuns}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">waiting runs</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.waitingRuns}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">blocked runs</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedRuns}</div></div>
+            <div className="rounded border border-border p-1"><div className="text-muted-foreground">partial streams</div><div className="font-mono text-info">{operatorDashboard.globalSummary.partialStreamingRuns}</div></div>
           </div>
           <div className="text-muted-foreground">release blockers {workspaceState.releaseControl.operations.blockerSummary.total} • failures {workspaceState.releaseControl.operations.decisionFactors.unresolvedExecutionFailures}</div>
           <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>

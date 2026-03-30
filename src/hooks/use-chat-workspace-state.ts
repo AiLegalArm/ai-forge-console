@@ -2211,6 +2211,8 @@ export function useChatWorkspaceState() {
               : "Working on it…",
         createdAtIso: new Date(now + 250).toISOString(),
         status: "pending" as const,
+        liveState: "preparing" as const,
+        phaseLabel: "Building context",
         linked: mockResponse.linked,
         providerMeta: {
           ...mockResponse.providerMeta,
@@ -2274,6 +2276,10 @@ export function useChatWorkspaceState() {
         evidenceIds: linkedTask?.linkedEvidenceIds ?? [],
       });
       const traceId = trace.traceId;
+      pendingResponse.linked = {
+        ...pendingResponse.linked,
+        executionContextId: traceId,
+      };
       const tracedWorkflow = appendExecutionTraceStep(
         {
           ...workflowRef.current,
@@ -2285,6 +2291,8 @@ export function useChatWorkspaceState() {
           type: "context_built",
           title: "Context built",
           details: budgetDecision.warning ? `${chatContextPacket.summary} • ${budgetDecision.warning}` : chatContextPacket.summary,
+          phaseLabel: "Building context",
+          liveState: "preparing",
           nextStatus: "in_progress",
         },
       );
@@ -2296,6 +2304,8 @@ export function useChatWorkspaceState() {
           type: "routing_selected",
           title: "Routing selected",
           details: `${routingDecision.reason} • budget:${budgetDecision.pressure} • degraded:${localInference.operational.degradedMode ? "yes" : "no"}`,
+          phaseLabel: "Choosing model/provider",
+          liveState: "preparing",
           provider: selectedProviderLabel,
           model: selectedProviderModel,
           nextStatus: "waiting_provider",
@@ -2324,6 +2334,8 @@ export function useChatWorkspaceState() {
                 type: "run_completed",
                 title: "Orchestration completed",
                 details: "Main orchestrator handled request and updated workflow graph.",
+                phaseLabel: "Finalizing result",
+                liveState: "completed",
                 provider: selectedProviderLabel,
                 model: selectedProviderModel,
                 nextStatus: "completed",
@@ -2358,6 +2370,8 @@ export function useChatWorkspaceState() {
                         authorLabel: "Orchestrator",
                         content: orchestration.response,
                         status: "completed" as const,
+                        liveState: "completed" as const,
+                        phaseLabel: "Completed",
                         createdAtIso: new Date().toISOString(),
                         linked: {
                           taskId: updatedTask?.id,
@@ -2414,10 +2428,31 @@ export function useChatWorkspaceState() {
               nowIso: new Date().toISOString(),
               type: "provider_called",
               title: "Primary provider called",
+              phaseLabel: "Waiting for provider response",
+              liveState: "waiting_for_tool",
               provider: "OpenRouter",
               model: selectedProviderModel,
               nextStatus: "waiting_provider",
             }),
+          });
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...chatStateRef.current,
+              messagesBySessionId: {
+                ...chatStateRef.current.messagesBySessionId,
+                [sessionId]: (chatStateRef.current.messagesBySessionId[sessionId] ?? []).map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        status: "streaming" as const,
+                        liveState: "waiting_for_tool" as const,
+                        phaseLabel: "Waiting for provider",
+                      }
+                    : message,
+                ),
+              },
+            },
           });
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
             model: selectedProviderModel,
@@ -2442,6 +2477,9 @@ export function useChatWorkspaceState() {
                   type: "result_received",
                   title: "Provider result received",
                   details: "Primary provider returned output.",
+                  phaseLabel: "Streaming partial output",
+                  liveState: "streaming",
+                  partialOutput: openRouterResult.outputText.slice(0, 220),
                   provider: "OpenRouter",
                   model: openRouterResult.model,
                   nextStatus: "completed",
@@ -2468,7 +2506,10 @@ export function useChatWorkspaceState() {
                       ? {
                           ...message,
                           content: openRouterResult.outputText,
+                          partialContent: openRouterResult.outputText.slice(0, 220),
                           status: "completed" as const,
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed",
                           createdAtIso: openRouterResult.receivedAtIso,
                           providerMeta: {
                             provider: "OpenRouter",
@@ -2516,6 +2557,8 @@ export function useChatWorkspaceState() {
                     type: "provider_failed",
                     title: "Primary provider failed",
                     details: openRouterResult.errorMessage,
+                    phaseLabel: "Primary provider failed",
+                    liveState: "fallback_running",
                     failureType: openRouterResult.errorCode === "rate_limited" ? "timeout" : "provider_failure",
                     provider: "OpenRouter",
                     model: selectedProviderModel,
@@ -2527,6 +2570,8 @@ export function useChatWorkspaceState() {
                     type: "fallback_selected",
                     title: "Fallback selected",
                     details: `Fallback executed due to ${fallbackReason}.`,
+                    phaseLabel: "Fallback activated",
+                    liveState: "fallback_running",
                     provider: "Ollama",
                     model: routingDecision.fallbackModelId ?? undefined,
                     nextStatus: "fallback_in_progress",
@@ -2538,6 +2583,9 @@ export function useChatWorkspaceState() {
                   type: "result_received",
                   title: "Fallback result received",
                   details: "Local fallback completed successfully.",
+                  phaseLabel: "Fallback streaming output",
+                  liveState: "streaming",
+                  partialOutput: fallbackText.slice(0, 220),
                   provider: "Ollama",
                   model: routingDecision.fallbackModelId ?? undefined,
                   nextStatus: "completed",
@@ -2595,6 +2643,9 @@ export function useChatWorkspaceState() {
                           ...message,
                           content: fallbackText,
                           status: "completed" as const,
+                          partialContent: fallbackText.slice(0, 220),
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed via fallback",
                           createdAtIso: fallbackIso,
                         }
                       : message,
@@ -2612,6 +2663,9 @@ export function useChatWorkspaceState() {
             type: "provider_failed",
             title: "Primary provider failed",
             details: openRouterResult.errorMessage,
+            phaseLabel: "Primary provider failed",
+            liveState: "blocked",
+            blockedReason: openRouterResult.errorMessage,
             failureType: "provider_failure",
             provider: "OpenRouter",
             model: selectedProviderModel,
@@ -2624,6 +2678,8 @@ export function useChatWorkspaceState() {
               type: "fallback_selected",
               title: "Fallback selected",
               details: `Fallback provider ${routingDecision.fallbackProvider} selected by routing.`,
+              phaseLabel: "Fallback selected",
+              liveState: "fallback_running",
               provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
               model: routingDecision.fallbackModelId ?? undefined,
               nextStatus: "fallback_in_progress",
@@ -2634,6 +2690,8 @@ export function useChatWorkspaceState() {
               type: "fallback_called",
               title: "Fallback invoked",
               details: "Fallback execution attempted after primary provider failure.",
+              phaseLabel: "Fallback running",
+              liveState: "fallback_running",
               provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
               model: routingDecision.fallbackModelId ?? undefined,
               nextStatus: "fallback_in_progress",
@@ -2648,6 +2706,9 @@ export function useChatWorkspaceState() {
                 type: "run_failed",
                 title: "Run failed",
                 details: openRouterResult.errorMessage,
+                phaseLabel: "Execution failed",
+                liveState: "failed",
+                blockedReason: openRouterResult.errorMessage,
                 failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
                 nextStatus: "failed",
               }),
@@ -2678,15 +2739,17 @@ export function useChatWorkspaceState() {
                   message.id === responseId
                     ? {
                         ...message,
-                        content: runOutput.outputText,
+                        content: `Execution failed before completion.\n\n${openRouterResult.errorMessage}`,
                         role: chatType === "audit" ? "auditor" : chatType === "review" ? "reviewer" : chatType === "agent" ? "agent" : "orchestrator",
-                        status: "completed" as const,
-                        createdAtIso: runOutput.run.endedAtIso,
+                        status: "failed" as const,
+                        liveState: "failed" as const,
+                        phaseLabel: "Blocked",
+                        createdAtIso: failureIso,
                         providerMeta: {
-                          provider: usedProvider,
-                          model: runOutput.run.providerModelId,
-                          backend: runOutput.run.backend,
-                          routingKey: runOutput.run.routingDecision.profile,
+                          provider: "OpenRouter",
+                          model: selectedProviderModel,
+                          backend: "cloud",
+                          routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                         },
                       }
                     : message,
@@ -2696,13 +2759,13 @@ export function useChatWorkspaceState() {
                 session.id === sessionId
                   ? {
                       ...session,
-                      lastMessageAtIso: runOutput.run.endedAtIso,
+                      lastMessageAtIso: failureIso,
                       unreadCount: 0,
                       providerMeta: {
-                        provider: usedProvider,
-                        model: runOutput.run.providerModelId,
-                        backend: runOutput.run.backend,
-                        routingKey: runOutput.run.routingDecision.profile,
+                        provider: "OpenRouter",
+                        model: selectedProviderModel,
+                        backend: "cloud",
+                        routingKey: `${routingDecision.profile}${routingDecision.usedFallback ? " • fallback" : ""}`,
                       },
                     }
                   : session,
@@ -2713,33 +2776,20 @@ export function useChatWorkspaceState() {
             type: "set_workflow",
             workflow: {
               ...workflowRef.current,
-              executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
               activityEvents: [
                 {
-                  id: `activity-${runOutput.run.id}`,
-                  type: "execution_started",
-                  title: `${activeAgent?.name ?? "Agent"} executed via ${usedProvider}`,
-                  details: `${runOutput.run.providerModelId}${runOutput.run.usedFallback ? " (fallback)" : ""}`,
-                  taskId: runOutput.run.taskId,
-                  chatId: runOutput.run.chatSessionId,
-                  agentId: runOutput.run.agentId,
-                  agentRole: runOutput.run.agentRole,
-                  provider: usedProvider,
-                  backend: runOutput.run.backend,
-                  createdAtIso: runOutput.run.startedAtIso,
-                },
-                {
-                  id: `activity-${runOutput.run.id}-done`,
-                  type: "completed",
-                  title: `${activeAgent?.name ?? "Agent"} response completed`,
-                  details: runOutput.run.usedFallback ? "Completed with fallback route." : "Completed with primary route.",
-                  taskId: runOutput.run.taskId,
-                  chatId: runOutput.run.chatSessionId,
-                  agentId: runOutput.run.agentId,
-                  agentRole: runOutput.run.agentRole,
-                  provider: usedProvider,
-                  backend: runOutput.run.backend,
-                  createdAtIso: runOutput.run.endedAtIso,
+                  id: `activity-${traceId}-blocked`,
+                  type: "blocked",
+                  title: `${activeAgent?.name ?? "Agent"} execution blocked`,
+                  details: openRouterResult.errorMessage,
+                  taskId: linkedTask?.id,
+                  chatId: sessionId,
+                  agentId: activeSession?.linked.agentId ?? linkedTask?.ownerAgentId,
+                  provider: "OpenRouter",
+                  backend: "cloud",
+                  severity: "critical",
+                  traceId,
+                  createdAtIso: failureIso,
                 },
                 ...workflowRef.current.activityEvents,
               ],
@@ -2749,35 +2799,101 @@ export function useChatWorkspaceState() {
           return;
         }
 
-        setTimeout(() => {
-          const completionIso = new Date(Date.now()).toISOString();
+        const previewSegments = [
+          "Building context",
+          "Delegating subtasks",
+          "Running audit",
+          "Finalizing result",
+        ];
+        let segmentIndex = 0;
+        const partialInterval = setInterval(() => {
+          if (segmentIndex >= previewSegments.length) {
+            clearInterval(partialInterval);
+            const completionIso = new Date(Date.now()).toISOString();
+            dispatch({
+              type: "set_workflow",
+              workflow: completeExecutionTrace(
+                appendExecutionTraceStep(workflowRef.current, {
+                  traceId,
+                  nowIso: completionIso,
+                  type: "result_received",
+                  title: "Result received",
+                  details: "Local/mock execution completed.",
+                  phaseLabel: "Finalizing result",
+                  liveState: "completed",
+                  partialOutput: mockResponse.content.slice(0, 280),
+                  provider: selectedProviderLabel,
+                  model: selectedProviderModel,
+                  nextStatus: "completed",
+                }),
+                traceId,
+                {
+                  nowIso: completionIso,
+                  outcome: "success",
+                  usage: {
+                    executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
+                    executionWeight: "light",
+                  },
+                },
+              ),
+            });
+            const latestChat = chatStateRef.current;
+            const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((message) =>
+                    message.id === responseId
+                      ? {
+                          ...message,
+                          content: mockResponse.content,
+                          partialContent: mockResponse.content.slice(0, 280),
+                          status: "completed" as const,
+                          liveState: "completed" as const,
+                          phaseLabel: "Completed",
+                          createdAtIso: completionIso,
+                        }
+                      : message,
+                  ),
+                },
+                sessions: latestChat.sessions.map((session) =>
+                  session.id === sessionId
+                    ? {
+                        ...session,
+                        lastMessageAtIso: completionIso,
+                        unreadCount: 0,
+                      }
+                    : session,
+                ),
+              },
+            });
+            return;
+          }
+          const nowIsoTick = new Date().toISOString();
+          const phaseLabel = previewSegments[segmentIndex];
+          const chunkSize = Math.ceil(mockResponse.content.length * ((segmentIndex + 1) / previewSegments.length));
+          const partialOutput = mockResponse.content.slice(0, chunkSize);
           dispatch({
             type: "set_workflow",
-            workflow: completeExecutionTrace(
-              appendExecutionTraceStep(workflowRef.current, {
-                traceId,
-                nowIso: completionIso,
-                type: "result_received",
-                title: "Result received",
-                details: "Local/mock execution completed.",
-                provider: selectedProviderLabel,
-                model: selectedProviderModel,
-                nextStatus: "completed",
-              }),
+            workflow: appendExecutionTraceStep(workflowRef.current, {
               traceId,
-              {
-                nowIso: completionIso,
-                outcome: "success",
-                usage: {
-                  executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
-                  executionWeight: "light",
-                },
-              },
-            ),
+              nowIso: nowIsoTick,
+              type: "provider_called",
+              title: phaseLabel,
+              details: "Partial update emitted while execution is in-flight.",
+              phaseLabel,
+              liveState: "streaming",
+              partialOutput,
+              provider: selectedProviderLabel,
+              model: selectedProviderModel,
+              nextStatus: "in_progress",
+            }),
           });
           const latestChat = chatStateRef.current;
           const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
-
           dispatch({
             type: "set_chat",
             chat: {
@@ -2788,25 +2904,20 @@ export function useChatWorkspaceState() {
                   message.id === responseId
                     ? {
                         ...message,
-                        content: mockResponse.content,
-                        status: "completed" as const,
-                        createdAtIso: completionIso,
+                        partialContent: partialOutput,
+                        content: partialOutput,
+                        status: "streaming" as const,
+                        liveState: "streaming" as const,
+                        phaseLabel,
+                        createdAtIso: nowIsoTick,
                       }
                     : message,
                 ),
               },
-              sessions: latestChat.sessions.map((session) =>
-                session.id === sessionId
-                  ? {
-                      ...session,
-                      lastMessageAtIso: completionIso,
-                      unreadCount: 0,
-                    }
-                  : session,
-              ),
             },
           });
-        }, 1500);
+          segmentIndex += 1;
+        }, 450);
       };
 
       void executeProviderRequest();

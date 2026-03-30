@@ -1,8 +1,8 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MessageSquare, Bot, Shield, GitPullRequest,
   Slash, AtSign, Paperclip, Cpu, Eye, Send,
-  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight,
+  Loader2, CheckCircle, XCircle, Clock, Waypoints, Check, FolderPlus, HardDriveDownload, PlugZap, GitBranchPlus, RefreshCw, ArrowRight, Radio,
 } from "lucide-react";
 import type { ChatType } from "@/types/chat";
 type ChatTab = ChatType;
@@ -26,6 +26,18 @@ const statusIcon: Record<string, React.ReactNode> = {
   pending: <Clock className="h-3 w-3 text-muted-foreground shrink-0" />,
   failed: <XCircle className="h-3 w-3 text-destructive shrink-0" />,
   needs_approval: <Clock className="h-3 w-3 text-warning shrink-0" />,
+};
+
+const liveStateTone: Record<string, string> = {
+  idle: "text-muted-foreground",
+  preparing: "text-info",
+  streaming: "text-primary",
+  waiting_for_tool: "text-warning",
+  waiting_for_approval: "text-warning",
+  blocked: "text-destructive",
+  fallback_running: "text-warning",
+  completed: "text-success",
+  failed: "text-destructive",
 };
 
 interface ChatPanelProps {
@@ -405,15 +417,23 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
                 {msg.authorLabel || roleLabelMap[msg.role]?.label || msg.role}
               </span>
               {msg.status === "streaming" && (
-                <span className="text-2xs text-primary font-mono animate-pulse">{t("chat.streaming" as never)}</span>
+                <span className="text-2xs text-primary font-mono inline-flex items-center gap-1"><Radio className="h-2.5 w-2.5 animate-pulse" /> {t("chat.streaming" as never)}</span>
               )}
+              {msg.phaseLabel ? (
+                <span className="text-2xs text-muted-foreground font-mono border border-border-subtle rounded px-1">{msg.phaseLabel}</span>
+              ) : null}
+              {msg.liveState ? (
+                <span className={`text-2xs font-mono ${liveStateTone[msg.liveState] ?? "text-muted-foreground"}`}>{msg.liveState.replace(/_/g, " ")}</span>
+              ) : null}
               <span className="text-2xs text-muted-foreground ml-auto font-mono">{formatTime(msg.createdAtIso)}</span>
             </div>
-            {msg.status === "streaming" ? (
-              <StreamingText text={msg.content} />
-            ) : (
-              <p className="text-sm text-foreground leading-normal whitespace-pre-wrap">{msg.content}</p>
-            )}
+            <p className="text-sm text-foreground leading-normal whitespace-pre-wrap">{msg.content}</p>
+            {msg.partialContent && msg.status !== "completed" ? (
+              <p className="text-2xs text-muted-foreground font-mono mt-1">partial: {msg.partialContent.slice(0, 220)}</p>
+            ) : null}
+            {msg.linked?.executionContextId ? (
+              <TraceInlineStatus traceId={msg.linked.executionContextId} workspaceState={workspaceState} />
+            ) : null}
             {msg.linked?.taskTitle && (
               <p className="text-2xs text-muted-foreground mt-0.5 font-mono">{t("chat.task" as never)} {msg.linked.taskTitle}</p>
             )}
@@ -423,7 +443,6 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </div>
         ))}
 
-        <TypingIndicator agents={messages.filter(m => m.status === "streaming").map(m => m.authorLabel || roleLabelMap[m.role]?.label || "")} />
       </div>
 
       {/* Composer */}
@@ -529,36 +548,18 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   );
 }
 
-function StreamingText({ text }: { text: string }) {
-  const [visibleLen, setVisibleLen] = useState(0);
-  useEffect(() => {
-    setVisibleLen(0);
-    const id = setInterval(() => {
-      setVisibleLen((prev) => {
-        if (prev >= text.length) { clearInterval(id); return prev; }
-        return Math.min(prev + 2, text.length);
-      });
-    }, 18);
-    return () => clearInterval(id);
-  }, [text]);
+function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; workspaceState: WorkspaceRuntimeState }) {
+  const trace = workspaceState.workflow.executionTraces.find((item) => item.traceId === traceId);
+  if (!trace) return null;
   return (
-    <p className="text-sm text-foreground leading-normal whitespace-pre-wrap">
-      {text.slice(0, visibleLen)}
-      {visibleLen < text.length && <span className="inline-block w-1 h-3.5 bg-primary animate-pulse ml-0.5" />}
-    </p>
-  );
-}
-
-function TypingIndicator({ agents }: { agents: string[] }) {
-  if (agents.length === 0) return null;
-  return (
-    <div className="flex items-center gap-2 py-1.5 animate-fade-in">
-      <div className="flex gap-0.5">
-        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
-      </div>
-      <span className="text-2xs font-mono text-muted-foreground">{agents.join(", ")} typing…</span>
+    <div className="mt-1 border border-border-subtle rounded px-2 py-1 text-2xs font-mono text-muted-foreground">
+      <span className="text-foreground">{trace.liveState.replace(/_/g, " ")}</span>
+      {" · "}
+      {trace.currentPhase ?? "in progress"}
+      {" · "}
+      {trace.provider ?? "unknown"}/{trace.model ?? "unknown"}
+      {trace.latestPartialOutput ? <span className="block mt-0.5">latest: {trace.latestPartialOutput.slice(0, 180)}</span> : null}
+      {trace.blockedReason ? <span className="block mt-0.5 text-destructive">blocked: {trace.blockedReason}</span> : null}
     </div>
   );
 }
