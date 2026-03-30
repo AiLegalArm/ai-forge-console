@@ -35,6 +35,13 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
           <div><span className="text-muted-foreground">Rollback-ready deploys</span><div className="font-mono text-lg text-success">{releaseControlState.deployments.filter((deployment) => deployment.rollbackAvailable).length}</div></div>
         </div>
       </div>
+      <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Release context packet</span>
+          <span className="text-primary uppercase">{workspaceState.contextPackets.releaseFlow.target}</span>
+        </div>
+        <p className="text-muted-foreground">{workspaceState.contextPackets.releaseFlow.summary}</p>
+      </div>
 
       <div className="space-y-2">
         <h2 className="text-xs font-semibold text-foreground">Release candidates</h2>

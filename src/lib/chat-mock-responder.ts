@@ -1,5 +1,6 @@
 import type { AgentRuntimeState } from "@/types/workspace";
 import type { ChatLinkedContext, ChatMessage, ChatType, MessageRole } from "@/types/chat";
+import type { ContextInjectionPacket } from "@/types/context";
 
 interface MockResponseContext {
   chatType: ChatType;
@@ -14,6 +15,7 @@ interface MockResponseContext {
   activeAgent?: AgentRuntimeState;
   linkedContext?: ChatLinkedContext;
   turnIndex: number;
+  contextPacket?: ContextInjectionPacket;
 }
 
 const mainPatterns = ["plan", "status", "approval", "completion"] as const;
@@ -64,20 +66,21 @@ const buildAuditSeverity = (prompt: string) => {
 };
 
 const buildResponseContent = (context: MockResponseContext) => {
+  const contextSummary = context.contextPacket ? `\nContext: ${context.contextPacket.summary}` : "";
   switch (context.chatType) {
     case "main":
-      return mainResponse(context);
+      return `${mainResponse(context)}${contextSummary}`;
     case "agent": {
       const persona = resolveAgentPersona(context.prompt, context.activeAgent);
-      return `${persona.label} (${persona.lens})\nWorking on ${context.currentTask} in ${context.currentProject}.\nUsing ${context.activeProvider}/${context.activeModel} with ${context.routingProfile}.\nLatest ask captured: "${context.prompt}".`; 
+      return `${persona.label} (${persona.lens})\nWorking on ${context.currentTask} in ${context.currentProject}.\nUsing ${context.activeProvider}/${context.activeModel} with ${context.routingProfile}.\nLatest ask captured: "${context.prompt}".${contextSummary}`;
     }
     case "audit": {
       const severity = buildAuditSeverity(context.prompt);
       const finding = context.linkedContext?.auditFindingId ?? "AUDIT-PENDING";
-      return `Audit finding ${finding} summary:\nSeverity: ${severity}.\nBlocker analysis: scoped to ${context.currentTask}.\nRecommendation: apply least-privilege guardrails and attach validation evidence before clearance.`;
+      return `Audit finding ${finding} summary:\nSeverity: ${severity}.\nBlocker analysis: scoped to ${context.currentTask}.\nRecommendation: apply least-privilege guardrails and attach validation evidence before clearance.${contextSummary}`;
     }
     case "review":
-      return `Review thread update:\nDiff focus: ${context.currentTask}.\nRelease readiness: validating blockers, tests, and audit deltas for ${context.currentProject}.\nDecision framing: hold release until unresolved issues are cleared or accepted.`;
+      return `Review thread update:\nDiff focus: ${context.currentTask}.\nRelease readiness: validating blockers, tests, and audit deltas for ${context.currentProject}.\nDecision framing: hold release until unresolved issues are cleared or accepted.${contextSummary}`;
     default:
       return `Context synced for ${context.currentTask}.`;
   }
