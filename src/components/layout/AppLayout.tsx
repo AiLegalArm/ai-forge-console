@@ -113,7 +113,12 @@ export default function AppLayout() {
               onLaunchTask={launchTask}
             />
             <div className="hidden md:flex flex-col">
-              <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />
+              <BottomPanel
+                expanded={bottomExpanded}
+                onToggle={() => setBottomExpanded(!bottomExpanded)}
+                terminal={workspaceState.localShell.terminal}
+                traces={workspaceState.workflow.executionTraces}
+              />
             </div>
           </div>
           <div className="hidden lg:flex">
@@ -132,7 +137,12 @@ export default function AppLayout() {
       {mobileBottomOpen && (
         <div className="fixed inset-x-0 bottom-0 z-40 md:hidden">
           <div className="bg-panel border-t border-border h-64">
-            <BottomPanel expanded onToggle={() => setMobileBottomOpen(false)} terminal={workspaceState.localShell.terminal} />
+            <BottomPanel
+              expanded
+              onToggle={() => setMobileBottomOpen(false)}
+              terminal={workspaceState.localShell.terminal}
+              traces={workspaceState.workflow.executionTraces}
+            />
           </div>
         </div>
       )}

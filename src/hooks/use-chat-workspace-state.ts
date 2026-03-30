@@ -21,6 +21,7 @@ import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
 import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import { evaluateExecutionPolicy, pushPolicyDecision } from "@/lib/execution-policy-engine";
+import { appendExecutionTraceStep, completeExecutionTrace, createExecutionTrace } from "@/lib/execution-trace-service";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -1986,6 +1987,10 @@ export function useChatWorkspaceState() {
 
       const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
       const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const linkedTask =
+        workflowRef.current.tasks.find((task) => task.linkedChatSessionId === sessionId) ??
+        workflowRef.current.tasks.find((task) => task.id === activeSession?.linked.taskId) ??
+        workflowRef.current.tasks[0];
       const routingDecision = buildRuntimeRoutingDecision(chatType, sessionId, activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId);
       const selectedProviderLabel = routingDecision.selectedProvider === "openrouter" ? "OpenRouter" : "Ollama";
       const selectedProviderModel =
@@ -2081,6 +2086,46 @@ export function useChatWorkspaceState() {
           },
         },
       });
+      const runId = `run-${sessionId}-${now}`;
+      const trace = createExecutionTrace({
+        runId,
+        nowIso,
+        taskId: linkedTask?.id,
+        chatId: sessionId,
+        agentId: activeSession?.linked.agentId ?? linkedTask?.ownerAgentId,
+        provider: selectedProviderLabel,
+        model: selectedProviderModel,
+        routingDecision,
+        evidenceIds: linkedTask?.linkedEvidenceIds ?? [],
+      });
+      const traceId = trace.traceId;
+      const tracedWorkflow = appendExecutionTraceStep(
+        {
+          ...workflowRef.current,
+          executionTraces: [trace, ...workflowRef.current.executionTraces],
+        },
+        {
+          traceId,
+          nowIso,
+          type: "context_built",
+          title: "Context built",
+          details: chatContextPacket.summary,
+          nextStatus: "in_progress",
+        },
+      );
+      dispatch({
+        type: "set_workflow",
+        workflow: appendExecutionTraceStep(tracedWorkflow, {
+          traceId,
+          nowIso: new Date().toISOString(),
+          type: "routing_selected",
+          title: "Routing selected",
+          details: routingDecision.reason,
+          provider: selectedProviderLabel,
+          model: selectedProviderModel,
+          nextStatus: "waiting_provider",
+        }),
+      });
 
       if (chatType === "main") {
         const orchestration = runMainChatOrchestrator({
@@ -2094,9 +2139,30 @@ export function useChatWorkspaceState() {
         });
 
         if (orchestration.handled) {
+          const completionIso = new Date().toISOString();
           dispatch({
             type: "set_workflow",
-            workflow: orchestration.updatedWorkflow,
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(orchestration.updatedWorkflow, {
+                traceId,
+                nowIso: completionIso,
+                type: "run_completed",
+                title: "Orchestration completed",
+                details: "Main orchestrator handled request and updated workflow graph.",
+                provider: selectedProviderLabel,
+                model: selectedProviderModel,
+                nextStatus: "completed",
+              }),
+              traceId,
+              {
+                nowIso: completionIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: "hybrid",
+                  executionWeight: "standard",
+                },
+              },
+            ),
           });
 
           const latestChat = chatStateRef.current;
@@ -2166,6 +2232,18 @@ export function useChatWorkspaceState() {
           const contextSystemPrompt = buildContextPrompt(workspaceState.contextPackets.mainChat);
 
           setProviderExecutionState("waiting");
+          dispatch({
+            type: "set_workflow",
+            workflow: appendExecutionTraceStep(workflowRef.current, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "provider_called",
+              title: "Primary provider called",
+              provider: "OpenRouter",
+              model: selectedProviderModel,
+              nextStatus: "waiting_provider",
+            }),
+          });
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
             model: selectedProviderModel,
             userInput: draft,
@@ -2180,6 +2258,30 @@ export function useChatWorkspaceState() {
 
           if (openRouterResult.executionState === "completed") {
             setProviderExecutionState("streaming_ready");
+            dispatch({
+              type: "set_workflow",
+              workflow: completeExecutionTrace(
+                appendExecutionTraceStep(workflowRef.current, {
+                  traceId,
+                  nowIso: openRouterResult.receivedAtIso,
+                  type: "result_received",
+                  title: "Provider result received",
+                  details: "Primary provider returned output.",
+                  provider: "OpenRouter",
+                  model: openRouterResult.model,
+                  nextStatus: "completed",
+                }),
+                traceId,
+                {
+                  nowIso: openRouterResult.receivedAtIso,
+                  outcome: "success",
+                  usage: {
+                    executionLocation: "cloud",
+                    executionWeight: "standard",
+                  },
+                },
+              ),
+            });
             dispatch({
               type: "set_chat",
               chat: {
@@ -2224,6 +2326,69 @@ export function useChatWorkspaceState() {
             return;
           }
 
+          const failureIso = openRouterResult.receivedAtIso;
+          let failedWorkflow = appendExecutionTraceStep(workflowRef.current, {
+            traceId,
+            nowIso: failureIso,
+            type: "provider_failed",
+            title: "Primary provider failed",
+            details: openRouterResult.errorMessage,
+            failureType: "provider_failure",
+            provider: "OpenRouter",
+            model: selectedProviderModel,
+            nextStatus: "fallback_in_progress",
+          });
+          if (routingDecision.usedFallback) {
+            failedWorkflow = appendExecutionTraceStep(failedWorkflow, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "fallback_selected",
+              title: "Fallback selected",
+              details: `Fallback provider ${routingDecision.fallbackProvider} selected by routing.`,
+              provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
+              model: routingDecision.fallbackModelId ?? undefined,
+              nextStatus: "fallback_in_progress",
+            });
+            failedWorkflow = appendExecutionTraceStep(failedWorkflow, {
+              traceId,
+              nowIso: new Date().toISOString(),
+              type: "fallback_called",
+              title: "Fallback invoked",
+              details: "Fallback execution attempted after primary provider failure.",
+              provider: routingDecision.fallbackProvider === "openrouter" ? "OpenRouter" : "Ollama",
+              model: routingDecision.fallbackModelId ?? undefined,
+              nextStatus: "fallback_in_progress",
+            });
+          }
+          dispatch({
+            type: "set_workflow",
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(failedWorkflow, {
+                traceId,
+                nowIso: failureIso,
+                type: "run_failed",
+                title: "Run failed",
+                details: openRouterResult.errorMessage,
+                failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
+                nextStatus: "failed",
+              }),
+              traceId,
+              {
+                nowIso: failureIso,
+                outcome: "failed",
+                failureType: routingDecision.usedFallback ? "fallback_failure" : "provider_failure",
+                failureMessage: openRouterResult.errorMessage,
+                failurePoint: "run_failed",
+                linkedFindingIds: linkedTask?.linkedAuditId ? [linkedTask.linkedAuditId] : [],
+                linkedBlockerIds: linkedTask?.blockedByTaskIds ?? [],
+                usage: {
+                  executionLocation: routingDecision.usedFallback ? "hybrid" : "cloud",
+                  executionWeight: "standard",
+                },
+              },
+            ),
+          });
+
           dispatch({
             type: "set_chat",
             chat: {
@@ -2257,6 +2422,31 @@ export function useChatWorkspaceState() {
         }
 
         setTimeout(() => {
+          const completionIso = new Date(Date.now()).toISOString();
+          dispatch({
+            type: "set_workflow",
+            workflow: completeExecutionTrace(
+              appendExecutionTraceStep(workflowRef.current, {
+                traceId,
+                nowIso: completionIso,
+                type: "result_received",
+                title: "Result received",
+                details: "Local/mock execution completed.",
+                provider: selectedProviderLabel,
+                model: selectedProviderModel,
+                nextStatus: "completed",
+              }),
+              traceId,
+              {
+                nowIso: completionIso,
+                outcome: "success",
+                usage: {
+                  executionLocation: routingDecision.selectedProvider === "ollama" ? "local" : "cloud",
+                  executionWeight: "light",
+                },
+              },
+            ),
+          });
           const latestChat = chatStateRef.current;
           const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
 
@@ -2272,7 +2462,7 @@ export function useChatWorkspaceState() {
                         ...message,
                         content: mockResponse.content,
                         status: "completed" as const,
-                        createdAtIso: new Date(Date.now()).toISOString(),
+                        createdAtIso: completionIso,
                       }
                     : message,
                 ),
@@ -2281,7 +2471,7 @@ export function useChatWorkspaceState() {
                 session.id === sessionId
                   ? {
                       ...session,
-                      lastMessageAtIso: new Date().toISOString(),
+                      lastMessageAtIso: completionIso,
                       unreadCount: 0,
                     }
                   : session,

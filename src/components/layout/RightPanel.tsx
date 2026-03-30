@@ -145,6 +145,7 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
   const activeCandidate = workspaceState.releaseControl.releaseCandidates.find(
     (candidate) => candidate.id === workspaceState.currentReleaseCandidateId,
   );
+  const latestTrace = [...workspaceState.workflow.executionTraces].sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso))[0];
 
   const contextHeader = (
     <SectionCard title="Current Context">
@@ -152,6 +153,9 @@ function RightPanelContent({ tab, workspaceState }: { tab: string; workspaceStat
       <InfoRow label="Task" value={workspaceState.currentTask} />
       <InfoRow label="Chat / Review" value={`${workspaceState.currentConversationType} · ${workspaceState.currentReviewId ?? "no-review"}`} />
       <InfoRow label="Provider / Runtime" value={`${workspaceState.activeProvider} · ${workspaceState.activeBackend}`} />
+      <InfoRow label="Execution trace" value={latestTrace ? `${latestTrace.traceId} · ${latestTrace.summary.outcome}` : "none"} />
+      <InfoRow label="Trace provider/model" value={latestTrace ? `${latestTrace.provider ?? "unknown"} / ${latestTrace.model ?? "unknown"}` : "none"} />
+      <InfoRow label="Fallback / failure" value={latestTrace ? `${latestTrace.fallbackUsed ? "fallback" : "no-fallback"} · ${latestTrace.error?.type ?? "none"}` : "none"} />
       <InfoRow label="Release readiness" value={workspaceState.releaseReadinessStatus} />
       <InfoRow label="Task status" value={`${workspaceState.currentTaskStatus} · ${workspaceState.currentPhase}`} />
     </SectionCard>

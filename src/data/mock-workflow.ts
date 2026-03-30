@@ -4,10 +4,10 @@ import type {
   WorkflowSubtask,
   WorkflowApproval,
   AgentActivityEvent,
+  ExecutionTrace,
   GitHubRepositoryConnection,
   AgentCommandRequest,
   WorkflowDelegation,
-  WorkflowSubtask,
   WorkflowTaskGraph,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
@@ -782,19 +782,80 @@ const activityEvents: AgentActivityEvent[] = [
   },
 ];
 
+const executionTraces: ExecutionTrace[] = [
+  {
+    traceId: "trace-run-main-rbac-1",
+    runId: "run-main-rbac-1",
+    taskId: "task-rbac-exec",
+    subtaskId: "subtask-rbac-frontend-browser",
+    chatId: "main-session-1",
+    agentId: "agent-frontend",
+    auditorId: "agent-auditor",
+    releaseDecisionId: "decision-rbac-1",
+    evidenceIds: ["ev-browser-step-fail-1", "ev-browser-console-1"],
+    provider: "OpenRouter",
+    model: "openai/gpt-4.1",
+    routingDecision: "balanced • openrouter/openai/gpt-4.1",
+    fallbackUsed: true,
+    status: "failed",
+    finalResultState: "failed",
+    startedAtIso: "2026-03-29T10:46:45.000Z",
+    updatedAtIso: "2026-03-29T10:47:12.000Z",
+    completedAtIso: "2026-03-29T10:47:12.000Z",
+    statusTransitions: [
+      { from: "queued", to: "in_progress", atIso: "2026-03-29T10:46:45.000Z", reason: "run_created" },
+      { from: "in_progress", to: "waiting_provider", atIso: "2026-03-29T10:46:50.000Z", reason: "provider_called" },
+      { from: "waiting_provider", to: "fallback_in_progress", atIso: "2026-03-29T10:46:58.000Z", reason: "fallback_selected" },
+      { from: "fallback_in_progress", to: "failed", atIso: "2026-03-29T10:47:12.000Z", reason: "run_failed" },
+    ],
+    steps: [
+      { id: "trace-step-1", type: "run_created", title: "Run created", status: "in_progress", createdAtIso: "2026-03-29T10:46:45.000Z" },
+      { id: "trace-step-2", type: "context_built", title: "Context packet assembled", details: "Main task, subtasks, and release gate context merged.", status: "in_progress", createdAtIso: "2026-03-29T10:46:48.000Z" },
+      { id: "trace-step-3", type: "routing_selected", title: "Routing selected", details: "Balanced profile selected OpenRouter primary with Ollama fallback.", status: "in_progress", provider: "OpenRouter", model: "openai/gpt-4.1", createdAtIso: "2026-03-29T10:46:49.000Z" },
+      { id: "trace-step-4", type: "provider_called", title: "Provider called", status: "waiting_provider", provider: "OpenRouter", model: "openai/gpt-4.1", createdAtIso: "2026-03-29T10:46:50.000Z" },
+      { id: "trace-step-5", type: "provider_failed", title: "Provider failure", details: "Primary provider request timed out.", status: "waiting_provider", failureType: "timeout", createdAtIso: "2026-03-29T10:46:57.000Z" },
+      { id: "trace-step-6", type: "fallback_selected", title: "Fallback selected", status: "fallback_in_progress", provider: "Ollama", model: "qwen3-coder:14b", createdAtIso: "2026-03-29T10:46:58.000Z" },
+      { id: "trace-step-7", type: "fallback_called", title: "Fallback called", status: "fallback_in_progress", provider: "Ollama", model: "qwen3-coder:14b", createdAtIso: "2026-03-29T10:47:00.000Z" },
+      { id: "trace-step-8", type: "run_failed", title: "Run failed", details: "Fallback returned malformed response payload.", status: "failed", failureType: "malformed_response", createdAtIso: "2026-03-29T10:47:12.000Z" },
+    ],
+    error: {
+      type: "malformed_response",
+      message: "Fallback returned malformed response payload.",
+      failedStepId: "trace-step-8",
+      atIso: "2026-03-29T10:47:12.000Z",
+    },
+    usage: {
+      estimatedCostUsd: 0.0212,
+      inputTokens: 3189,
+      outputTokens: 842,
+      totalTokens: 4031,
+      executionLocation: "hybrid",
+      executionWeight: "heavy",
+    },
+    summary: {
+      totalDurationMs: 27000,
+      providerModelLabel: "OpenRouter / openai/gpt-4.1",
+      fallbackUsed: true,
+      failurePoint: "run_failed",
+      outcome: "failed",
+      linkedBlockerIds: ["AF-SEC-014"],
+      linkedFindingIds: ["finding-sec-014", "browser-find-console-1"],
+    },
+  },
+];
+
 const gatedSubtasks = applySubtaskAuditBlocking(subtasks, auditBlockers);
 const gatedTasks = applyParentTaskBlocking(tasks, gatedSubtasks, auditBlockers);
 
 export const workflowState: WorkflowState = {
   tasks: gatedTasks,
   subtasks: gatedSubtasks,
-  tasks,
-  subtasks,
   delegations,
   taskGraphs,
   approvals,
   agentCommandRequests,
   activityEvents,
+  executionTraces,
   github: {
     activeRepositoryId: "repo-saas-dashboard",
     repositories,
