@@ -87,7 +87,7 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
         </div>
-        <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
+        <div className="w-72 border-l border-border-subtle bg-panel overflow-auto shrink-0 hidden lg:block">
           <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onFocusTask={onFocusTask} onLaunchTask={onLaunchTask} />
         </div>
       </div>
@@ -123,8 +123,8 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
   );
 
   return (
-    <div className="p-2.5 space-y-3 text-xs">
-      <div className={`rounded border p-2 ${operatorMode ? "border-primary/50 bg-primary/5" : "border-border bg-card/50"}`}>
+    <div className="p-2 space-y-2 text-[11px]">
+      <div className={`border p-2 ${operatorMode ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}>
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-foreground flex items-center gap-1"><Radar className="h-3 w-3 text-primary" /> Operator Mode</span>
           <span className={`text-[9px] font-mono uppercase ${operatorMode ? "text-success" : "text-muted-foreground"}`}>{operatorMode ? "active" : "standby"}</span>
@@ -145,12 +145,12 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
 
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">operator dashboard</span>
-        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
           <div className="grid grid-cols-2 gap-1">
-            <div className="rounded border border-border p-1"><div className="text-muted-foreground">active tasks</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.activeTasks}</div></div>
-            <div className="rounded border border-border p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
-            <div className="rounded border border-border p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
-            <div className="rounded border border-border p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">active tasks</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.activeTasks}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
+            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
           </div>
           <div className="text-muted-foreground">release blockers {workspaceState.releaseControl.operations.blockerSummary.total} • failures {workspaceState.releaseControl.operations.decisionFactors.unresolvedExecutionFailures}</div>
           <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>
@@ -163,7 +163,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">project summaries</span>
         <div className="mt-1.5 space-y-1">
           {operatorDashboard.projectSummaries.map((project) => (
-            <div key={project.projectId} className={`rounded border p-1.5 text-[10px] ${project.isActiveProject ? "border-primary/40 bg-primary/5" : "border-border"}`}>
+            <div key={project.projectId} className={`border p-1.5 text-[10px] ${project.isActiveProject ? "border-primary/40 bg-primary/5" : "border-border"}`}>
               <div className="font-mono text-foreground truncate">{project.projectName}</div>
               <div className="text-muted-foreground">active {project.activeTaskCount} • blocked {project.blockedTaskCount} • subtasks {project.activeSubtaskCount}</div>
               <div className="text-muted-foreground">agents {project.agentUtilization.active}/{project.agentUtilization.active + project.agentUtilization.idle} • {(project.agentUtilization.utilizationRatio * 100).toFixed(0)}%</div>
@@ -177,7 +177,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
 
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">execution drill-down</span>
-        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
           <div className="flex flex-wrap gap-1">
             {operatorDashboard.entryPoints.fromDashboardCards.slice(0, 4).map((traceId) => (
               <button key={traceId} onClick={() => setSelectedTraceId(traceId)} className={`border rounded px-1 py-0.5 font-mono ${selectedDrillDown?.traceId === traceId ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>card:{traceId}</button>
@@ -207,7 +207,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">task launch + focus</span>
         <div className="mt-1.5 space-y-1">
           {tasks.map((task) => (
-            <div key={task.id} className="rounded border border-border p-1.5">
+            <div key={task.id} className="border border-border-subtle p-1.5">
               <div className="flex items-center gap-1.5">
                 {taskStatusIcons[task.status]}
                 <span className="text-[10px] text-foreground truncate">{task.title}</span>
@@ -224,7 +224,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
 
       <div>
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><GitCommitHorizontal className="h-3 w-3" /> subtask command map</span>
-        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">parent task</span><span className="font-mono text-foreground">{parentTask?.id ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">active subtasks</span><span className="font-mono text-primary">{delegatedSubtasks.length}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">blocked</span><span className="font-mono text-destructive">{blockedSubtasks.length}</span></div>
@@ -238,8 +238,8 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
           <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.task_graph" as never)}</span>
           <span className="text-[10px] font-mono text-primary">{Math.round(progress)}%</span>
         </div>
-        <div className="h-1 bg-muted rounded-full overflow-hidden mb-2">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+        <div className="h-1 bg-muted  overflow-hidden mb-2">
+          <div className="h-full bg-primary  transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
           {parentTask ? (
@@ -291,7 +291,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">delegations</span>
         <div className="mt-1.5 space-y-1">
           {workspaceState.workflow.delegations.map((delegation) => (
-            <div key={delegation.id} className="rounded border border-border p-1.5 text-[10px]">
+            <div key={delegation.id} className="border border-border-subtle p-1.5 text-[10px]">
               <div className="text-foreground font-mono truncate">
                 {delegation.subtaskId} → {delegation.toAgentId}
               </div>
@@ -310,7 +310,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
             <div className="text-[10px] text-muted-foreground font-mono">{t("rail.no_approvals" as never)}</div>
           ) : (
             workspaceState.pendingApprovals.map((approval: WorkflowApproval) => (
-              <div key={approval.id} className="rounded border border-warning/30 bg-warning/5 p-1.5">
+              <div key={approval.id} className="border border-warning/30 bg-warning/5 p-1.5">
                 <div className="text-[10px] text-warning font-mono">{approval.category}</div>
                 <div className="text-[10px] text-foreground">{approval.title}</div>
                 <div className="text-[9px] text-muted-foreground font-mono">task {approval.taskId ?? "—"} • agent {approval.agentId ?? "operator"} • risk {approval.category}</div>
@@ -327,7 +327,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
         <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">agent commands</span>
         <div className="mt-1.5 space-y-1">
           {workspaceState.workflow.agentCommandRequests.slice(0, 3).map((request) => (
-            <div key={request.id} className="rounded border border-border p-1.5 text-[10px]">
+            <div key={request.id} className="border border-border-subtle p-1.5 text-[10px]">
               <div className="text-foreground font-mono truncate">{request.rawCommand}</div>
               <div className="text-muted-foreground">{request.origin.replace(/_/g, " ")} • {request.executionState}</div>
             </div>
@@ -434,7 +434,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, 
             </div>
           ))}
           {workspaceState.policyState.lastDecision ? (
-            <div className="mt-2 rounded border border-warning/30 bg-warning/5 p-1.5">
+            <div className="mt-2 border border-warning/30 bg-warning/5 p-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-warning font-mono uppercase">policy</span>
                 <span
@@ -714,7 +714,7 @@ function DeployView({ workspaceState, onTriggerDeploy, onRefreshDeployStatus }: 
           <div key={deployment.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5 text-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${deployment.status === "blocked" || deployment.status === "failed" ? "bg-destructive" : deployment.status === "preview_ready" || deployment.status === "production_ready" ? "bg-primary" : "bg-success"}`} />
+                <span className={`w-2 h-2  ${deployment.status === "blocked" || deployment.status === "failed" ? "bg-destructive" : deployment.status === "preview_ready" || deployment.status === "production_ready" ? "bg-primary" : "bg-success"}`} />
                 <span className="font-semibold text-foreground">{deployment.environment}</span>
                 <span className="text-[10px] text-muted-foreground font-mono">{deployment.id}</span>
               </div>
@@ -771,7 +771,7 @@ function DomainsView({ workspaceState }: { workspaceState: WorkspaceRuntimeState
           <div key={domain.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${domain.assignmentState === "blocked" || domain.verificationState === "error" ? "bg-destructive" : domain.verificationState === "pending_verification" ? "bg-warning" : "bg-success"}`} />
+                <span className={`w-2 h-2  ${domain.assignmentState === "blocked" || domain.verificationState === "error" ? "bg-destructive" : domain.verificationState === "pending_verification" ? "bg-warning" : "bg-success"}`} />
                 <span className="text-xs font-mono text-foreground">{domain.name}</span>
               </div>
               <span className={`text-[10px] font-mono uppercase ${domain.assignmentState === "blocked" ? "text-destructive" : "text-success"}`}>{domain.assignmentState}</span>
