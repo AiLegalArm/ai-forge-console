@@ -60,6 +60,7 @@ export interface DomainRecord {
 export type ReviewState = "not_opened" | "in_review" | "changes_requested" | "approved" | "blocked";
 export type ReleaseReadiness = "ready" | "warning" | "blocked";
 export type GoNoGoStatus = "ready" | "warning" | "blocked" | "go" | "no_go";
+export type ReleaseOperationsSignalState = "ready" | "warning" | "blocked";
 
 export interface ReleaseCandidate {
   id: string;
@@ -108,6 +109,132 @@ export interface GoNoGoDecision {
   summary: string;
 }
 
+export interface ReleaseCandidateLinkage {
+  branch: string;
+  taskId?: string;
+  reviewId?: string;
+  deploymentId?: string;
+  domainIds: string[];
+}
+
+export interface ReleaseBlockerSummary {
+  total: number;
+  critical: number;
+  high: number;
+  unresolved: string[];
+}
+
+export interface ReleaseApprovalDetail {
+  approvalId: string;
+  category: WorkflowApproval["category"];
+  title: string;
+  status: WorkflowApproval["status"];
+  requestedBy: string;
+  requestedAtIso: string;
+  relation: string;
+}
+
+export interface ReleaseApprovalSummary {
+  required: ReleaseApprovalDetail[];
+  completed: ReleaseApprovalDetail[];
+  missing: ReleaseApprovalDetail[];
+}
+
+export interface ReleaseAuditSummary {
+  verdict: AuditorVerdict;
+  activeBlockers: number;
+  unresolvedFindings: number;
+  gateSummary: Array<{ stage: string; verdict: "go" | "no_go" | "not_ready" }>;
+}
+
+export interface ReleaseReviewReadiness {
+  state: ReviewState;
+  status: ReleaseOperationsSignalState;
+  summary: string;
+}
+
+export interface ReleaseDeployReadiness {
+  previewStatus: DeploymentStatus | "missing";
+  productionStatus: DeploymentStatus | "missing";
+  rolloutState: string;
+  dependencyState: string[];
+  blockers: string[];
+  status: ReleaseOperationsSignalState;
+}
+
+export interface ReleaseDomainReadiness {
+  status: ReleaseOperationsSignalState;
+  summary: string;
+  blockingDomains: string[];
+}
+
+export interface ReleaseRollbackReadiness {
+  availability: "available" | "limited" | "unavailable";
+  rollbackTarget?: string;
+  fallbackPlanRequired: boolean;
+  summary: string;
+  status: ReleaseOperationsSignalState;
+}
+
+export interface ReleaseGoNoGoSurface {
+  status: GoNoGoStatus;
+  blockerSeverity: "none" | "warning" | "critical";
+  unresolvedExecutionFailures: number;
+  operatorOverrides: string[];
+  summary: string;
+  blockers: string[];
+  warnings: string[];
+}
+
+export interface ReleaseInspectionItem {
+  id: string;
+  label: string;
+  status: string;
+  relation?: string;
+}
+
+export interface ReleaseEvidenceReference {
+  evidenceId: string;
+  title: string;
+  severity: string;
+  blocking: boolean;
+}
+
+export interface ReleaseExecutionTraceReference {
+  traceId: string;
+  outcome: "success" | "failed" | "blocked" | "interrupted";
+  summary: string;
+  updatedAtIso: string;
+}
+
+export interface ReleaseOperationsPanel {
+  generatedAtIso: string;
+  candidate: {
+    id: string;
+    label: string;
+    linkage: ReleaseCandidateLinkage;
+  };
+  blockerSummary: ReleaseBlockerSummary;
+  approvalSummary: ReleaseApprovalSummary;
+  auditSummary: ReleaseAuditSummary;
+  reviewReadiness: ReleaseReviewReadiness;
+  deployReadiness: ReleaseDeployReadiness;
+  domainReadiness: ReleaseDomainReadiness;
+  rollbackReadiness: ReleaseRollbackReadiness;
+  decisionSurface: ReleaseGoNoGoSurface;
+  inspection: {
+    tasks: ReleaseInspectionItem[];
+    subtasks: ReleaseInspectionItem[];
+    unresolvedBlockers: string[];
+    auditResults: string[];
+    executionTraces: ReleaseExecutionTraceReference[];
+    evidence: ReleaseEvidenceReference[];
+  };
+  activityLinks: string[];
+  reviewChatReferences: string[];
+  auditChatReferences: string[];
+}
+
 export interface ReleaseControlState {
   deployments: DeploymentRecord[];
   domains: DomainRecord[];
@@ -115,4 +242,5 @@ export interface ReleaseControlState {
   releaseHistoryIds: string[];
   activeCandidateId: string;
   finalDecision: GoNoGoDecision;
+  operationsPanel: ReleaseOperationsPanel;
 }
