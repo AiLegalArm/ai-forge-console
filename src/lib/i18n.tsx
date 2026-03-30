@@ -7,6 +7,7 @@ const translations = {
   "cloud": { en: "Cloud", ru: "Облако" },
   "mobile": { en: "Mobile", ru: "Мобильный" },
   "plan": { en: "Plan", ru: "План" },
+  "operator": { en: "Operator", ru: "Оператор" },
   "build": { en: "Build", ru: "Сборка" },
   "audit": { en: "Audit", ru: "Аудит" },
   "release": { en: "Release", ru: "Релиз" },

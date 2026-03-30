@@ -12,7 +12,9 @@ export type SyncStatus =
 
 export type EntityLinkRef = {
   taskId?: string;
+  subtaskId?: string;
   chatSessionId?: string;
+  executionContextId?: string;
   branchName?: string;
   reviewId?: string;
   releaseCandidateId?: string;

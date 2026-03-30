@@ -5,6 +5,15 @@ export type ActivitySeverity = "info" | "warning" | "critical";
 
 export type AgentActivityEventType =
   | "task_received"
+  | "subtask_created"
+  | "delegation_proposed"
+  | "delegation_assigned"
+  | "delegation_accepted"
+  | "delegation_blocked"
+  | "delegation_rejected"
+  | "subtask_state_changed"
+  | "subtask_completed"
+  | "result_aggregated"
   | "planning_started"
   | "planning_completed"
   | "agent_assigned"
@@ -232,9 +241,20 @@ export interface GitHubSyncState {
   globalSyncModeDefault: GitHubSyncMode;
 }
 
-export type TaskStatus = "queued" | "in_progress" | "blocked" | "awaiting_approval" | "completed" | "failed";
+export type TaskStatus =
+  | "proposed"
+  | "assigned"
+  | "accepted"
+  | "queued"
+  | "in_progress"
+  | "blocked"
+  | "awaiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type TaskPhase = "planning" | "implementation" | "audit" | "review" | "release";
+export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export interface WorkflowSubtask {
   id: string;
@@ -261,9 +281,13 @@ export interface WorkflowTask {
   id: string;
   title: string;
   status: TaskStatus;
+  parentTaskId?: string;
+  childSubtaskIds?: string[];
   ownerAgentId?: string;
+  delegatedOwnerAgentId?: string;
   dependencyTaskIds: string[];
   linkedChatSessionId: string;
+  linkedExecutionContextId?: string;
   linkedAuditId?: string;
   linkedAuditorTypes?: AuditorType[];
   linkedReviewId?: string;
@@ -275,15 +299,100 @@ export interface WorkflowTask {
   auditVerdict?: AuditorVerdict;
   auditFindingCount?: number;
   designBrowserBlockers?: number;
+  completionRate?: number;
+  aggregatedSubtaskIds?: string[];
+  blockedByTaskIds?: string[];
+  failureReason?: string;
   updatedAtIso: string;
   parentTaskId?: string;
   rollup?: WorkflowTaskRollup;
   github?: TaskGitHubState;
 }
 
+export interface WorkflowSubtask {
+  id: string;
+  parentTaskId: string;
+  title: string;
+  description: string;
+  assignedAgentId: string;
+  status: TaskStatus;
+  dependencies: string[];
+  priority: TaskPriority;
+  linkedChatContext: {
+    chatSessionId: string;
+    chatType: "main" | "agent" | "audit" | "review";
+  };
+  linkedExecutionContext: {
+    executionContextId: string;
+    source: "planner" | "orchestrator" | "agent_handoff" | "audit";
+  };
+  resultSummary?: string;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export type DelegationState =
+  | "proposed"
+  | "assigned"
+  | "accepted"
+  | "queued"
+  | "in_progress"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "rejected";
+
+export interface WorkflowDelegation {
+  id: string;
+  parentTaskId: string;
+  subtaskId: string;
+  fromAgentId: string;
+  toAgentId: string;
+  state: DelegationState;
+  delegationReason: string;
+  delegatedAtIso: string;
+  respondedAtIso?: string;
+  assignmentMetadata: {
+    requestedPriority: TaskPriority;
+    requestedByRole: "orchestrator" | "planner" | "auditor";
+    capabilityTags: string[];
+    expectedOutcome: string;
+    blockedReason?: string;
+  };
+  acceptanceNote?: string;
+  rejectionReason?: string;
+  linkedDependencyTaskIds: string[];
+}
+
+export interface WorkflowTaskGraph {
+  parentTaskId: string;
+  childSubtaskIds: string[];
+  dependencyChains: Array<{
+    fromTaskId: string;
+    toTaskId: string;
+  }>;
+  delegatedOwnership: Record<string, string>;
+  completionAggregation: {
+    completedSubtasks: number;
+    totalSubtasks: number;
+    completionRate: number;
+  };
+  failurePropagation: {
+    failedSubtaskIds: string[];
+    propagatedToParentTask: boolean;
+  };
+  blockedPropagation: {
+    blockedSubtaskIds: string[];
+    propagatedToParentTask: boolean;
+  };
+}
+
 export interface WorkflowState {
   tasks: WorkflowTask[];
   subtasks: WorkflowSubtask[];
+  delegations: WorkflowDelegation[];
+  taskGraphs: WorkflowTaskGraph[];
   activityEvents: AgentActivityEvent[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];

@@ -23,15 +23,22 @@ import {
   MonitorPlay,
   Camera,
   AlertTriangle,
+  Radar,
+  Bot,
+  Flag,
 } from "lucide-react";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
+  proposed: <Clock className="h-3 w-3 text-muted-foreground" />,
+  assigned: <Clock className="h-3 w-3 text-primary" />,
+  accepted: <Clock className="h-3 w-3 text-primary" />,
   completed: <CheckCircle className="h-3 w-3 text-success" />,
   in_progress: <Play className="h-3 w-3 text-primary animate-pulse" />,
   queued: <Clock className="h-3 w-3 text-muted-foreground" />,
   blocked: <XCircle className="h-3 w-3 text-destructive" />,
   awaiting_approval: <Clock className="h-3 w-3 text-warning" />,
   failed: <XCircle className="h-3 w-3 text-destructive" />,
+  cancelled: <XCircle className="h-3 w-3 text-muted-foreground" />,
 };
 
 interface WorkspaceViewProps {
@@ -44,7 +51,7 @@ interface WorkspaceViewProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve: (approvalId: string) => void;
+  onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
@@ -56,9 +63,11 @@ interface WorkspaceViewProps {
   onConnectRepository: (payload: { pathOrUrl: string; name?: string; branch?: string }) => Promise<{ ok: boolean; code: string; message: string }>;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
+  onFocusTask: (taskId: string) => void;
+  onLaunchTask: (taskId: string) => void;
 }
 
-export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: WorkspaceViewProps) {
+export function WorkspaceView({ section, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onFocusTask, onLaunchTask }: WorkspaceViewProps) {
   if (section === "files") return <FilesView />;
   if (section === "git") return <GitView workspaceState={workspaceState} onGitAction={onGitAction} />;
   if (section === "deploy") return <DeployView workspaceState={workspaceState} />;
@@ -75,27 +84,80 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
           <ChatPanel workspaceState={workspaceState} chatState={chatState} chatContexts={chatContexts} onConversationTypeChange={onConversationTypeChange} onDraftChange={onDraftChange} onSendMessage={onSendMessage} onApprovalResolve={onApprovalResolve} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onProviderSourceChange={onProviderSourceChange} onModelChange={onModelChange} onDeploymentModeChange={onDeploymentModeChange} onRoutingProfileChange={onRoutingProfileChange} onAddLocalProject={onAddLocalProject} onCreateProject={onCreateProject} onConnectRepository={onConnectRepository} onDisconnectRepository={onDisconnectRepository} onActiveProjectChange={onActiveProjectChange} />
         </div>
         <div className="w-64 border-l border-border bg-card overflow-auto shrink-0 hidden lg:block">
-          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} />
+          <SideRail mode={mode} workspaceState={workspaceState} chatState={chatState} onWorkflowApprovalResolve={onWorkflowApprovalResolve} onFocusTask={onFocusTask} onLaunchTask={onLaunchTask} />
         </div>
       </div>
     </div>
   );
 }
 
-function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void }) {
+function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void }) {
   const { t } = useI18n();
   const tasks = workspaceState.workflow.tasks;
+  const subtasks = workspaceState.workflow.subtasks;
   const completed = tasks.filter((s) => s.status === "completed").length;
   const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
 
   const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
   const linkedContext = activeSession?.linked;
   const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
+  const parentTask = tasks.find((task) => task.id === "task-rbac") ?? activeTask;
+  const delegatedSubtasks = subtasks.filter((subtask) => subtask.parentTaskId === parentTask?.id);
   const taskEvidence = activeTask?.id ? workspaceState.evidenceFlow.linkedByTaskId[activeTask.id] ?? [] : [];
   const blockerEvidence = workspaceState.evidenceFlow.records.filter((record) => record.blocking);
+  const blockedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "blocked");
+  const completedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "completed");
+  const activeBlockers = workspaceState.workflow.tasks.filter((task) => task.status === "blocked" || (task.designBrowserBlockers ?? 0) > 0);
+  const criticalPath = workspaceState.workflow.tasks.filter((task) => task.status !== "completed" && task.phase !== "planning");
+  const activeReleaseTask = workspaceState.workflow.tasks.find((task) => task.phase === "release");
+  const operatorMode = mode === "operator";
 
   return (
     <div className="p-2.5 space-y-3 text-xs">
+      <div className={`rounded border p-2 ${operatorMode ? "border-primary/50 bg-primary/5" : "border-border bg-card/50"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-foreground flex items-center gap-1"><Radar className="h-3 w-3 text-primary" /> Operator Mode</span>
+          <span className={`text-[9px] font-mono uppercase ${operatorMode ? "text-success" : "text-muted-foreground"}`}>{operatorMode ? "active" : "standby"}</span>
+        </div>
+        <div className="mt-2 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">project</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.currentProject}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">task</span><span className="font-mono text-primary truncate max-w-[120px]">{activeTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">provider/model</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.providerSource}/{workspaceState.activeModel}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">routing</span><span className="font-mono text-foreground uppercase">{workspaceState.routingMode.replace(/_/g, " ")}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">task launch + focus</span>
+        <div className="mt-1.5 space-y-1">
+          {tasks.map((task) => (
+            <div key={task.id} className="rounded border border-border p-1.5">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[task.status]}
+                <span className="text-[10px] text-foreground truncate">{task.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono">{task.phase} • {task.status} • owner {task.ownerAgentId ?? "orchestrator"}</div>
+              <div className="mt-1 flex gap-1">
+                <button onClick={() => onLaunchTask(task.id)} className="text-[9px] font-mono border border-primary/30 text-primary rounded px-1.5 py-0.5 hover:bg-primary/10">launch</button>
+                <button onClick={() => onFocusTask(task.id)} className="text-[9px] font-mono border border-border rounded px-1.5 py-0.5 hover:bg-muted">focus</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><GitCommitHorizontal className="h-3 w-3" /> subtask command map</span>
+        <div className="mt-1.5 rounded border border-border p-2 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">parent task</span><span className="font-mono text-foreground">{parentTask?.id ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">active subtasks</span><span className="font-mono text-primary">{delegatedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">blocked</span><span className="font-mono text-destructive">{blockedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">completed</span><span className="font-mono text-success">{completedSubtasks.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">critical path</span><span className="font-mono text-warning">{criticalPath.map((task) => task.id).join(" → ")}</span></div>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.task_graph" as never)}</span>
@@ -105,7 +167,29 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
           <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
-          {tasks.map((task) => (
+          {parentTask ? (
+            <div className="py-1 border-b border-border/30">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[parentTask.status]}
+                <span className="text-[10px] text-foreground truncate font-semibold">{parentTask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                owner {parentTask.ownerAgentId ?? "orchestrator"} • {Math.round(parentTask.completionRate ?? 0)}% rollup
+              </div>
+            </div>
+          ) : null}
+          {delegatedSubtasks.map((subtask) => (
+            <div key={subtask.id} className="py-1 border-b border-border/30 last:border-0 pl-2">
+              <div className="flex items-center gap-1.5">
+                {taskStatusIcons[subtask.status]}
+                <span className="text-[10px] text-foreground truncate">{subtask.title}</span>
+              </div>
+              <div className="text-[9px] text-muted-foreground font-mono pl-4">
+                {subtask.assignedAgentId} • {subtask.priority} • {subtask.status}
+              </div>
+            </div>
+          ))}
+          {tasks.filter((task) => !task.parentTaskId).map((task) => (
             <div key={task.id} className="py-1 border-b border-border/30 last:border-0">
               <div className="flex items-center gap-1.5">
                 {taskStatusIcons[task.status]}
@@ -129,7 +213,23 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.approvals" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">delegations</span>
+        <div className="mt-1.5 space-y-1">
+          {workspaceState.workflow.delegations.map((delegation) => (
+            <div key={delegation.id} className="rounded border border-border p-1.5 text-[10px]">
+              <div className="text-foreground font-mono truncate">
+                {delegation.subtaskId} → {delegation.toAgentId}
+              </div>
+              <div className="text-muted-foreground">
+                {delegation.state} • {delegation.assignmentMetadata.expectedOutcome}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Flag className="h-3 w-3 text-warning" /> approval command center</span>
         <div className="mt-1.5 space-y-1">
           {workspaceState.pendingApprovals.length === 0 ? (
             <div className="text-[10px] text-muted-foreground font-mono">{t("rail.no_approvals" as never)}</div>
@@ -138,6 +238,7 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
               <div key={approval.id} className="rounded border border-warning/30 bg-warning/5 p-1.5">
                 <div className="text-[10px] text-warning font-mono">{approval.category}</div>
                 <div className="text-[10px] text-foreground">{approval.title}</div>
+                <div className="text-[9px] text-muted-foreground font-mono">task {approval.taskId ?? "—"} • agent {approval.agentId ?? "operator"} • risk {approval.category}</div>
                 <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="mt-1 text-[10px] font-mono text-primary hover:underline">
                   {t("chat.approve" as never)}
                 </button>
@@ -182,8 +283,10 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.audit_review" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><ShieldAlert className="h-3 w-3 text-warning" /> audit control</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">active blockers</span><span className="text-destructive font-mono">{activeBlockers.length}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">severity overview</span><span className="text-warning font-mono uppercase">{activeBlockers.length > 0 ? "elevated" : "stable"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.design_state" as never)}</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
@@ -193,8 +296,9 @@ function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve }
       </div>
 
       <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.go_nogo" as never)}</span>
+        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Bot className="h-3 w-3 text-primary" /> release command layer</span>
         <div className="mt-1.5 space-y-1 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">release candidate</span><span className="text-foreground font-mono">{activeReleaseTask?.linkedReleaseCandidateId ?? "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.finalDecision.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.finalDecision.status}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.finalDecision.blockers.length}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.finalDecision.warnings.length}</span></div>

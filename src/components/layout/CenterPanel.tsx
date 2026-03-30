@@ -23,7 +23,7 @@ interface CenterPanelProps {
   onDraftChange: (sessionId: string, value: string) => void;
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
-  onWorkflowApprovalResolve: (approvalId: string) => void;
+  onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
   onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onRefreshLocalInference: () => Promise<void>;
@@ -36,9 +36,13 @@ interface CenterPanelProps {
   onConnectRepository: (payload: { pathOrUrl: string; name?: string; branch?: string }) => Promise<{ ok: boolean; code: string; message: string }>;
   onDisconnectRepository: () => void;
   onActiveProjectChange: (projectId: string) => void;
+  onRunProjectCommand: (commandId: string) => Promise<{ ok: boolean; message: string; code?: string }>;
+  onRunProjectCommandCategory: (category: "dev" | "build" | "test" | "lint" | "typecheck") => Promise<{ ok: boolean; message: string; code?: string }>;
+  onFocusTask: (taskId: string) => void;
+  onLaunchTask: (taskId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory, onFocusTask, onLaunchTask }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -66,6 +70,8 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onConnectRepository={onConnectRepository}
           onDisconnectRepository={onDisconnectRepository}
           onActiveProjectChange={onActiveProjectChange}
+          onFocusTask={onFocusTask}
+          onLaunchTask={onLaunchTask}
         />
       </div>
     );
@@ -73,7 +79,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
 
   const renderContent = () => {
     switch (activeSection) {
-      case "projects": return <ProjectsView workspaceState={workspaceState} onAddLocalProject={onAddLocalProject} onActiveProjectChange={onActiveProjectChange} />;
+      case "projects": return <ProjectsView workspaceState={workspaceState} onAddLocalProject={onAddLocalProject} onActiveProjectChange={onActiveProjectChange} onRunProjectCommand={onRunProjectCommand} onRunProjectCommandCategory={onRunProjectCommandCategory} />;
       case "prompt-studio": return <PromptStudioView />;
       case "prompt-library": return <PromptLibraryView />;
       case "agents": return <AgentStudioView workspaceState={workspaceState} />;

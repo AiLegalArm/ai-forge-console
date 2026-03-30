@@ -13,7 +13,7 @@ export type NavSection =
   | "agents" | "providers" | "audits" | "supabase-import" | "deploy"
   | "domains" | "design" | "browser" | "release" | "settings";
 
-export type AppMode = "plan" | "build" | "audit" | "release";
+export type AppMode = "operator" | "plan" | "build" | "audit" | "release";
 
 export default function AppLayout() {
   const [activeSection, setActiveSection] = useState<NavSection>("workspace");
@@ -46,6 +46,10 @@ export default function AppLayout() {
     connectRepository,
     disconnectRepository,
     setActiveProject,
+    runProjectCommand,
+    runProjectCommandCategory,
+    focusTask,
+    launchTask,
   } = useChatWorkspaceState();
 
   const handleSectionChange = (s: NavSection) => {
@@ -103,6 +107,10 @@ export default function AppLayout() {
               onConnectRepository={connectRepository}
               onDisconnectRepository={disconnectRepository}
               onActiveProjectChange={setActiveProject}
+              onRunProjectCommand={runProjectCommand}
+              onRunProjectCommandCategory={runProjectCommandCategory}
+              onFocusTask={focusTask}
+              onLaunchTask={launchTask}
             />
             <div className="hidden md:flex flex-col">
               <BottomPanel expanded={bottomExpanded} onToggle={() => setBottomExpanded(!bottomExpanded)} terminal={workspaceState.localShell.terminal} />
