@@ -38,9 +38,11 @@ interface CenterPanelProps {
   onActiveProjectChange: (projectId: string) => void;
   onRunProjectCommand: (commandId: string) => Promise<{ ok: boolean; message: string; code?: string }>;
   onRunProjectCommandCategory: (category: "dev" | "build" | "test" | "lint" | "typecheck") => Promise<{ ok: boolean; message: string; code?: string }>;
+  onFocusTask: (taskId: string) => void;
+  onLaunchTask: (taskId: string) => void;
 }
 
-export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory }: CenterPanelProps) {
+export function CenterPanel({ activeSection, mode, workspaceState, chatContexts, chatState, onConversationTypeChange, onDraftChange, onSendMessage, onApprovalResolve, onWorkflowApprovalResolve, onGitAction, onRunBrowserScenario, onRefreshLocalInference, onProviderSourceChange, onModelChange, onDeploymentModeChange, onRoutingProfileChange, onAddLocalProject, onCreateProject, onConnectRepository, onDisconnectRepository, onActiveProjectChange, onRunProjectCommand, onRunProjectCommandCategory, onFocusTask, onLaunchTask }: CenterPanelProps) {
   const isWorkspace = ["workspace", "files", "git", "deploy", "domains", "design", "browser"].includes(activeSection);
 
   if (isWorkspace) {
@@ -68,6 +70,8 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           onConnectRepository={onConnectRepository}
           onDisconnectRepository={onDisconnectRepository}
           onActiveProjectChange={onActiveProjectChange}
+          onFocusTask={onFocusTask}
+          onLaunchTask={onLaunchTask}
         />
       </div>
     );

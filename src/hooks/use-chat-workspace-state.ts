@@ -1933,6 +1933,64 @@ export function useChatWorkspaceState() {
         },
       });
     },
+    focusTask: (taskId: string) => {
+      const task = workflow.tasks.find((entry) => entry.id === taskId);
+      if (!task) return;
+
+      const targetSession = chatState.sessions.find((session) => session.id === task.linkedChatSessionId);
+      if (!targetSession) return;
+
+      dispatch({ type: "set_active_chat_type", chatType: targetSession.type });
+      dispatch({
+        type: "select_session",
+        chatType: targetSession.type,
+        sessionId: targetSession.id,
+      });
+    },
+    launchTask: (taskId: string) => {
+      const task = workflow.tasks.find((entry) => entry.id === taskId);
+      if (!task) return;
+
+      const nowIso = new Date().toISOString();
+      const nextStatus = task.status === "proposed" || task.status === "assigned" || task.status === "queued" ? "in_progress" : task.status;
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...workflow,
+          tasks: workflow.tasks.map((entry) =>
+            entry.id === taskId
+              ? {
+                  ...entry,
+                  status: nextStatus,
+                  updatedAtIso: nowIso,
+                }
+              : entry,
+          ),
+          activityEvents: [
+            {
+              id: `activity-launch-${taskId}-${Date.now().toString(36)}`,
+              type: "execution_started",
+              title: "Operator launched task",
+              details: task.title,
+              taskId: task.id,
+              chatId: task.linkedChatSessionId,
+              severity: "info",
+              createdAtIso: nowIso,
+            },
+            ...workflow.activityEvents,
+          ],
+        },
+      });
+
+      const targetSession = chatState.sessions.find((session) => session.id === task.linkedChatSessionId);
+      if (!targetSession) return;
+      dispatch({ type: "set_active_chat_type", chatType: targetSession.type });
+      dispatch({
+        type: "select_session",
+        chatType: targetSession.type,
+        sessionId: targetSession.id,
+      });
+    },
     refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
