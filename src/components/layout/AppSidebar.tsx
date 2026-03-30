@@ -48,7 +48,7 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
 
   return (
     <aside
-      className={`flex flex-col border-r border-border-subtle bg-sidebar shrink-0 transition-all duration-150 h-full ${
+      className={`flex flex-col border-r border-border-subtle bg-sidebar shrink-0 ui-transition h-full ${
         isMobile ? "w-56" : collapsed ? "w-12" : "w-56"
       }`}
     >

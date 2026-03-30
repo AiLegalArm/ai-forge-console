@@ -14,9 +14,9 @@ export function ListRow({ left, center, right, selected, disabled, loading, clas
   return (
     <div
       className={cn(
-        "h-8 px-2.5 border-b border-border-subtle flex items-center gap-2 text-xs",
-        "hover:bg-surface-hover transition-colors",
-        selected && "bg-primary/10",
+        "h-8 px-2.5 border-b border-border-subtle flex items-center gap-2 text-xs rounded-sm ui-transition",
+        "hover:bg-surface-hover/90 hover:border-border-default",
+        selected && "bg-primary/12 border-primary/30",
         (disabled || loading) && "opacity-50 pointer-events-none",
         className,
       )}
