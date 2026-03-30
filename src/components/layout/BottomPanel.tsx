@@ -21,23 +21,19 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
     { id: "agent-trace", icon: Activity, label: "Runtime" },
   ];
   const [activeTab, setActiveTab] = useState("terminal");
-  const height = expanded ? "h-64" : "h-36";
+  const height = expanded ? "h-60" : "h-32";
 
   const latestCommand = useMemo(() => terminal.history[0], [terminal.history]);
-  const recentActivity = useMemo(
-    () => [...terminal.output].slice(0, 6),
-    [terminal.output],
-  );
   const latestTraces = useMemo(() => [...traces].sort((a, b) => b.updatedAtIso.localeCompare(a.updatedAtIso)).slice(0, 5), [traces]);
 
   return (
-    <div className={`${height} border-t border-border bg-card shrink-0 flex flex-col transition-all duration-150`}>
-      <div className="flex items-center border-b border-border px-1 overflow-x-auto">
+    <div className={`${height} border-t border-border-subtle bg-background shrink-0 flex flex-col transition-all duration-150`}>
+      <div className="flex items-center border-b border-border-subtle px-1 overflow-x-auto">
         {tabConfig.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1 px-2 py-1.5 text-2xs font-mono transition-colors border-b-2 shrink-0 ${
+            className={`flex items-center gap-1 px-2 py-1 text-[10px] font-mono uppercase tracking-wide transition-colors border-b-2 shrink-0 ${
               activeTab === tab.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -49,7 +45,7 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
         </button>
       </div>
-      <div className="flex-1 overflow-auto p-2 font-mono text-2xs">
+      <div className="flex-1 overflow-auto p-2 font-mono text-[10px]">
         {activeTab === "terminal" && (
           <div className="space-y-0.5">
             <div className="text-muted-foreground mb-1">session {terminal.sessionId} · cwd {terminal.workingDirectory}</div>
@@ -64,13 +60,6 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
                 <span className={line.stream === "stderr" ? "text-warning" : line.stream === "system" ? "text-primary" : "text-foreground"}>{line.text}</span>
               </div>
             ))}
-            {latestCommand?.state === "running" ? (
-              <div className="flex gap-2 items-center">
-                <span className="text-muted-foreground">now</span>
-                <span className="text-primary">$</span>
-                <span className="w-1.5 h-3 bg-primary animate-pulse" />
-              </div>
-            ) : null}
           </div>
         )}
         {activeTab === "agent-trace" && (
@@ -78,10 +67,10 @@ export function BottomPanel({ expanded, onToggle, terminal, traces }: BottomPane
             {latestTraces.length === 0 ? (
               <div className="text-muted-foreground">No runtime activity yet.</div>
             ) : latestTraces.map((trace) => (
-              <div key={trace.traceId} className="border border-border-subtle rounded-md px-2 py-1.5 space-y-0.5">
+              <div key={trace.traceId} className="border border-border-subtle px-2 py-1 space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground shrink-0">{new Date(trace.updatedAtIso).toLocaleTimeString()}</span>
-                  <span className={`shrink-0 px-1 rounded-md text-2xs ${trace.finalResultState === "failed" ? "bg-destructive/15 text-destructive" : trace.fallbackUsed ? "bg-warning/15 text-warning" : "bg-success/15 text-success"}`}>{trace.status}</span>
+                  <span className={`shrink-0 px-1 text-[9px] uppercase ${trace.finalResultState === "failed" ? "text-destructive" : trace.fallbackUsed ? "text-warning" : "text-success"}`}>{trace.status}</span>
                   <span className="text-foreground truncate">{trace.provider ?? "unknown"} / {trace.model ?? "unknown"}</span>
                 </div>
                 <div className="text-muted-foreground truncate">
