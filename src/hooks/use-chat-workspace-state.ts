@@ -563,17 +563,54 @@ export function useChatWorkspaceState() {
   };
 
   const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
-    const mainChat = assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "main_chat", chatType: "main" });
+    const mainChat = assembleContextPacket({
+      workspace: workspaceStateBase as WorkspaceRuntimeState,
+      target: "main_chat",
+      chatType: "main",
+      memoryContext: contextEnvelope,
+    });
     return {
       mainChat,
-      agentChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "agent_chat", chatType: "agent", agentId: workspaceStateBase.activeAgentId }),
-      auditChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "audit_chat", chatType: "audit", agentId: workspaceStateBase.activeAgentId }),
-      reviewChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "review_chat", chatType: "review", agentId: workspaceStateBase.activeAgentId }),
-      workerAgent: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "worker_agent", agentId: workspaceStateBase.activeAgentId }),
-      auditor: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "auditor", agentId: workspaceStateBase.activeAgentId }),
-      releaseFlow: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "release_flow" }),
+      agentChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "agent_chat",
+        chatType: "agent",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      auditChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "audit_chat",
+        chatType: "audit",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      reviewChat: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "review_chat",
+        chatType: "review",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      workerAgent: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "worker_agent",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      auditor: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "auditor",
+        agentId: workspaceStateBase.activeAgentId,
+        memoryContext: contextEnvelope,
+      }),
+      releaseFlow: assembleContextPacket({
+        workspace: workspaceStateBase as WorkspaceRuntimeState,
+        target: "release_flow",
+        memoryContext: contextEnvelope,
+      }),
     };
-  }, [workspaceStateBase]);
+  }, [contextEnvelope, workspaceStateBase]);
 
   const workspaceState: WorkspaceRuntimeState = {
     ...workspaceStateBase,
