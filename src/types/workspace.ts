@@ -9,6 +9,7 @@ import type { EvidenceFlowState } from "@/types/evidence";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
 import type { AuditorVerdict } from "@/types/audits";
+import type { ProjectInstructionState } from "@/lib/project-instructions-service";
 
 export type PrivacyMode = "private" | "team";
 export interface AgentRuntimeState {
@@ -43,6 +44,13 @@ export interface WorkspaceProjectEntry {
   provider?: {
     connected: boolean;
     source?: "openrouter" | "ollama";
+  };
+  instructions?: {
+    status: ProjectInstructionState["status"];
+    path?: string;
+    fileType?: string;
+    summary?: string;
+    lastLoadedAtIso?: string;
   };
 }
 
@@ -101,6 +109,7 @@ export interface WorkspaceRuntimeState {
   activeProjectId: string;
   repository: WorkspaceRepositoryState;
   providerExecutionState: OpenRouterExecutionState;
+  projectInstructions: ProjectInstructionState;
 }
 
 export type ChatContextMap = Record<ChatType, ChatMessage[]>;

@@ -81,7 +81,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
       case "audits": return <AuditsView workspaceState={workspaceState} />;
       case "supabase-import": return <SupabaseImportView />;
       case "release": return <ReleaseCenterView />;
-      case "settings": return <SettingsView />;
+      case "settings": return <SettingsView workspaceState={workspaceState} />;
       default: return null;
     }
   };
@@ -98,6 +98,9 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
           <span className="text-border">|</span>
           <span className="text-muted-foreground">provider/model</span>
           <span className="text-foreground">{workspaceState.providerSource} · {workspaceState.activeModel}</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground">instructions</span>
+          <span className={workspaceState.projectInstructions.status === "loaded" ? "text-success" : workspaceState.projectInstructions.status === "parse_warning" ? "text-warning" : "text-muted-foreground"}>{workspaceState.projectInstructions.status}</span>
           <span className="text-border">|</span>
           <span className="text-muted-foreground">task</span>
           <span className="text-foreground">{workspaceState.currentTask}</span>

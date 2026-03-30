@@ -195,7 +195,9 @@ export async function validateLocalProjectPath(rawPath: string): Promise<LocalPr
   const isEmptyFolder = entries.length === 0;
   const inferredName = await adapter.basename(resolvedPath);
   const hasGitRepository = await adapter.exists(await adapter.join(resolvedPath, ".git"));
-  const hasAgentsInstructions = await adapter.exists(await adapter.join(resolvedPath, "AGENTS.md"));
+  const hasAgentsInstructions =
+    (await adapter.exists(await adapter.join(resolvedPath, "AGENTS.md"))) ||
+    (await adapter.exists(await adapter.join(resolvedPath, "AGENT.md")));
 
   if (isEmptyFolder) {
     return {

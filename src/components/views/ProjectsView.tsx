@@ -70,12 +70,18 @@ export function ProjectsView({ workspaceState, onAddLocalProject, onActiveProjec
                     {isActive && <div className="text-primary">active</div>}
                     <div className={project.source === "local" ? "text-success" : "text-muted-foreground"}>{project.source}</div>
                     <div className={project.repository?.connected ? "text-info" : "text-warning"}>{project.repository?.connected ? `repo ${project.repository.branch ?? "unknown"}` : "repo missing"}</div>
+                    <div className={project.instructions?.status === "loaded" ? "text-success" : "text-muted-foreground"}>
+                      instr {project.instructions?.status ?? "not_found"}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted-foreground">
                   <span className="font-mono truncate">{project.localPath ?? project.projectRoot ?? "manual"}</span>
                   <span className="font-mono">{project.branch}</span>
                 </div>
+                {project.instructions?.summary ? (
+                  <div className="mt-1 text-[10px] text-muted-foreground truncate">{project.instructions.summary}</div>
+                ) : null}
               </button>
             );
           })}

@@ -17,6 +17,7 @@ import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
+import { createEmptyProjectInstructionState, loadProjectInstructions, type ProjectInstructionState } from "@/lib/project-instructions-service";
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
@@ -200,6 +201,9 @@ export function useChatWorkspaceState() {
         connected: true,
         source: "ollama" as const,
       },
+      instructions: {
+        status: localShell.project.projectInstructionsDetected ? "found" : "not_found",
+      },
     },
   ]);
   const [activeProjectId, setActiveProjectId] = useState("project-local-1");
@@ -208,6 +212,7 @@ export function useChatWorkspaceState() {
     syncStatus: "idle",
     connectionState: "disconnected",
   });
+  const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionState>(createEmptyProjectInstructionState());
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -380,6 +385,62 @@ export function useChatWorkspaceState() {
 
   const activeProject = projects.find((project) => project.id === activeProjectId);
 
+  useEffect(() => {
+    let cancelled = false;
+    const activeRoot = activeProject?.projectRoot ?? activeProject?.localPath ?? localShell.project.activeProjectRoot;
+
+    if (!activeRoot) {
+      setProjectInstructions(createEmptyProjectInstructionState());
+      return;
+    }
+
+    const syncProjectInstructions = async () => {
+      setProjectInstructions((prev) => ({
+        ...prev,
+        status: "found",
+        summary: `Scanning ${activeRoot} for AGENTS.md / AGENT.md…`,
+      }));
+
+      const nextState = await loadProjectInstructions(activeRoot);
+      if (cancelled) return;
+
+      setProjectInstructions(nextState);
+      setProjects((prevProjects) =>
+        prevProjects.map((project) =>
+          project.id === activeProjectId
+            ? {
+                ...project,
+                instructions: {
+                  status: nextState.status,
+                  path: nextState.source?.path,
+                  fileType: nextState.source?.fileType,
+                  summary: nextState.summary,
+                  lastLoadedAtIso: nextState.lastLoadedAtIso,
+                },
+              }
+            : project,
+        ),
+      );
+      dispatch({
+        type: "set_local_shell",
+        localShell: {
+          ...localShellRef.current,
+          project: {
+            ...localShellRef.current.project,
+            projectInstructionsDetected: nextState.status !== "not_found" && nextState.status !== "load_error",
+            instructionSources: nextState.candidates.map((entry) => entry.path),
+          },
+        },
+      });
+    };
+
+    void syncProjectInstructions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject?.localPath, activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot]);
+
   const workspaceState: WorkspaceRuntimeState = {
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
@@ -425,6 +486,7 @@ export function useChatWorkspaceState() {
     activeProjectId,
     repository,
     providerExecutionState,
+    projectInstructions,
   };
 
   useEffect(() => {
@@ -790,6 +852,9 @@ export function useChatWorkspaceState() {
             connected: true,
             source: providerSource,
           },
+          instructions: {
+            status: validation.hasAgentsInstructions ? "found" : "not_found",
+          },
         },
         ...prev.map((project) => ({ ...project, status: "idle" as const })),
       ]);
@@ -838,6 +903,9 @@ export function useChatWorkspaceState() {
           provider: {
             connected: true,
             source: providerSource,
+          },
+          instructions: {
+            status: "not_found",
           },
         },
         ...prev.map((project) => ({ ...project, status: "idle" as const })),
