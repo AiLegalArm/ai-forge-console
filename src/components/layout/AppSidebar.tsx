@@ -6,6 +6,9 @@ import {
 import type { NavSection } from "./AppLayout";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
+import { SidebarNavRow } from "@/ui/layout/sidebar";
+import { Badge } from "@/ui/components/badge";
+import { Button } from "@/ui/components/button";
 
 const navItems: { id: NavSection; icon: React.ElementType; labelKey: string }[] = [
   { id: "workspace", icon: MessageSquare, labelKey: "nav.workspace" },
@@ -69,33 +72,28 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
         {navItems.map((item) => {
           const isActive = activeSection === item.id;
           return (
-            <button
+            <SidebarNavRow
               key={item.id}
+              icon={item.icon}
+              active={isActive}
               onClick={() => onSectionChange(item.id)}
-              className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[11px] transition-colors border-l-2 ${
-                isActive
-                  ? "text-primary bg-primary/10 border-primary"
-                  : "text-sidebar-foreground border-transparent hover:text-foreground hover:bg-surface-hover"
-              }`}
+              label={(!collapsed || isMobile) ? t(item.labelKey as never) : ""}
               title={collapsed && !isMobile ? t(item.labelKey as never) : undefined}
-            >
-              <item.icon className="h-3.5 w-3.5 shrink-0" />
-              {(!collapsed || isMobile) && (
-                <>
-                  <span className="font-medium truncate flex-1 text-left">{t(item.labelKey as never)}</span>
-                  {isActive && <CircleDot className="h-2.5 w-2.5 text-primary" />}
-                </>
-              )}
-            </button>
+              right={(!collapsed || isMobile) && isActive ? <CircleDot className="h-2.5 w-2.5 text-primary" /> : undefined}
+            />
           );
         })}
       </div>
 
       {!collapsed || isMobile ? (
         <div className="px-2 py-2 border-t border-border-subtle space-y-1">
-          <button onClick={() => onSectionChange("projects")} className="w-full text-left px-2 py-1 text-[10px] font-mono text-muted-foreground hover:bg-surface-hover hover:text-foreground flex items-center gap-1.5 transition-colors"><Folder className="h-3 w-3" /> switch project</button>
-          {!connectedRepo && <button onClick={() => onSectionChange("git")} className="w-full text-left px-2 py-1 text-[10px] font-mono text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">connect repository</button>}
-          {!(openRouterConnected || ollamaHealthy) && <button onClick={() => onSectionChange("providers")} className="w-full text-left px-2 py-1 text-[10px] font-mono text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">connect provider</button>}
+          <div className="flex flex-wrap gap-1">
+            <Badge variant={connectedRepo ? "success" : "warning"}>repo</Badge>
+            <Badge variant={openRouterConnected || ollamaHealthy ? "success" : "warning"}>runtime</Badge>
+          </div>
+          <Button onClick={() => onSectionChange("projects")} variant="ghost" className="w-full justify-start text-[10px] font-mono"><Folder className="h-3 w-3" /> switch project</Button>
+          {!connectedRepo && <Button onClick={() => onSectionChange("git")} variant="ghost" className="w-full justify-start text-[10px] font-mono">connect repository</Button>}
+          {!(openRouterConnected || ollamaHealthy) && <Button onClick={() => onSectionChange("providers")} variant="ghost" className="w-full justify-start text-[10px] font-mono">connect provider</Button>}
         </div>
       ) : null}
       <button

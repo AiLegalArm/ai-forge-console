@@ -3,6 +3,9 @@ import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBra
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
+import { Button } from "@/ui/components/button";
+import { TopBarMeta } from "@/ui/layout/top-bar";
+import { Tabs, TabButton } from "@/ui/components/tabs";
 
 const modeKeys = {
   operator: "operator" as const,
@@ -46,29 +49,27 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
         </span>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 border border-border-subtle bg-card px-1 py-0.5 rounded">
+      <Tabs className="shrink-0 border border-border-subtle bg-card rounded-sm">
         {(Object.keys(modeKeys) as AppMode[]).map((m) => (
-          <button
+          <TabButton
             key={m}
             onClick={() => onModeChange(m)}
-            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors uppercase tracking-wide ${
-              mode === m
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-            }`}
+            active={mode === m}
+            className="h-7 border-b-0"
           >
             {t(modeKeys[m])}
-          </button>
+          </TabButton>
         ))}
-      </div>
+      </Tabs>
 
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-        <button
+        <Button
           onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-          className="px-1.5 py-0.5 text-[10px] font-mono border border-border-subtle text-foreground rounded hover:bg-surface-hover transition-colors"
+          variant="subtle"
+          className="h-7 px-1.5 text-[10px] font-mono"
         >
           {lang === "ru" ? "EN" : "RU"}
-        </button>
+        </Button>
         <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono px-1.5 py-0.5 border border-border-subtle rounded bg-card">
           <ShieldCheck className={`h-3 w-3 ${localShell.security.safeDefaultsEnabled ? "text-success" : "text-warning"}`} />
           <span>{localShell.executionMode.replace(/_/g, " ")}</span>
@@ -78,6 +79,15 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           <span className="text-border-default">•</span>
           <Smartphone className="h-3 w-3" />
           <span>{localShell.desktopShellMode}</span>
+        </div>
+        <div className="hidden xl:block min-w-[260px]">
+          <TopBarMeta
+            project={currentProject}
+            provider={localShell.executionMode}
+            model={currentBranch}
+            routing={localShell.security.privacyMode}
+            state={repository.connected ? "ok" : "warn"}
+          />
         </div>
         <button onClick={onToggleBottom} className="md:hidden p-1 text-muted-foreground hover:text-foreground">
           <Terminal className="h-4 w-4" />
