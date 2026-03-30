@@ -39,6 +39,7 @@ export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntim
 
   const selectedFinding = auditFindings.find((finding) => finding.id === selectedFindingId) ?? null;
   const blockingGateCount = auditGateDecisions.filter((gate) => gate.verdict !== "go").length;
+  const activeBlockers = workspaceState.auditors.blockers.filter((blocker) => blocker.status === "active");
   const currentVerdict = workspaceState.auditGateVerdict ?? auditSummary.overall;
   const recentRuns = workspaceState.auditors.runs.slice(0, 6);
   const severitySummary = workspaceState.auditors.findings.reduce((acc, finding) => {
@@ -90,7 +91,20 @@ export function AuditsView({ workspaceState }: { workspaceState: WorkspaceRuntim
         <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
         <div>
           <div className="text-xs font-semibold text-warning uppercase">Go / No-Go: {currentVerdict === "no_go" || currentVerdict === "fail" ? "NO-GO" : "GO"}</div>
-          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {severitySummary.critical} {t("au.before_release")}</div>
+          <div className="text-[10px] text-muted-foreground">{t("au.resolve")} {severitySummary.critical} {t("au.before_release")} • {activeBlockers.length} active workflow blockers</div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-3">
+        <h2 className="text-xs font-semibold text-foreground mb-2">Audit-driven blockers</h2>
+        <div className="space-y-1.5">
+          {activeBlockers.slice(0, 6).map((blocker) => (
+            <div key={blocker.id} className="border border-warning/30 bg-warning/5 rounded p-2 text-[10px]">
+              <div className="text-foreground font-mono">{blocker.entityType}:{blocker.entityId} • {blocker.blockingSeverity}</div>
+              <div className="text-muted-foreground">Blocked by {blocker.sourceAuditorType} auditor via {blocker.linkedFindingIds.join(", ")}.</div>
+              <div className="text-primary">Unblock: {blocker.unblockCondition}</div>
+            </div>
+          ))}
         </div>
       </div>
 

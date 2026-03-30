@@ -1,6 +1,6 @@
-import { releaseControlState } from "@/data/mock-release-control";
 import { Package, CheckCircle, XCircle, Clock, AlertTriangle, Shield } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import type { WorkspaceRuntimeState } from "@/types/workspace";
 
 const stateIcons: Record<string, React.ReactNode> = {
   go: <CheckCircle className="h-3.5 w-3.5 text-success" />,
@@ -10,8 +10,9 @@ const stateIcons: Record<string, React.ReactNode> = {
   no_go: <XCircle className="h-3.5 w-3.5 text-destructive" />,
 };
 
-export function ReleaseCenterView() {
+export function ReleaseCenterView({ workspaceState }: { workspaceState: WorkspaceRuntimeState }) {
   const { t } = useI18n();
+  const releaseControlState = workspaceState.releaseControl;
   const activeCandidate = releaseControlState.releaseCandidates.find((candidate) => candidate.id === releaseControlState.activeCandidateId);
 
   return (
@@ -56,6 +57,15 @@ export function ReleaseCenterView() {
             <div className="flex items-center justify-between"><span className="text-muted-foreground">Review</span><span className="text-foreground font-mono">{activeCandidate.reviewState}</span></div>
             <div className="flex items-center justify-between"><span className="text-muted-foreground">Deploy state</span><span className="text-warning font-mono">{activeCandidate.deploymentState}</span></div>
             <div className="flex items-center justify-between"><span className="text-muted-foreground">Domain state</span><span className="text-warning font-mono">{activeCandidate.domainState}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Readiness</span><span className="text-warning font-mono">{releaseControlState.finalDecision.readiness}</span></div>
+          </div>
+          <div className="mt-3 space-y-1">
+            {releaseControlState.finalDecision.blockers.slice(0, 4).map((blocker) => (
+              <div key={blocker} className="text-[11px] text-destructive">• {blocker}</div>
+            ))}
+            {releaseControlState.finalDecision.goSignals.slice(0, 3).map((signal) => (
+              <div key={signal} className="text-[11px] text-success">✓ {signal}</div>
+            ))}
           </div>
         </div>
       ) : null}

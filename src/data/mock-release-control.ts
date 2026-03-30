@@ -2,7 +2,7 @@ import type { ReleaseControlState, DeploymentRecord, DomainRecord, ReleaseCandid
 import type { WorkflowApproval } from "@/types/workflow";
 import { evaluateGoNoGo } from "@/lib/release-go-no-go";
 import { workflowState } from "@/data/mock-workflow";
-import { auditGateDecisions, auditors } from "@/data/mock-audits";
+import { auditBlockers, auditGateDecisions, auditors } from "@/data/mock-audits";
 import { evidenceFlowState } from "@/data/mock-evidence";
 
 const deployments: DeploymentRecord[] = [
@@ -174,8 +174,19 @@ const domainReadiness = domains.some((domain) => domain.assignmentState === "blo
 
 const finalDecision = evaluateGoNoGo({
   auditors: [...activeAuditVerdicts, ...auditGateDecisions.map((gate) => gate.verdict === "go" ? "go" : "no_go")],
+  releaseAuditorVerdict: auditors.find((auditor) => auditor.type === "release")?.verdict ?? "not_ready",
   reviewState: releaseCandidates[0].reviewState,
   taskStatuses: workflowState.tasks.filter((task) => task.id === "task-rbac-release" || task.id === "task-rbac-audit").map((task) => task.status),
+  subtaskStatuses: workflowState.subtasks
+    .filter((subtask) => ["task-rbac-release", "task-rbac-audit", "task-rbac-exec"].includes(subtask.taskId) && subtask.criticalPath)
+    .map((subtask) => subtask.status),
+  auditBlockers,
+  agentOutcomeSignals: [
+    { source: "browser_agent", status: unresolvedBrowserBlockers ? "blocked" as const : "ready" as const, detail: unresolvedBrowserBlockers ? "Failed invite scenario evidence is unresolved" : "Scenarios passed" },
+    { source: "reviewer", status: releaseCandidates[0].reviewState === "approved" ? "ready" as const : "warning" as const, detail: `Review state is ${releaseCandidates[0].reviewState}` },
+    { source: "security_auditor", status: auditBlockers.some((blocker) => blocker.sourceAuditorType === "security") ? "blocked" as const : "ready" as const, detail: "Security findings must be resolved before merge/release" },
+    { source: "test_auditor", status: auditBlockers.some((blocker) => blocker.sourceAuditorType === "test") ? "blocked" as const : "ready" as const, detail: "Regression coverage and browser failures are part of release gate" },
+  ],
   githubSyncStatus: workflowState.github.repositories[0]?.state ?? "error",
   browserEvidenceResolved: !unresolvedBrowserBlockers,
   designEvidenceResolved: !unresolvedDesignBlockers,

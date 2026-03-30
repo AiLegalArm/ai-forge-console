@@ -1,6 +1,7 @@
 import type {
   WorkflowState,
   WorkflowTask,
+  WorkflowSubtask,
   WorkflowApproval,
   AgentActivityEvent,
   GitHubRepositoryConnection,
@@ -10,6 +11,8 @@ import type {
   WorkflowTaskGraph,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
+import { auditBlockers } from "@/data/mock-audits";
+import { applyParentTaskBlocking, applySubtaskAuditBlocking } from "@/lib/workflow-gating";
 
 const repositories: GitHubRepositoryConnection[] = [
   {
@@ -328,6 +331,42 @@ const tasks: WorkflowTask[] = [
         auditGate: auditGateDecisions.find((gate) => gate.stage === "release_readiness"),
       },
     },
+  },
+];
+
+const subtasks: WorkflowSubtask[] = [
+  {
+    id: "subtask-rbac-frontend-browser",
+    taskId: "task-rbac-exec",
+    title: "Frontend invite flow browser verification",
+    status: "completed",
+    linkedAgentId: "agent-browser",
+    linkedFindingIds: ["AF-BROWSER-211"],
+    evidenceIds: ["ev-browser-trace-211", "ev-browser-shot-211"],
+    criticalPath: true,
+    updatedAtIso: "2026-03-29T10:47:15.000Z",
+  },
+  {
+    id: "subtask-rbac-backend-security",
+    taskId: "task-rbac-audit",
+    title: "Backend invite token scope hardening",
+    status: "completed",
+    linkedAgentId: "agent-auditor",
+    linkedFindingIds: ["AF-SEC-014"],
+    evidenceIds: ["ev-sec-runtime", "ev-sec-browser-network"],
+    criticalPath: true,
+    updatedAtIso: "2026-03-29T10:46:55.000Z",
+  },
+  {
+    id: "subtask-rbac-release-checklist",
+    taskId: "task-rbac-release",
+    title: "Release readiness checklist and sign-off",
+    status: "in_progress",
+    linkedAgentId: "agent-release",
+    linkedFindingIds: ["AF-REL-501", "AF-TEST-302"],
+    evidenceIds: ["ev-release-audit", "ev-test-quality"],
+    criticalPath: true,
+    updatedAtIso: "2026-03-29T10:48:10.000Z",
   },
 ];
 
@@ -743,7 +782,12 @@ const activityEvents: AgentActivityEvent[] = [
   },
 ];
 
+const gatedSubtasks = applySubtaskAuditBlocking(subtasks, auditBlockers);
+const gatedTasks = applyParentTaskBlocking(tasks, gatedSubtasks, auditBlockers);
+
 export const workflowState: WorkflowState = {
+  tasks: gatedTasks,
+  subtasks: gatedSubtasks,
   tasks,
   subtasks,
   delegations,

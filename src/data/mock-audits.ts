@@ -1,4 +1,5 @@
 import type {
+  AuditBlockerCondition,
   AuditEvidenceReference,
   AuditGateDecision,
   AuditorControlState,
@@ -9,6 +10,7 @@ import type {
   FindingSeverity,
   SeveritySummary,
 } from "@/types/audits";
+import { buildAuditBlockers } from "@/lib/workflow-gating";
 
 const nowIso = "2026-03-29T10:49:00.000Z";
 
@@ -36,6 +38,23 @@ const evidence = (id: string, type: AuditEvidenceReference["type"], title: strin
 });
 
 export const auditFindings: AuditorFinding[] = [
+  {
+    id: "AF-BROWSER-211",
+    title: "Invite modal hides error state on retry",
+    description: "Browser Agent found retry flow where toast disappears without preserving inline error details, preventing user recovery.",
+    auditorType: "test",
+    severity: "high",
+    blocking: true,
+    scope: { scopeType: "task", scopeId: "subtask-rbac-frontend-browser", label: "Frontend invite browser validation" },
+    evidence: [
+      evidence("ev-browser-trace-211", "scenario_trace", "Retry flow trace", "artifact://browser/traces/invite-retry.json"),
+      evidence("ev-browser-shot-211", "screenshot", "Toast disappears screenshot", "artifact://browser/screens/invite-retry.png"),
+    ],
+    recommendation: "Keep inline error state mounted until retry response succeeds and add browser assertion for failed retry path.",
+    linked: { taskId: "task-rbac-exec", chatSessionId: "agent-session-1", reviewId: "pr-rbac-42" },
+    status: "open",
+    createdAtIso: nowIso,
+  },
   {
     id: "AF-CODE-101",
     title: "Duplicate RBAC mapper in API and UI",
@@ -290,12 +309,22 @@ export const auditGateDecisions: AuditGateDecision[] = [
   },
 ];
 
+export const auditBlockers: AuditBlockerCondition[] = buildAuditBlockers({
+  auditors,
+  findings: auditFindings,
+  runs: auditRuns,
+  runGroups: auditRunGroups,
+  gateDecisions: auditGateDecisions,
+  blockers: [],
+});
+
 export const auditorControlState: AuditorControlState = {
   auditors,
   findings: auditFindings,
   runs: auditRuns,
   runGroups: auditRunGroups,
   gateDecisions: auditGateDecisions,
+  blockers: auditBlockers,
 };
 
 const summaryBySeverity = summarizeSeverity(auditFindings);

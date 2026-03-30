@@ -27,6 +27,9 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
     (finding) => finding.linked.taskId === activeTask?.id,
   );
   const noGoGates = workspaceState.auditors.gateDecisions.filter((gate) => gate.verdict === "no_go").length;
+  const activeTaskBlockers = workspaceState.auditors.blockers.filter(
+    (blocker) => blocker.status === "active" && (blocker.entityId === activeTask?.id || blocker.entityType === "subtask"),
+  );
   const ollamaState = workspaceState.localInference.ollama.serviceState;
 
   return (
@@ -86,6 +89,7 @@ export function ChatContextBar({ workspaceState, chatState }: ChatContextBarProp
       <span className="text-warning hidden md:inline">{workspaceState.pendingApprovals.length} approvals</span>
       <span className="text-border hidden md:inline">|</span>
       <span className="text-warning hidden md:inline">{currentTaskAuditFindings.length} audit findings</span>
+      <span className="text-destructive hidden md:inline">{activeTaskBlockers.length} blockers</span>
       <span className={`hidden md:inline ${noGoGates > 0 ? "text-destructive" : "text-success"}`}>
         {noGoGates > 0 ? `${noGoGates} no-go gates` : "all gates go"}
       </span>

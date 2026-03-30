@@ -256,6 +256,27 @@ export type TaskStatus =
 export type TaskPhase = "planning" | "implementation" | "audit" | "review" | "release";
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
+export interface WorkflowSubtask {
+  id: string;
+  taskId: string;
+  title: string;
+  status: TaskStatus;
+  linkedAgentId?: string;
+  linkedFindingIds: string[];
+  evidenceIds: string[];
+  criticalPath: boolean;
+  updatedAtIso: string;
+}
+
+export interface WorkflowTaskRollup {
+  totalSubtasks: number;
+  completedSubtasks: number;
+  blockedSubtasks: number;
+  criticalBlockedSubtasks: number;
+  blockerIds: string[];
+  gateStatus: "ready" | "warning" | "blocked";
+}
+
 export interface WorkflowTask {
   id: string;
   title: string;
@@ -283,6 +304,8 @@ export interface WorkflowTask {
   blockedByTaskIds?: string[];
   failureReason?: string;
   updatedAtIso: string;
+  parentTaskId?: string;
+  rollup?: WorkflowTaskRollup;
   github?: TaskGitHubState;
 }
 
