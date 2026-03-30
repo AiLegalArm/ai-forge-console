@@ -8,6 +8,8 @@ import { browserSession, designSession } from "@/data/mock-agent-workspace";
 import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
+import { createDeployProviderClientFromEnv, RealDeployIntegrationService } from "@/lib/deploy-integration-service";
+import { deriveReleaseControlState, upsertApproval, upsertDeployment } from "@/lib/release-control-state";
 import { createLocalGitService } from "@/lib/local-git-service";
 import { createLocalGitHubService } from "@/lib/local-github-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
@@ -335,6 +337,14 @@ export function useChatWorkspaceState() {
     Record<string, { commandId: string; taskId?: string; chatId?: string; projectId: string }>
   >({});
   const [policyState, setPolicyState] = useState<ExecutionPolicyState>({ recentDecisions: [] });
+  const [releaseControl, setReleaseControl] = useState(releaseControlState);
+  const deployIntegrationService = useMemo(
+    () => new RealDeployIntegrationService(createDeployProviderClientFromEnv()),
+    [],
+  );
+  useEffect(() => {
+    setReleaseControl((prev) => deriveReleaseControlState(prev, workflow, auditorControlState, activeEvidenceFlow));
+  }, [workflow, activeEvidenceFlow]);
 
   type AddLocalProjectResult = {
     ok: boolean;
@@ -619,7 +629,7 @@ export function useChatWorkspaceState() {
         ],
         workflow,
         auditors: auditorControlState,
-        releaseControl: releaseControlState,
+        releaseControl: releaseControl,
         chatState,
         currentChatType,
         currentChatSessionId,
@@ -720,7 +730,7 @@ export function useChatWorkspaceState() {
       hasAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active"),
       hasCriticalAuditBlockers: auditorControlState.blockers.some((blocker) => blocker.status === "active" && blocker.blockingSeverity === "critical"),
       releaseState:
-        releaseControlState.finalDecision.status === "go" ? "go" : releaseControlState.finalDecision.status === "blocked" || releaseControlState.finalDecision.status === "no_go" ? "blocked" : "warning",
+        releaseControl.finalDecision.status === "go" ? "go" : releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go" ? "blocked" : "warning",
       commandSafetyLevel: action.commandSafetyLevel ?? "safe",
       repoConnected: repository.connected,
       repoClean: repository.clean ?? true,
@@ -767,14 +777,14 @@ export function useChatWorkspaceState() {
     currentReviewId: activeReviewId,
     currentReleaseCandidateId: activeReleaseCandidateId,
     auditGateVerdict: activeAuditGate?.verdict,
-    releaseReadinessStatus: releaseControlState.finalDecision.status,
+    releaseReadinessStatus: releaseControl.finalDecision.status,
     pendingApprovals,
     workflow,
     auditors: auditorControlState,
     designSession,
     browserSession: activeBrowserSession,
     evidenceFlow: activeEvidenceFlow,
-    releaseControl: releaseControlState,
+    releaseControl: releaseControl,
     localInference,
     localShell,
     projects,
@@ -855,12 +865,12 @@ export function useChatWorkspaceState() {
   const operatorDashboardInput = useMemo<OperatorDashboardWorkspaceInput>(() => ({
     workflow,
     auditors: auditorControlState,
-    releaseControl: releaseControlState,
+    releaseControl: releaseControl,
     pendingApprovals,
     localInference,
     activeAgents,
     activeProjectId,
-    releaseReadinessStatus: releaseControlState.finalDecision.status,
+    releaseReadinessStatus: releaseControl.finalDecision.status,
   }), [workflow, pendingApprovals, localInference, activeProjectId]);
 
   const operatorDashboard = useMemo(() => buildOperatorDashboard(operatorDashboardInput, operatorProjectSnapshots), [operatorDashboardInput, operatorProjectSnapshots]);
@@ -2791,45 +2801,11 @@ export function useChatWorkspaceState() {
                       lastMessageAtIso: completionIso,
                       unreadCount: 0,
                     }
-                  : message,
+                  : session,
               ),
             },
-            sessions: latestChat.sessions.map((session) =>
-              session.id === sessionId
-                ? {
-                    ...session,
-                    lastMessageAtIso: runOutput.run.endedAtIso,
-                    unreadCount: 0,
-                  }
-                : session,
-            ),
-          },
-        });
-        dispatch({
-          type: "set_workflow",
-          workflow: {
-            ...workflowRef.current,
-            executionRuns: [runOutput.run, ...workflowRef.current.executionRuns],
-            activityEvents: [
-              {
-                id: `activity-${runOutput.run.id}-failed`,
-                type: "failed",
-                title: `${activeAgent?.name ?? "Agent"} execution failed`,
-                details: `${runOutput.run.error?.code ?? "execution_error"}: ${runOutput.run.error?.message ?? "unknown"}`,
-                taskId: runOutput.run.taskId,
-                chatId: runOutput.run.chatSessionId,
-                agentId: runOutput.run.agentId,
-                agentRole: runOutput.run.agentRole,
-                provider: usedProvider,
-                backend: runOutput.run.backend,
-                severity: "critical",
-                createdAtIso: runOutput.run.endedAtIso,
-              },
-              ...workflowRef.current.activityEvents,
-            ],
-          },
-        });
-        setProviderExecutionState("failed");
+          });
+        }, 1500);
       };
 
       void executeProviderRequest();
@@ -3030,6 +3006,96 @@ export function useChatWorkspaceState() {
         chatType: targetSession.type,
         sessionId: targetSession.id,
       });
+    },
+    triggerDeploy: async (environment: "preview" | "production") => {
+      const activeCandidate = releaseControl.releaseCandidates.find((candidate) => candidate.id === releaseControl.activeCandidateId);
+      const branch = activeCandidate?.linkedBranch ?? repository.branch ?? "main";
+      const taskId = activeCandidate?.linkedTaskId;
+      const policyDecision = evaluatePolicy({
+        actionType: "deploy_action",
+        subject: { type: "user", id: "workspace-operator" },
+        target: { type: "release_action", id: activeCandidate?.id, label: `deploy:${environment}` },
+      });
+      if (policyDecision.blocked) {
+        return { ok: false, message: policyDecision.rationale };
+      }
+      if (policyDecision.requiresApproval && environment === "production") {
+        const approval = deployIntegrationService.buildDeployApproval(taskId, currentChatSessionId, environment);
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            approvals: upsertApproval(workflow.approvals, approval),
+            activityEvents: [
+              {
+                id: `activity-${approval.id}`,
+                type: "waiting_for_approval",
+                title: "Production deploy awaiting approval",
+                details: approval.reason,
+                taskId,
+                chatId: currentChatSessionId,
+                severity: "warning",
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        return { ok: false, message: "Approval required", approvalId: approval.id };
+      }
+
+      const result = await deployIntegrationService.triggerDeploy({
+        releaseControl,
+        projectId: activeProjectId,
+        repository: repository.name ?? localShell.project.repositoryName ?? activeProject?.name ?? "workspace",
+        branch,
+        taskId,
+        chatId: currentChatSessionId,
+        releaseCandidateId: activeCandidate?.id,
+        environment,
+        approvals: workflow.approvals,
+        releaseState: releaseControl.finalDecision.status === "go" ? "go" : releaseControl.finalDecision.status === "blocked" || releaseControl.finalDecision.status === "no_go" ? "blocked" : "warning",
+      });
+
+      if (!result.ok || !result.deployment) {
+        return result;
+      }
+
+      setReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      dispatch({
+        type: "set_workflow",
+        workflow: {
+          ...workflow,
+          activityEvents: [
+            {
+              id: `activity-deploy-${result.deployment.id}`,
+              type: "deploy_triggered",
+              title: `${environment} deploy triggered`,
+              details: `${result.deployment.id} (${result.deployment.status})`,
+              taskId,
+              chatId: currentChatSessionId,
+              severity: "info",
+              createdAtIso: new Date().toISOString(),
+            },
+            ...workflow.activityEvents,
+          ],
+        },
+      });
+      return result;
+    },
+    refreshDeployStatus: async (deploymentId: string) => {
+      const deployment = releaseControl.deployments.find((entry) => entry.id === deploymentId);
+      if (!deployment) return { ok: false, message: "Deployment not found." };
+      const result = await deployIntegrationService.refreshDeploymentStatus(deployment);
+      if (!result.ok || !result.deployment) return result;
+      setReleaseControl((prev) => ({
+        ...prev,
+        deployments: upsertDeployment(prev.deployments, result.deployment!),
+      }));
+      return result;
     },
     refreshLocalInference,
     runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => {
