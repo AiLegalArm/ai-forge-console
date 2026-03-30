@@ -9,6 +9,7 @@ import type {
   AgentCommandRequest,
   WorkflowDelegation,
   WorkflowTaskGraph,
+  AgentExecutionRun,
 } from "@/types/workflow";
 import { auditGateDecisions } from "@/data/mock-audits";
 import { auditBlockers } from "@/data/mock-audits";
@@ -854,6 +855,7 @@ export const workflowState: WorkflowState = {
   taskGraphs,
   approvals,
   agentCommandRequests,
+  executionRuns,
   activityEvents,
   executionTraces,
   github: {

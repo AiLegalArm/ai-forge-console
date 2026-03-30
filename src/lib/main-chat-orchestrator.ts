@@ -212,6 +212,7 @@ export function runMainChatOrchestrator(input: OrchestratorInput): OrchestratorR
     delegations: [...delegations, ...input.workflow.delegations],
     taskGraphs: [taskGraph, ...input.workflow.taskGraphs],
     activityEvents: [...events, ...input.workflow.activityEvents],
+    executionRuns: input.workflow.executionRuns,
   };
 
   const planSummary = subtasks

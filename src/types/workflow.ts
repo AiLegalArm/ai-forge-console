@@ -1,5 +1,7 @@
 import type { AuditGateDecision, AuditorType, AuditorVerdict } from "@/types/audits";
 import type { RuntimeProviderBackend, SyncStatus } from "@/types/contracts";
+import type { ChatType } from "@/types/chat";
+import type { ModelProvider, RoutingDecision } from "@/types/local-inference";
 
 export type ActivitySeverity = "info" | "warning" | "critical";
 
@@ -501,5 +503,6 @@ export interface WorkflowState {
   executionTraces: ExecutionTrace[];
   approvals: WorkflowApproval[];
   agentCommandRequests: AgentCommandRequest[];
+  executionRuns: AgentExecutionRun[];
   github: GitHubSyncState;
 }
