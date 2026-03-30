@@ -61,6 +61,7 @@ export interface AgentActivityEvent {
 export type ApprovalCategory =
   | "git_push"
   | "push_approval"
+  | "pr_creation_approval"
   | "auto_push_enablement"
   | "deploy"
   | "production_deploy_approval"
@@ -203,7 +204,18 @@ export interface PullRequestReviewFinding {
 export interface PullRequestState {
   id: string;
   number?: number;
+  url?: string;
   title: string;
+  body?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  linkedTaskIds: string[];
+  linkedSubtaskIds: string[];
+  linkedAuditId?: string;
+  draftPreparedAtIso?: string;
+  draftPreparationStatus: "idle" | "ready" | "failed";
+  creationStatus: "idle" | "approval_required" | "ready" | "creating" | "created" | "failed";
+  pendingError?: string;
   status: "draft_review" | "ready_for_review" | "changes_requested" | "approved" | "merged" | "closed";
   reviewChatSessionId?: string;
   linkedAuditorIds: string[];

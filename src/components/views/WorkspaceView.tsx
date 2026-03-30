@@ -53,7 +53,7 @@ interface WorkspaceViewProps {
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
-  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;
   onModelChange: (model: string) => void;
@@ -566,7 +566,7 @@ function GitView({
   onGitAction,
 }: {
   workspaceState: WorkspaceRuntimeState;
-  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => Promise<void>;
 }) {
   const { t } = useI18n();
   const activeTask =
@@ -626,6 +626,9 @@ function GitView({
       <div className="bg-card border border-border rounded-lg p-3 space-y-2 text-xs">
         <div className="flex items-center gap-2 text-primary"><Upload className="h-3.5 w-3.5" /> {t("git.review_audit" as never)}</div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.pr_status" as never)}</span><span className="font-mono text-foreground">{reviewState?.status ?? "not_opened"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR branch</span><span className="font-mono text-foreground">{reviewState?.sourceBranch && reviewState?.targetBranch ? `${reviewState.sourceBranch} → ${reviewState.targetBranch}` : "—"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR draft</span><span className="font-mono text-foreground">{reviewState?.draftPreparationStatus ?? "idle"}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">PR creation</span><span className="font-mono text-foreground">{reviewState?.creationStatus ?? "idle"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.review_chat" as never)}</span><span className="font-mono text-foreground">{reviewState?.reviewChatSessionId ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.auditors" as never)}</span><span className="font-mono text-foreground">{reviewState?.linkedAuditorIds.join(", ") ?? "—"}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">{t("git.merge_readiness" as never)}</span><span className={`font-mono ${reviewState?.mergeReadiness === "blocked" ? "text-destructive" : "text-success"}`}>{reviewState?.mergeReadiness ?? "not_ready"}</span></div>
@@ -637,6 +640,7 @@ function GitView({
             <span className="truncate">{openFindings[0].title}</span>
           </div>
         ) : null}
+        {reviewState?.pendingError ? <div className="text-warning">{reviewState.pendingError}</div> : null}
       </div>
 
       <div className="bg-card border border-border rounded-lg p-3 space-y-1 text-xs">
@@ -653,6 +657,8 @@ function GitView({
         <button onClick={() => activeTask && void onGitAction("stage_all", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.stage_all" as never)}</button>
         <button onClick={() => activeTask && void onGitAction("commit", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.commit" as never)}</button>
         <button onClick={() => activeTask && void onGitAction("push", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-primary text-primary-foreground rounded">{t("git.push")}</button>
+        <button onClick={() => activeTask && void onGitAction("prepare_pr", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Prepare PR</button>
+        <button onClick={() => activeTask && void onGitAction("create_pr", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">Create PR</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.pull")}</button>
         <button onClick={() => activeTask && void onGitAction("pull", activeTask.id)} className="px-3 py-1 text-xs font-mono bg-secondary text-secondary-foreground rounded">{t("git.sync")}</button>
       </div>

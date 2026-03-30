@@ -9,6 +9,7 @@ import { evidenceFlowState } from "@/data/mock-evidence";
 import { localShellState } from "@/data/mock-local-shell";
 import { releaseControlState } from "@/data/mock-release-control";
 import { createLocalGitService } from "@/lib/local-git-service";
+import { createLocalGitHubService } from "@/lib/local-github-service";
 import { createLocalTerminalExecutionService } from "@/lib/local-terminal-service";
 import { hasDuplicateLocalPath, selectLocalProjectPath, validateLocalProjectPath } from "@/lib/local-project-service";
 import { validateRepositoryConnection } from "@/lib/local-repository-service";
@@ -264,6 +265,7 @@ export function useChatWorkspaceState() {
   const localShellRef = useRef(localShell);
   localShellRef.current = localShell;
   const gitService = useMemo(() => createLocalGitService(localShell.project.activeProjectRoot), [localShell.project.activeProjectRoot]);
+  const githubService = useMemo(() => createLocalGitHubService(localShell.project.activeProjectRoot), [localShell.project.activeProjectRoot]);
   const terminalService = useMemo(
     () => createLocalTerminalExecutionService(localShellState.project.activeProjectRoot),
     [],
@@ -3030,9 +3032,32 @@ export function useChatWorkspaceState() {
       });
     },
     refreshLocalInference,
-    runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => {
+    runGitAction: async (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => {
       const task = workflow.tasks.find((entry) => entry.id === taskId);
       if (!task?.github) return;
+      const hasRepositoryConnection = repository.connected || Boolean(workflow.github.activeRepositoryId);
+      if (!hasRepositoryConnection && (action === "push" || action === "prepare_pr" || action === "create_pr")) {
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-git-no-repo-${task.id}-${Date.now().toString(36)}`,
+                type: "blocked",
+                title: "GitHub workflow blocked",
+                details: "No connected repository. Connect a repository before push/PR actions.",
+                severity: "critical",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+          },
+        });
+        return;
+      }
       const gitPolicyDecision = evaluatePolicy({
         actionType: action === "push" ? "git_push" : action === "commit" ? "risky_command_execution" : "safe_command_execution",
         subject: { type: "user", id: "workspace-operator" },
@@ -3090,6 +3115,253 @@ export function useChatWorkspaceState() {
                         status: "approval_required",
                         linkedApprovalId: approvalId,
                         pendingError: "Push blocked until approval is granted.",
+                      },
+                    },
+                  }
+                : entry,
+            ),
+          },
+        });
+        return;
+      }
+
+      const defaultTargetBranch = workflow.github.repositories.find((repo) => repo.id === task.github?.repositoryId)?.defaultBranch ?? "main";
+      const taskBranch = task.github.branch?.localBranchName ?? task.branchName;
+      const canPreparePr =
+        Boolean(taskBranch) &&
+        task.github.pushWorkflow.status === "pushed" &&
+        task.github.commitWorkflow.status === "committed";
+
+      if (action === "prepare_pr") {
+        if (!taskBranch || taskBranch === defaultTargetBranch) {
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflow,
+              tasks: workflow.tasks.map((entry) =>
+                entry.id === task.id && entry.github
+                  ? {
+                      ...entry,
+                      github: {
+                        ...entry.github,
+                        pullRequest: {
+                          ...(entry.github.pullRequest ?? {
+                            id: `pr-${task.id}`,
+                            title: "",
+                            status: "draft_review",
+                            linkedAuditorIds: entry.linkedAuditorTypes ?? [],
+                            findings: [],
+                            mergeReadiness: "not_ready",
+                            releaseGateReadiness: "not_ready",
+                            linkedTaskIds: [],
+                            linkedSubtaskIds: [],
+                            draftPreparationStatus: "idle",
+                            creationStatus: "idle",
+                          }),
+                          pendingError: "Cannot prepare PR from default branch. Switch to a task branch first.",
+                          draftPreparationStatus: "failed",
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            },
+          });
+          return;
+        }
+        if (!canPreparePr) {
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflow,
+              tasks: workflow.tasks.map((entry) =>
+                entry.id === task.id && entry.github
+                  ? {
+                      ...entry,
+                      github: {
+                        ...entry.github,
+                        pullRequest: {
+                          ...(entry.github.pullRequest ?? {
+                            id: `pr-${task.id}`,
+                            title: "",
+                            status: "draft_review",
+                            linkedAuditorIds: entry.linkedAuditorTypes ?? [],
+                            findings: [],
+                            mergeReadiness: "not_ready",
+                            releaseGateReadiness: "not_ready",
+                            linkedTaskIds: [],
+                            linkedSubtaskIds: [],
+                            draftPreparationStatus: "idle",
+                            creationStatus: "idle",
+                          }),
+                          pendingError: "PR draft requires a committed and pushed task branch.",
+                          draftPreparationStatus: "failed",
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            },
+          });
+          return;
+        }
+        const draft = githubService.preparePullRequestDraft({
+          taskId: task.id,
+          taskTitle: task.title,
+          sourceBranch: taskBranch,
+          targetBranch: defaultTargetBranch,
+          commitSummary: task.github.commitSummary,
+          linkedSubtaskIds: workflow.subtasks.filter((subtask) => subtask.taskId === task.id).map((subtask) => subtask.id),
+          linkedAuditId: task.linkedAuditId,
+        });
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-pr-draft-${task.id}-${Date.now().toString(36)}`,
+                type: "review_triggered",
+                title: "PR draft prepared",
+                details: `${draft.sourceBranch} -> ${draft.targetBranch}`,
+                severity: "info",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+            tasks: workflow.tasks.map((entry) =>
+              entry.id === task.id && entry.github
+                ? {
+                    ...entry,
+                    github: {
+                      ...entry.github,
+                      branchLifecycle: "review_opened",
+                      pullRequest: {
+                        ...(entry.github.pullRequest ?? {
+                          id: `pr-${task.id}`,
+                          status: "draft_review",
+                          reviewChatSessionId: task.linkedChatSessionId,
+                          linkedAuditorIds: entry.linkedAuditorTypes ?? [],
+                          findings: [],
+                          mergeReadiness: "not_ready",
+                          releaseGateReadiness: "not_ready",
+                        }),
+                        title: draft.title,
+                        body: draft.body,
+                        sourceBranch: draft.sourceBranch,
+                        targetBranch: draft.targetBranch,
+                        linkedTaskIds: draft.linkedTaskIds,
+                        linkedSubtaskIds: draft.linkedSubtaskIds,
+                        linkedAuditId: draft.linkedAuditId,
+                        draftPreparedAtIso: new Date().toISOString(),
+                        draftPreparationStatus: "ready",
+                        creationStatus: "ready",
+                        pendingError: undefined,
+                      },
+                    },
+                  }
+                : entry,
+            ),
+          },
+        });
+        return;
+      }
+
+      if (action === "create_pr") {
+        const existingDraft = task.github.pullRequest;
+        if (!existingDraft || existingDraft.draftPreparationStatus !== "ready" || !existingDraft.sourceBranch || !existingDraft.targetBranch) {
+          return;
+        }
+        const pendingPrApproval = workflow.approvals.find(
+          (approval) => approval.taskId === task.id && approval.category === "pr_creation_approval" && approval.status === "pending",
+        );
+        const prApproved = workflow.approvals.some(
+          (approval) => approval.taskId === task.id && approval.category === "pr_creation_approval" && approval.status === "approved",
+        );
+        const requiresPrApproval = task.phase === "release" || task.github.syncMode === "auto_push";
+        if (requiresPrApproval && !prApproved) {
+          const approvalId = pendingPrApproval?.id ?? `approval-pr-${task.id}`;
+          dispatch({
+            type: "set_workflow",
+            workflow: {
+              ...workflow,
+              approvals: pendingPrApproval
+                ? workflow.approvals
+                : [
+                    ...workflow.approvals,
+                    {
+                      id: approvalId,
+                      category: "pr_creation_approval",
+                      title: `Approve PR creation for ${task.title}`,
+                      reason: "PR creation requires operator confirmation for release/review context linkage.",
+                      status: "pending",
+                      taskId: task.id,
+                      chatId: task.linkedChatSessionId,
+                      requestedBy: "github-service",
+                      requestedAtIso: new Date().toISOString(),
+                    },
+                  ],
+              tasks: workflow.tasks.map((entry) =>
+                entry.id === task.id && entry.github && entry.github.pullRequest
+                  ? {
+                      ...entry,
+                      github: {
+                        ...entry.github,
+                        pullRequest: {
+                          ...entry.github.pullRequest,
+                          creationStatus: "approval_required",
+                          pendingError: "PR creation is waiting for approval.",
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            },
+          });
+          return;
+        }
+
+        const prCreateResult = await githubService.createPullRequest({
+          title: existingDraft.title,
+          body: existingDraft.body || "",
+          sourceBranch: existingDraft.sourceBranch,
+          targetBranch: existingDraft.targetBranch,
+          draft: true,
+        });
+
+        dispatch({
+          type: "set_workflow",
+          workflow: {
+            ...workflow,
+            activityEvents: [
+              {
+                id: `activity-pr-create-${task.id}-${Date.now().toString(36)}`,
+                type: prCreateResult.ok ? "review_triggered" : "failed",
+                title: prCreateResult.ok ? "Pull request created" : "Pull request creation failed",
+                details: prCreateResult.details,
+                severity: prCreateResult.ok ? "info" : "critical",
+                taskId: task.id,
+                chatId: task.linkedChatSessionId,
+                createdAtIso: new Date().toISOString(),
+              },
+              ...workflow.activityEvents,
+            ],
+            tasks: workflow.tasks.map((entry) =>
+              entry.id === task.id && entry.github && entry.github.pullRequest
+                ? {
+                    ...entry,
+                    github: {
+                      ...entry.github,
+                      branchLifecycle: prCreateResult.ok ? "review_opened" : entry.github.branchLifecycle,
+                      pullRequest: {
+                        ...entry.github.pullRequest,
+                        number: prCreateResult.number ?? entry.github.pullRequest.number,
+                        url: prCreateResult.url ?? entry.github.pullRequest.url,
+                        status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
+                        creationStatus: prCreateResult.ok ? "created" : "failed",
+                        pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
                       },
                     },
                   }

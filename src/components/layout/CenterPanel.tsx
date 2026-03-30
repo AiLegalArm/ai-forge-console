@@ -24,7 +24,7 @@ interface CenterPanelProps {
   onSendMessage: (conversation: ChatType) => void;
   onApprovalResolve: (sessionId: string) => void;
   onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>;
-  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull", taskId: string) => Promise<void>;
+  onGitAction: (action: "stage_all" | "unstage_all" | "commit" | "push" | "pull" | "prepare_pr" | "create_pr", taskId: string) => Promise<void>;
   onRunBrowserScenario: () => Promise<void>;
   onRefreshLocalInference: () => Promise<void>;
   onProviderSourceChange: (source: "openrouter" | "ollama") => void;

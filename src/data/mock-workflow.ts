@@ -161,7 +161,17 @@ const tasks: WorkflowTask[] = [
       pullRequest: {
         id: "pr-rbac-42",
         number: 42,
+        url: "https://github.com/acme-dev/saas-dashboard/pull/42",
         title: "RBAC foundation and invite workflow",
+        body: "## Summary\n- Implement RBAC foundation\n- Add invite workflow\n\n## Linked context\n- Task: task-rbac-exec\n- Audit: AF-SEC-014",
+        sourceBranch: "feat/rbac-task-rbac-exec",
+        targetBranch: "main",
+        linkedTaskIds: ["task-rbac-exec"],
+        linkedSubtaskIds: ["subtask-rbac-frontend-browser"],
+        linkedAuditId: "AF-SEC-014",
+        draftPreparedAtIso: "2026-03-29T10:45:10.000Z",
+        draftPreparationStatus: "ready",
+        creationStatus: "created",
         status: "draft_review",
         reviewChatSessionId: "review-session-1",
         linkedAuditorIds: ["agent-auditor", "agent-release"],
@@ -314,7 +324,17 @@ const tasks: WorkflowTask[] = [
       pullRequest: {
         id: "pr-rbac-42",
         number: 42,
+        url: "https://github.com/acme-dev/saas-dashboard/pull/42",
         title: "RBAC foundation and invite workflow",
+        body: "## Summary\n- Prepare release rollout notes\n\n## Linked context\n- Task: task-rbac-release",
+        sourceBranch: "feat/rbac-task-rbac-exec",
+        targetBranch: "main",
+        linkedTaskIds: ["task-rbac-release"],
+        linkedSubtaskIds: ["subtask-rbac-release-checklist"],
+        linkedAuditId: "AF-SEC-014",
+        draftPreparedAtIso: "2026-03-29T10:46:52.000Z",
+        draftPreparationStatus: "ready",
+        creationStatus: "created",
         status: "ready_for_review",
         reviewChatSessionId: "review-session-1",
         linkedAuditorIds: ["agent-auditor", "agent-release"],
@@ -434,7 +454,7 @@ const approvals: WorkflowApproval[] = [
   },
 ];
 
-const subtasks: WorkflowSubtask[] = [
+const delegatedSubtasks: WorkflowSubtask[] = [
   {
     id: "task-rbac-plan",
     parentTaskId: "task-rbac",
