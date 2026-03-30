@@ -49,6 +49,13 @@ export interface WorkspaceProjectEntry {
     connected: boolean;
     source?: "openrouter" | "ollama";
   };
+  instructions?: {
+    status: ProjectInstructionState["status"];
+    path?: string;
+    fileType?: string;
+    summary?: string;
+    lastLoadedAtIso?: string;
+  };
 }
 
 export interface WorkspaceRepositoryState {

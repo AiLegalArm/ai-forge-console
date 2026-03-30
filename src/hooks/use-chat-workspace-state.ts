@@ -310,6 +310,9 @@ export function useChatWorkspaceState() {
         connected: true,
         source: "ollama" as const,
       },
+      instructions: {
+        status: localShell.project.projectInstructionsDetected ? "found" : "not_found",
+      },
     },
   ]);
   const [activeProjectId, setActiveProjectId] = useState(defaultProjectId);
@@ -1898,6 +1901,9 @@ export function useChatWorkspaceState() {
             connected: true,
             source: providerSource,
           },
+          instructions: {
+            status: validation.hasAgentsInstructions ? "found" : "not_found",
+          },
         },
         ...prev.map((project) => ({ ...project, status: "idle" as const })),
       ]);
@@ -1952,6 +1958,9 @@ export function useChatWorkspaceState() {
           provider: {
             connected: true,
             source: providerSource,
+          },
+          instructions: {
+            status: "not_found",
           },
         },
         ...prev.map((project) => ({ ...project, status: "idle" as const })),
