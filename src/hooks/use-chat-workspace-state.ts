@@ -18,6 +18,8 @@ import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
+import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
+import { assembleContextPacket, buildContextPrompt } from "@/lib/context-assembly";
 import {
   buildWorkspaceMemorySnapshot,
   getMemoryStorageKey,
@@ -36,6 +38,7 @@ import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } 
 import type { AppRoutingModeProfile, RoutingMode } from "@/types/local-inference";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
+import type { ContextInjectionPacket } from "@/types/context";
 
 type Action =
   | { type: "set_active_chat_type"; chatType: ChatType }
@@ -508,7 +511,105 @@ export function useChatWorkspaceState() {
     ],
   );
 
-  const workspaceState: WorkspaceRuntimeState = {
+  const memoryStorageKey = useMemo(
+    () => getMemoryStorageKey(activeProjectId, activeProject?.projectRoot ?? localShell.project.activeProjectRoot),
+    [activeProject?.projectRoot, activeProjectId, localShell.project.activeProjectRoot],
+  );
+  const [persistedMemory, setPersistedMemory] = useState<WorkspaceMemoryState | null>(null);
+
+  useEffect(() => {
+    setPersistedMemory(loadWorkspaceMemory(memoryStorageKey));
+  }, [memoryStorageKey]);
+
+  const workspaceMemorySnapshot = useMemo(
+    () =>
+      buildWorkspaceMemorySnapshot({
+        projectId: activeProject?.id ?? activeProjectId,
+        projectName: activeProject?.name ?? localShell.project.workspaceName,
+        projectPath: activeProject?.projectRoot ?? localShell.project.activeProjectRoot,
+        repositorySummary: repository.connected
+          ? `${repository.name ?? "repo"} @ ${repository.branch ?? "unknown"} (${repository.syncStatus ?? "idle"})`
+          : "Repository disconnected",
+        discoveredInstructions: localShell.project.instructionSources,
+        commandRegistry: projectCommandRegistry,
+        providerSource,
+        activeModel,
+        deploymentMode,
+        localCloudPreference: deploymentMode === "local" ? "local" : deploymentMode === "cloud" ? "cloud" : "hybrid",
+        knownConventions: [
+          ...(projectCommandRegistry.diagnostics.agentsFileFound ? ["AGENTS.md instructions present"] : []),
+          ...(projectCommandRegistry.diagnostics.packageJsonFound ? ["package.json scripts workflow"] : []),
+          ...(projectCommandRegistry.diagnostics.makefileFound ? ["Makefile targets available"] : []),
+        ],
+        workflow,
+        auditors: auditorControlState,
+        releaseControl: releaseControlState,
+        chatState,
+        currentChatType,
+        currentChatSessionId,
+        activeAgentId: activeWorkflowTask?.ownerAgentId ?? currentSession?.linked.agentId,
+      }),
+    [
+      activeModel,
+      activeProject?.id,
+      activeProject?.name,
+      activeProject?.projectRoot,
+      activeProjectId,
+      chatState,
+      currentChatSessionId,
+      currentChatType,
+      currentSession?.linked.agentId,
+      deploymentMode,
+      localShell.project.activeProjectRoot,
+      localShell.project.instructionSources,
+      localShell.project.workspaceName,
+      projectCommandRegistry,
+      providerSource,
+      repository.branch,
+      repository.connected,
+      repository.name,
+      repository.syncStatus,
+      workflow,
+      activeWorkflowTask?.ownerAgentId,
+    ],
+  );
+  const workspaceMemory = useMemo(
+    () => mergeWorkspaceMemory(persistedMemory, workspaceMemorySnapshot),
+    [persistedMemory, workspaceMemorySnapshot],
+  );
+
+  useEffect(() => {
+    persistWorkspaceMemory(memoryStorageKey, workspaceMemory);
+  }, [memoryStorageKey, workspaceMemory]);
+
+  const contextEnvelope = useMemo(
+    () =>
+      retrieveMemoryContext(workspaceMemory, {
+        projectId: activeProject?.id ?? activeProjectId,
+        taskId: activeWorkflowTask?.id,
+        chatSessionId: currentChatSessionId,
+        releaseCandidateId: activeWorkflowTask?.linkedReleaseCandidateId,
+        agentRole: activeWorkflowTask?.ownerAgentId,
+        audience:
+          currentChatType === "agent"
+            ? "agent"
+            : currentChatType === "audit" || currentChatType === "review"
+              ? "auditor"
+              : "main_chat",
+      }),
+    [
+      workspaceMemory,
+      activeProject?.id,
+      activeProjectId,
+      activeWorkflowTask?.id,
+      activeWorkflowTask?.linkedReleaseCandidateId,
+      activeWorkflowTask?.ownerAgentId,
+      currentChatSessionId,
+      currentChatType,
+    ],
+  );
+
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope"> = {
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
@@ -556,6 +657,26 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+    memory: workspaceMemory,
+    contextEnvelope,
+  };
+
+  const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
+    const mainChat = assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "main_chat", chatType: "main" });
+    return {
+      mainChat,
+      agentChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "agent_chat", chatType: "agent", agentId: workspaceStateBase.activeAgentId }),
+      auditChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "audit_chat", chatType: "audit", agentId: workspaceStateBase.activeAgentId }),
+      reviewChat: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "review_chat", chatType: "review", agentId: workspaceStateBase.activeAgentId }),
+      workerAgent: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "worker_agent", agentId: workspaceStateBase.activeAgentId }),
+      auditor: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "auditor", agentId: workspaceStateBase.activeAgentId }),
+      releaseFlow: assembleContextPacket({ workspace: workspaceStateBase as WorkspaceRuntimeState, target: "release_flow" }),
+    };
+  }, [workspaceStateBase]);
+
+  const workspaceState: WorkspaceRuntimeState = {
+    ...workspaceStateBase,
+    contextPackets,
     memory: workspaceMemory,
     contextEnvelope,
   };
@@ -1706,6 +1827,14 @@ export function useChatWorkspaceState() {
 
       const activeSession = currentChat.sessions.find((session) => session.id === sessionId);
       const activeAgent = workspaceState.activeAgents.find((agent) => agent.id === workspaceState.activeAgentId);
+      const chatContextPacket: ContextInjectionPacket =
+        chatType === "main"
+          ? workspaceState.contextPackets.mainChat
+          : chatType === "agent"
+            ? workspaceState.contextPackets.agentChat
+            : chatType === "audit"
+              ? workspaceState.contextPackets.auditChat
+              : workspaceState.contextPackets.reviewChat;
       const turnIndex = (currentChat.messagesBySessionId[sessionId] ?? []).length;
       const mockResponse = createMockAssistantMessage({
         chatType,
@@ -1720,6 +1849,7 @@ export function useChatWorkspaceState() {
         activeAgent,
         linkedContext: activeSession?.linked,
         turnIndex,
+        contextPacket: chatContextPacket,
       });
 
       const pendingResponse = {
@@ -1764,6 +1894,76 @@ export function useChatWorkspaceState() {
         },
       });
 
+      if (chatType === "main") {
+        const orchestration = runMainChatOrchestrator({
+          message: draft,
+          sessionId,
+          chatId: sessionId,
+          workflow: workflowRef.current,
+          agents: workspaceState.activeAgents,
+          nowIso: new Date().toISOString(),
+          contextPacket: workspaceState.contextPackets.mainChat,
+        });
+
+        if (orchestration.handled) {
+          dispatch({
+            type: "set_workflow",
+            workflow: orchestration.updatedWorkflow,
+          });
+
+          const latestChat = chatStateRef.current;
+          const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
+          const updatedTask = orchestration.updatedWorkflow.tasks[0];
+
+          dispatch({
+            type: "set_chat",
+            chat: {
+              ...latestChat,
+              messagesBySessionId: {
+                ...latestChat.messagesBySessionId,
+                [sessionId]: sessionMessages.map((message) =>
+                  message.id === responseId
+                    ? {
+                        ...message,
+                        role: "orchestrator" as const,
+                        authorLabel: "Orchestrator",
+                        content: orchestration.response,
+                        status: "completed" as const,
+                        createdAtIso: new Date().toISOString(),
+                        linked: {
+                          taskId: updatedTask?.id,
+                          taskTitle: updatedTask?.title,
+                          agentId: updatedTask?.ownerAgentId,
+                        },
+                      }
+                    : message,
+                ),
+              },
+              sessions: latestChat.sessions.map((session) =>
+                session.id === sessionId
+                  ? {
+                      ...session,
+                      lastMessageAtIso: new Date().toISOString(),
+                      linked: {
+                        ...session.linked,
+                        taskId: updatedTask?.id ?? session.linked.taskId,
+                        taskTitle: updatedTask?.title ?? session.linked.taskTitle,
+                      },
+                    }
+                  : session,
+              ),
+            },
+          });
+
+          orchestration.triggers.forEach((trigger) => {
+            const triggerSessionId = chatStateRef.current.selectedSessionIdByType[trigger.chatType];
+            if (!triggerSessionId) return;
+            void proposeAgentCommand(trigger.chatType, triggerSessionId, trigger.reason, trigger.agentId);
+          });
+          return;
+        }
+      }
+
       const executeProviderRequest = async () => {
         if (providerSource === "openrouter" && chatType === "main") {
           setProviderExecutionState("sending");
@@ -1775,13 +1975,16 @@ export function useChatWorkspaceState() {
               role: message.role === "user" ? "user" : "assistant",
               content: message.content,
             })) as Array<{ role: "user" | "assistant"; content: string }>;
+          const contextSystemPrompt = buildContextPrompt(workspaceState.contextPackets.mainChat);
 
           setProviderExecutionState("waiting");
           const openRouterResult = await openRouterProviderService.executeChatCompletion({
             model: activeModel,
             userInput: draft,
             contextMessages: recentMessages,
-            systemPrompt: `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.`,
+            systemPrompt:
+              `You are assisting in a chat-first software workspace. Routing profile: ${routingProfile}. Routing mode: ${workspaceState.routingMode}.\n` +
+              `${contextSystemPrompt}`,
           });
 
           const latestChat = chatStateRef.current;
@@ -1905,7 +2108,7 @@ export function useChatWorkspaceState() {
         void proposeAgentCommand(
           chatType,
           sessionId,
-          `Requested from ${chatType} chat to support task execution and validation context.`,
+          `Requested from ${chatType} chat to support task execution and validation context. ${chatContextPacket.summary}`,
           activeSession?.linked.agentId ?? activeWorkflowTask?.ownerAgentId,
         );
       }

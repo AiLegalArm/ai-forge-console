@@ -10,6 +10,7 @@ import type { EvidenceFlowState } from "@/types/evidence";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { GoNoGoStatus, ReleaseControlState } from "@/types/release";
 import type { AuditorVerdict } from "@/types/audits";
+import type { ContextInjectionPacket } from "@/types/context";
 import type { MemoryContextEnvelope, WorkspaceMemoryState } from "@/types/memory";
 
 export type PrivacyMode = "private" | "team";
@@ -106,6 +107,15 @@ export interface WorkspaceRuntimeState {
   terminalCommandRegistryReady: boolean;
   agentCommandRegistryReady: boolean;
   providerExecutionState: OpenRouterExecutionState;
+  contextPackets: {
+    mainChat: ContextInjectionPacket;
+    agentChat: ContextInjectionPacket;
+    auditChat: ContextInjectionPacket;
+    reviewChat: ContextInjectionPacket;
+    workerAgent: ContextInjectionPacket;
+    auditor: ContextInjectionPacket;
+    releaseFlow: ContextInjectionPacket;
+  };
   memory: WorkspaceMemoryState;
   contextEnvelope: MemoryContextEnvelope;
 }
