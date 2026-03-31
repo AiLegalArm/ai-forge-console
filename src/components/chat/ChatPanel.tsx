@@ -622,7 +622,7 @@ function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; works
   if (!trace) return null;
   return (
     <span className="text-[10px] font-mono text-muted-foreground">
-      trace:{trace.traceId} · {trace.state}
+      trace:{trace.traceId} · {trace.status}
     </span>
   );
 }
