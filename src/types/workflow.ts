@@ -344,6 +344,46 @@ export interface WorkflowSubtask {
   updatedAtIso: string;
 }
 
+export interface WorkflowTaskRollup {
+  totalSubtasks: number;
+  completedSubtasks: number;
+  blockedSubtasks: number;
+  criticalBlockedSubtasks: number;
+  blockerIds: string[];
+  gateStatus: "ready" | "warning" | "blocked";
+}
+
+export interface WorkflowTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  parentTaskId?: string;
+  childSubtaskIds?: string[];
+  ownerAgentId?: string;
+  delegatedOwnerAgentId?: string;
+  dependencyTaskIds: string[];
+  linkedChatSessionId: string;
+  linkedExecutionContextId?: string;
+  linkedAuditId?: string;
+  linkedAuditorTypes?: AuditorType[];
+  linkedReviewId?: string;
+  linkedReleaseCandidateId?: string;
+  linkedEvidenceIds?: string[];
+  branchName?: string;
+  phase: TaskPhase;
+  progressSummary: string;
+  auditVerdict?: AuditorVerdict;
+  auditFindingCount?: number;
+  designBrowserBlockers?: number;
+  completionRate?: number;
+  aggregatedSubtaskIds?: string[];
+  blockedByTaskIds?: string[];
+  failureReason?: string;
+  updatedAtIso: string;
+  rollup?: WorkflowTaskRollup;
+  github?: TaskGitHubState;
+}
+
 export interface AgentExecutionRun {
   id: string;
   taskId: string;
