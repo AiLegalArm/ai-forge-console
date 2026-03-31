@@ -125,6 +125,7 @@ export interface ReleaseBlockerSummary {
 }
 
 export interface ReleaseApprovalDetail {
+  id?: string;
   approvalId: string;
   category: WorkflowApproval["category"];
   title: string;
