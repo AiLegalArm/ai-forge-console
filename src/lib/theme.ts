@@ -6,7 +6,7 @@
 export const theme = {
   panel: {
     bg: "var(--bg-secondary)",
-    border: "var(--border-default)",
+    border: "var(--border-subtle)",
     padding: "12px",
     gap: "8px",
   },
@@ -34,17 +34,17 @@ export const theme = {
     inputBorder: "var(--border-subtle)",
   },
   button: {
-    height: { sm: "28px", md: "32px" },
+    height: { sm: "24px", md: "28px", lg: "32px" },
     radius: "4px",
   },
   badge: {
     height: "20px",
     radius: "4px",
-    fontSize: "11px",
+    fontSize: "10px",
   },
   listItem: {
     height: "32px",
-    padding: "0 12px",
+    padding: "0 10px",
     gap: "8px",
   },
 } as const;
