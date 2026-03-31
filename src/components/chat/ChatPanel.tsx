@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui";
 import { SmartActionChips } from "@/components/assistive/SmartActionChips";
 import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
@@ -180,7 +180,7 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <span className="text-[10px] text-muted-foreground hidden sm:inline font-mono">
             {workspaceState.routingMode.replace(/_/g, " ")} · {activeSession?.providerMeta.provider}
           </span>
-          <Badge variant="outline" size="sm">state: {workspaceState.providerExecutionState}</Badge>
+          <Badge variant="neutral">state: {workspaceState.providerExecutionState}</Badge>
         </div>
       </div>
 
@@ -244,10 +244,10 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
-          <Badge variant="default" size="sm">{workspaceState.activeProvider} / {workspaceState.activeModel}</Badge>
-          <Badge variant="outline" size="sm">last: {workspaceState.lastUsedModel}</Badge>
-          <Badge variant="outline" size="sm">{workspaceState.currentProject}</Badge>
-          {workspaceState.currentTask && <Badge variant="outline" size="sm">{workspaceState.currentTask}</Badge>}
+          <Badge variant="primary">{workspaceState.activeProvider} / {workspaceState.activeModel}</Badge>
+          <Badge variant="neutral">last: {workspaceState.lastUsedModel}</Badge>
+          <Badge variant="neutral">{workspaceState.currentProject}</Badge>
+          {workspaceState.currentTask && <Badge variant="neutral">{workspaceState.currentTask}</Badge>}
         </div>
         <div className="flex flex-wrap gap-1">
           {(["cheap_fast", "balanced", "quality_first", "privacy_first", "local_only"] as AppRoutingModeProfile[]).map((profile) => (
@@ -356,11 +356,11 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               ))}
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <Badge variant={workspaceState.repository.connected ? "success" : "neutral"} size="sm">
+              <Badge variant={workspaceState.repository.connected ? "success" : "neutral"}>
                 Repo {workspaceState.repository.connected ? "connected" : "disconnected"}
               </Badge>
-              <Badge variant="outline" size="sm"><GitBranchPlus className="h-3 w-3 mr-0.5" />{workspaceState.repository.branch ?? "no-branch"}</Badge>
-              <Badge variant="outline" size="sm"><RefreshCw className="h-3 w-3 mr-0.5" />{workspaceState.repository.syncStatus ?? "idle"}</Badge>
+              <Badge variant="neutral"><GitBranchPlus className="h-3 w-3 mr-0.5" />{workspaceState.repository.branch ?? "no-branch"}</Badge>
+              <Badge variant="neutral"><RefreshCw className="h-3 w-3 mr-0.5" />{workspaceState.repository.syncStatus ?? "idle"}</Badge>
             </div>
             <div className="border border-border-subtle p-2 space-y-1">
               <div className="flex items-center justify-between">

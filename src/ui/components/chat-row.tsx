@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Badge } from "@/ui/components/badge";
-import { ListRow } from "@/ui/components/list-row";
+import { Badge } from "./badge";
+import { ListRow } from "./list-row";
 
 export function ChatRow({ role, content, meta, actions }: { role: string; content: string; meta?: string; actions?: ReactNode }) {
   return (

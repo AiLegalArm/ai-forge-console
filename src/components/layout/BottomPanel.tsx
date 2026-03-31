@@ -3,9 +3,7 @@ import { Terminal, FileText, TestTube, Code, Activity, ChevronUp, ChevronDown } 
 import { useI18n } from "@/lib/i18n";
 import type { TerminalSessionState } from "@/types/local-shell";
 import type { ExecutionTrace } from "@/types/workflow";
-import { Tabs, TabButton } from "@/ui/components/tabs";
-import { TraceRow } from "@/ui/components/trace-row";
-import { Button } from "@/ui/components/button";
+import { Tabs, TabButton, TraceRow, Button } from "@/ui";
 
 interface BottomPanelProps {
   expanded: boolean;

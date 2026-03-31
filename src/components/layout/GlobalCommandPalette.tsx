@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
-import { CommandPalette } from "@/ui/components/command-palette";
+import { CommandPalette } from "@/ui";
 
 export type CommandCategory =
   | "navigation"

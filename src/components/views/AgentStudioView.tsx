@@ -3,13 +3,13 @@ import { workerAgents, auditorAgents, remediatorAgents, type Agent, type AgentSt
 import { Bot, Shield, Wrench, ActivitySquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui";
 
-const statusVariant: Record<AgentStatus, "neutral" | "default" | "success" | "destructive" | "warning"> = {
+const statusVariant: Record<AgentStatus, "neutral" | "primary" | "success" | "error" | "warning"> = {
   idle: "neutral",
-  running: "default",
+  running: "primary",
   completed: "success",
-  error: "destructive",
+  error: "error",
   queued: "warning",
 };
 
@@ -74,7 +74,7 @@ function AgentRow({ agent, runtimeMatch }: { agent: Agent; runtimeMatch?: Worksp
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
-          <Badge variant={statusVariant[agent.status]} size="sm">{agent.status}</Badge>
+          <Badge variant={statusVariant[agent.status]}>{agent.status}</Badge>
         </div>
         <p className="text-2xs text-muted-foreground truncate mt-0.5">{agent.description}</p>
       </div>
