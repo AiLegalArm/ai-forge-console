@@ -291,20 +291,7 @@ export function useChatWorkspaceState() {
     openrouter: "openai/gpt-4.1",
     ollama: "qwen3-coder:14b",
   });
-  const [projects, setProjects] = useState<Array<{
-    id: string;
-    name: string;
-    description: string;
-    projectType: string;
-    source: string;
-    localPath?: string;
-    projectRoot?: string;
-    branch: string;
-    status: string;
-    repository: { connected: boolean; syncStatus: string; name?: string; url?: string; branch?: string };
-    provider: { connected: boolean; source?: string };
-    instructions: { status: string; path?: string; fileType?: string; summary?: string; lastLoadedAtIso?: string };
-  }>>([
+  const [projects, setProjects] = useState<WorkspaceProjectEntry[]>([
     {
       id: "project-local-1",
       name: localShell.project.workspaceName,
