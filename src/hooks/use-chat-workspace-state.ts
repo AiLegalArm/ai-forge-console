@@ -2657,8 +2657,8 @@ export function useChatWorkspaceState() {
                     {
                       atIso: fallbackIso,
                       reason: fallbackReason,
-                      from: "openrouter",
-                      to: "ollama",
+                      from: "openrouter" as const,
+                      to: "ollama" as const,
                       runId,
                     },
                     ...localInferenceRef.current.operational.fallbackEvents,
