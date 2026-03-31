@@ -772,12 +772,12 @@ export function useChatWorkspaceState() {
     return decision;
   };
 
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope" | "operatorDashboard"> = {
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "contextEnvelope" | "operatorDashboard"> = {
     // runtime-selected route is reflected in chat/session metadata and surfaced here for badges
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
-      repository.branch ??
+      (repository as any).branch ??
       activeWorkflowTask?.github?.branch?.localBranchName ??
       localShell.project.gitBranch ??
       activeWorkflowTask?.branchName ??
@@ -825,8 +825,8 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+    projectInstructions: { status: "not_found" },
     memory: workspaceMemory,
-    contextEnvelope,
   };
 
   const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {
