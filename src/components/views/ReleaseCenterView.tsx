@@ -223,8 +223,8 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
               <h3 className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 text-warning" /> Blockers & audit</h3>
               <div className="flex justify-between"><span className="text-muted-foreground">Critical blockers</span><span className="font-mono text-destructive">{operations.blockerSummary.critical}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Audit verdict</span><span className="font-mono">{operations.auditSummary.verdict}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Review readiness</span><span className="font-mono">{operations.readiness.review}</span></div>
-              {inspection?.executionTraceSummaries.slice(0, 2).map((trace) => (
+              <div className="flex justify-between"><span className="text-muted-foreground">Review readiness</span><span className="font-mono">{operations.readiness?.review ?? operations.reviewReadiness?.status ?? "—"}</span></div>
+              {(operations.inspection?.executionTraceSummaries ?? []).slice(0, 2).map((trace: { traceId: string; outcome: string }) => (
                 <div key={trace.traceId} className="text-[11px] text-muted-foreground">Trace {trace.traceId}: {trace.outcome}</div>
               ))}
             </div>
