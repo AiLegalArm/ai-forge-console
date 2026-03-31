@@ -2,12 +2,15 @@ import {
   AlertTriangle,
   CheckCircle,
   CircleDot,
+  Clipboard,
   Clock,
+  ListCheck,
   Package,
   Rocket,
   RotateCcw,
   Shield,
   ShieldCheck,
+  Undo2,
   XCircle,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
