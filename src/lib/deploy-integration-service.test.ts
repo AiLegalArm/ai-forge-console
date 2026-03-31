@@ -55,6 +55,11 @@ describe("RealDeployIntegrationService", () => {
       reviewChatReferences: [],
       auditChatReferences: [],
     },
+    operations: {
+      goNoGo: { status: "warning", warnings: [] },
+      blockerSummary: { total: 0, critical: 0 },
+      readiness: { state: "warning", summary: "stub" },
+    },
   };
   it("requires approval for production trigger", async () => {
     const service = new RealDeployIntegrationService(new FakeProvider());
