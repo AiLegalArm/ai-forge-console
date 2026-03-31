@@ -3666,7 +3666,7 @@ export function useChatWorkspaceState() {
                           number: prCreateResult.number ?? entry.github.pullRequest.number,
                           url: prCreateResult.url ?? entry.github.pullRequest.url,
                           status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
-                          creationStatus: prCreateResult.ok ? "created" : "failed",
+                          creationStatus: prCreateResult.ok ? "created" as const : "failed" as const,
                           pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
                           reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
                         };

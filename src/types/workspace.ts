@@ -50,7 +50,7 @@ export interface WorkspaceProjectEntry {
     source?: "openrouter" | "ollama";
   };
   instructions?: {
-    status: ProjectInstructionState["status"];
+    status: ProjectInstructionsState["status"];
     path?: string;
     fileType?: string;
     summary?: string;

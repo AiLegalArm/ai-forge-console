@@ -42,9 +42,9 @@ const buildTaskMemoryEntries = (workflow: WorkflowState, auditors: AuditorContro
     .map((task) => {
       const blockers = auditors.blockers.filter((blocker) => blocker.entityId === task.id && blocker.status === "active");
       const approvals = workflow.approvals.filter((approval) => approval.taskId === task.id).slice(0, 8);
-      const deniedApprovals = approvals.filter((approval) => approval.status === "denied");
-      const subtasks = task.subtasks ?? [];
-      const subtaskSummary = subtasks.length > 0 ? `${subtasks.filter((s) => s.status === "completed").length}/${subtasks.length} subtasks complete` : "No subtasks";
+      const deniedApprovals = approvals.filter((approval) => (approval.status as string) === "denied");
+      const subtasks = (task as any).subtasks ?? [];
+      const subtaskSummary = subtasks.length > 0 ? `${subtasks.filter((s: any) => s.status === "completed").length}/${subtasks.length} subtasks complete` : "No subtasks";
 
       return {
         taskId: task.id,

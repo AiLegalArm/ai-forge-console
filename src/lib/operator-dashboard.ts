@@ -94,7 +94,7 @@ export function buildOperatorDashboard(
           fallbackUsed: trace.fallbackUsed,
           degradedExecution: workspace.localInference.resources.degradedMode || workspace.localInference.operational.degradedMode,
           contributedToFailure: trace.error?.type === "routing_failure" || trace.error?.type === "fallback_failure",
-          costControlSignal: trace.fallbackUsed || (workspace.localInference.operational.budgetPressure as string) !== "normal" ? "observed" : "none",
+          costControlSignal: (trace.fallbackUsed || (workspace.localInference.operational.budgetPressure as string) !== "normal" ? "observed" : "none") as "none" | "observed",
         },
         status: trace.status,
         failureType: trace.error?.type,
