@@ -173,7 +173,7 @@ export class OllamaRuntimeService {
     });
 
     if (!requestResult.ok) {
-      const error = requestResult.error;
+      const error = (requestResult as { ok: false; error: string }).error;
       if (error === "ollama_timeout") {
         return {
           provider: "ollama",
