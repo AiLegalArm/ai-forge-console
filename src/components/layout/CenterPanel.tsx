@@ -91,7 +91,7 @@ export function CenterPanel({ activeSection, mode, workspaceState, chatContexts,
       case "audits": return <AuditsView workspaceState={workspaceState} />;
       case "supabase-import": return <SupabaseImportView />;
       case "release": return <ReleaseCenterView workspaceState={workspaceState} />;
-      case "settings": return <SettingsView />;
+      case "settings": return <SettingsView workspaceState={workspaceState} />;
       default: return null;
     }
   };
