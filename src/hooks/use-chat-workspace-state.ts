@@ -3194,7 +3194,7 @@ export function useChatWorkspaceState() {
       const result = await deployIntegrationService.triggerDeploy({
         releaseControl,
         projectId: activeProjectId,
-        repository: repository.name ?? localShell.project.repositoryName ?? activeProject?.name ?? "workspace",
+        repository: repository.name ?? (localShell.project as any).repositoryName ?? activeProject?.name ?? "workspace",
         branch,
         taskId,
         chatId: currentChatSessionId,
