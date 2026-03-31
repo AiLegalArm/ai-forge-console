@@ -3522,8 +3522,8 @@ export function useChatWorkspaceState() {
                         linkedSubtaskIds: draft.linkedSubtaskIds,
                         linkedAuditId: draft.linkedAuditId,
                         draftPreparedAtIso: new Date().toISOString(),
-                        draftPreparationStatus: "ready",
-                        creationStatus: "ready",
+                        draftPreparationStatus: "ready" as const,
+                        creationStatus: "ready" as const,
                         pendingError: undefined,
                         };
                         const reviewOps = evaluatePullRequestReviewOperations({
