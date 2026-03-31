@@ -597,14 +597,33 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
   );
 }
 
+function StreamingText({ text }: { text: string }) {
+  const [visibleLen, setVisibleLen] = useState(0);
+  useState(() => {
+    setVisibleLen(0);
+  });
+  useState(() => {
+    if (visibleLen < text.length) {
+      const timer = setTimeout(() => setVisibleLen((v) => Math.min(v + 2, text.length)), 18);
+      return () => clearTimeout(timer);
+    }
+  });
+  // Simple approach: just show full text with a cursor if streaming
+  return (
+    <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">
+      {text}
+      <span className="inline-block w-1 h-3.5 bg-primary animate-pulse ml-0.5" />
+    </p>
+  );
+}
+
 function TraceInlineStatus({ traceId, workspaceState }: { traceId: string; workspaceState: WorkspaceRuntimeState }) {
   const trace = workspaceState.workflow.executionTraces.find((item) => item.traceId === traceId);
   if (!trace) return null;
   return (
-    <p className="text-[12px] text-foreground leading-normal whitespace-pre-wrap">
-      {text.slice(0, visibleLen)}
-      {visibleLen < text.length && <span className="inline-block w-1 h-3.5 bg-primary animate-pulse ml-0.5" />}
-    </p>
+    <span className="text-[10px] font-mono text-muted-foreground">
+      trace:{trace.traceId} · {trace.state}
+    </span>
   );
 }
 
