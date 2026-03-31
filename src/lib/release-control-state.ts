@@ -140,10 +140,27 @@ export function deriveReleaseControlState(
     ].slice(0, 12),
   };
 
+  const operations = {
+    goNoGo: { status: finalDecision.status, warnings: finalDecision.warnings },
+    blockerSummary: { total: operationsPanel.blockerSummary.total, critical: operationsPanel.blockerSummary.critical },
+    approvalSummary: operationsPanel.approvalSummary,
+    decisionFactors: { unresolvedExecutionFailures: operationsPanel.decisionSurface.unresolvedExecutionFailures },
+    readiness: {
+      review: operationsPanel.reviewReadiness.status,
+      domain: operationsPanel.domainReadiness?.status ?? state.operations?.readiness?.domain ?? "warning",
+      rollback: operationsPanel.rollbackReadiness.status,
+    },
+    auditSummary: { verdict: operationsPanel.auditSummary?.verdict ?? state.operations?.auditSummary?.verdict ?? "not_ready" },
+    deployReadiness: operationsPanel.deployReadiness,
+    rollbackReadiness: operationsPanel.rollbackReadiness,
+    domainReadiness: operationsPanel.domainReadiness ?? state.operations?.domainReadiness ?? { status: "warning" as const, summary: "", blockingDomains: [] },
+  };
+
   return {
     ...state,
     finalDecision,
     operationsPanel,
+    operations,
     releaseCandidates: state.releaseCandidates.map((candidate) =>
       candidate.id === activeCandidate.id
         ? {
