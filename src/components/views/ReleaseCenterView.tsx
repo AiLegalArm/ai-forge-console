@@ -196,7 +196,7 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
       {activeCandidate ? (
         <div className="space-y-3">
           <div className="bg-card border border-border rounded-lg p-4">
-            <h2 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2"><ClipboardList className="h-3.5 w-3.5 text-primary" /> Candidate inspection</h2>
+            <h2 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2"><Clipboard className="h-3.5 w-3.5 text-primary" /> Candidate inspection</h2>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Current release candidate</span><span className="text-foreground font-mono">{activeCandidate.label}</span></div>
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Branch</span><span className="text-foreground font-mono">{activeCandidate.linkedBranch}</span></div>
