@@ -200,11 +200,11 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Current release candidate</span><span className="text-foreground font-mono">{activeCandidate.label}</span></div>
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Branch</span><span className="text-foreground font-mono">{activeCandidate.linkedBranch}</span></div>
-              <div className="flex items-center justify-between"><span className="text-muted-foreground">Task linkage</span><span className="text-foreground font-mono">{inspection?.linkedTaskIds.join(", ") ?? "—"}</span></div>
-              <div className="flex items-center justify-between"><span className="text-muted-foreground">Subtasks</span><span className="text-foreground font-mono">{inspection?.linkedSubtaskIds.length ?? 0}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Task linkage</span><span className="text-foreground font-mono">{operations.inspection?.linkedTaskIds?.join(", ") ?? "—"}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Subtasks</span><span className="text-foreground font-mono">{operations.inspection?.linkedSubtaskIds?.length ?? 0}</span></div>
               <div className="flex items-center justify-between"><span className="text-muted-foreground">Review</span><span className="text-foreground font-mono">{activeCandidate.reviewState}</span></div>
-              <div className="flex items-center justify-between"><span className="text-muted-foreground">Evidence refs</span><span className="text-foreground font-mono">{inspection?.evidenceReferences.join(", ") ?? "—"}</span></div>
-              <div className="flex items-center justify-between"><span className="text-muted-foreground">Review chat / Audit chat</span><span className="text-foreground font-mono">{operations.relatedChatSessions.reviewChatId ?? "—"} / {operations.relatedChatSessions.auditChatId ?? "—"}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Evidence refs</span><span className="text-foreground font-mono">{operations.inspection?.evidenceReferences?.join(", ") ?? "—"}</span></div>
+              <div className="flex items-center justify-between"><span className="text-muted-foreground">Review chat / Audit chat</span><span className="text-foreground font-mono">{operations.relatedChatSessions?.reviewChatId ?? "—"} / {operations.relatedChatSessions?.auditChatId ?? "—"}</span></div>
             </div>
           </div>
 
