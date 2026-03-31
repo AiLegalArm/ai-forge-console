@@ -18,6 +18,7 @@ import { buildProjectCommandRegistry } from "@/lib/project-command-registry-serv
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
+import { buildAuditorControlStateFromSignals } from "@/lib/auditor-execution-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
