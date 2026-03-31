@@ -1,5 +1,5 @@
-import { Inline } from "@/ui/primitives/inline";
-import { Badge } from "@/ui/components/badge";
+import { Inline } from "../primitives/inline";
+import { Badge } from "../components/badge";
 
 export function TopBarMeta({ project, provider, model, routing, state }: { project: string; provider: string; model: string; routing: string; state: string }) {
   return (

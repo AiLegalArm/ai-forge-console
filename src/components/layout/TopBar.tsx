@@ -3,9 +3,7 @@ import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBra
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
-import { Button } from "@/ui/components/button";
-import { TopBarMeta } from "@/ui/layout/top-bar";
-import { Tabs, TabButton } from "@/ui/components/tabs";
+import { Button, TopBarMeta, Tabs, TabButton } from "@/ui";
 
 const modeKeys = {
   operator: "operator" as const,

@@ -6,9 +6,7 @@ import {
 import type { NavSection } from "./AppLayout";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
-import { SidebarNavRow } from "@/ui/layout/sidebar";
-import { Badge } from "@/ui/components/badge";
-import { Button } from "@/ui/components/button";
+import { SidebarNavRow, Badge, Button } from "@/ui";
 
 const navItems: { id: NavSection; icon: React.ElementType; labelKey: string }[] = [
   { id: "workspace", icon: MessageSquare, labelKey: "nav.workspace" },
