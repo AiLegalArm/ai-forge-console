@@ -2775,7 +2775,7 @@ export function useChatWorkspaceState() {
                     ? {
                         ...message,
                         content: `Execution failed before completion.\n\n${openRouterResult.errorMessage}`,
-                        role: chatType === "audit" ? "auditor" : chatType === "review" ? "reviewer" : chatType === "agent" ? "agent" : "orchestrator",
+                        role: (chatType as string) === "audit" ? "auditor" : (chatType as string) === "review" ? "reviewer" : (chatType as string) === "agent" ? "agent" : "orchestrator",
                         status: "failed" as const,
                         liveState: "failed" as const,
                         phaseLabel: "Blocked",
