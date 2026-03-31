@@ -215,7 +215,7 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
               <div className="flex justify-between"><span className="text-muted-foreground">Completed</span><span className="font-mono text-success">{operations.approvalSummary.completed.length}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Missing</span><span className="font-mono text-warning">{operations.approvalSummary.missing.length}</span></div>
               {operations.approvalSummary.missing.slice(0, 3).map((approval) => (
-                <div key={approval.id} className="text-[11px] text-warning">• {approval.title} ({approval.category})</div>
+                <div key={approval.approvalId} className="text-[11px] text-warning">• {approval.title} ({approval.category})</div>
               ))}
             </div>
 
