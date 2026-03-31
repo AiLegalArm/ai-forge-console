@@ -74,7 +74,7 @@ function AgentRow({ agent, runtimeMatch }: { agent: Agent; runtimeMatch?: Worksp
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground truncate">{agent.name}</span>
-          <Badge variant={statusVariant[agent.status]} size="sm">{agent.status}</Badge>
+          <Badge variant={statusVariant[agent.status]}>{agent.status}</Badge>
         </div>
         <p className="text-2xs text-muted-foreground truncate mt-0.5">{agent.description}</p>
       </div>
