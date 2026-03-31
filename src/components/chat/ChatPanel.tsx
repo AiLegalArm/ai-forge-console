@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui";
 import { SmartActionChips } from "@/components/assistive/SmartActionChips";
 import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
