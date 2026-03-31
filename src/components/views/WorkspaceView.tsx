@@ -727,7 +727,7 @@ function DeployView({ workspaceState, onTriggerDeploy, onRefreshDeployStatus }: 
           <span className="font-mono text-muted-foreground">{t("deploy.go_nogo" as never)}</span>
           <span className={`font-mono uppercase ${operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{operations.goNoGo.status}</span>
         </div>
-        <div className="text-muted-foreground">{operations.goNoGo.summary}</div>
+        <div className="text-muted-foreground">{operations.goNoGo.warnings?.join(", ") || "—"}</div>
         <div className="grid grid-cols-2 gap-2 text-[10px]">
           <div className="flex justify-between"><span className="text-muted-foreground">Preview readiness</span><span className="font-mono">{operations.deployReadiness.previewStatus}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Production readiness</span><span className="font-mono">{operations.deployReadiness.productionStatus}</span></div>

@@ -374,4 +374,19 @@ export const releaseControlState: ReleaseControlState = {
   activeCandidateId: "rc-2026-03-29-rbac",
   finalDecision,
   operationsPanel,
+  operations: {
+    goNoGo: { status: finalDecision.status, warnings: finalDecision.warnings },
+    blockerSummary: { total: operationsPanel.blockerSummary.total, critical: operationsPanel.blockerSummary.critical },
+    approvalSummary: operationsPanel.approvalSummary,
+    decisionFactors: { unresolvedExecutionFailures: operationsPanel.decisionSurface.unresolvedExecutionFailures },
+    readiness: {
+      review: operationsPanel.reviewReadiness.status,
+      domain: operationsPanel.domainReadiness.status,
+      rollback: operationsPanel.rollbackReadiness.status,
+    },
+    auditSummary: { verdict: operationsPanel.auditSummary.verdict },
+    deployReadiness: operationsPanel.deployReadiness,
+    rollbackReadiness: operationsPanel.rollbackReadiness,
+    domainReadiness: operationsPanel.domainReadiness,
+  },
 };

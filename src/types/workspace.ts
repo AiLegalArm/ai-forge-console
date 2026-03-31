@@ -75,6 +75,15 @@ export interface WorkspaceRepositoryState {
   lastValidatedAtIso?: string;
 }
 
+export interface ProjectInstructionsState {
+  status: string;
+  source?: { path?: string; fileType?: string };
+  summary?: string;
+  lastLoadedAtIso?: string;
+  warning?: string;
+  error?: string;
+}
+
 export interface WorkspaceRuntimeState {
   currentProject: string;
   currentBranch: string;
@@ -117,6 +126,7 @@ export interface WorkspaceRuntimeState {
   agentCommandRegistryReady: boolean;
   providerExecutionState: OpenRouterExecutionState;
   policyState: ExecutionPolicyState;
+  projectInstructions: ProjectInstructionsState;
   contextPackets: {
     mainChat: ContextInjectionPacket;
     agentChat: ContextInjectionPacket;

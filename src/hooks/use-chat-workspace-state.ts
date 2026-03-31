@@ -18,6 +18,7 @@ import { buildProjectCommandRegistry } from "@/lib/project-command-registry-serv
 import { ollamaRuntimeService } from "@/lib/ollama-runtime-service";
 import { openRouterProviderService, type OpenRouterExecutionState } from "@/lib/openrouter-provider-service";
 import { modelRoutingEngine } from "@/lib/model-routing-engine";
+import { buildAuditorControlStateFromSignals } from "@/lib/auditor-execution-engine";
 import { BrowserAutomationService, RuntimeBridgeBrowserAdapter } from "@/lib/browser-automation-service";
 import { createMockAssistantMessage } from "@/lib/chat-mock-responder";
 import { runMainChatOrchestrator } from "@/lib/main-chat-orchestrator";
@@ -39,11 +40,10 @@ import {
 import type { ChatState, ChatType } from "@/types/chat";
 import type { BrowserSession } from "@/types/agents";
 import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
-import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, RoutingMode, TaskType } from "@/types/local-inference";
+import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, RoutingMode, TaskType, RoutingDecision } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
-import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
-import type { AgentRole, AppRoutingModeProfile, RoutingDecision, RoutingMode, TaskType } from "@/types/local-inference";
+import type { ChatContextMap, WorkspaceProjectEntry, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
@@ -291,24 +291,24 @@ export function useChatWorkspaceState() {
     openrouter: "openai/gpt-4.1",
     ollama: "qwen3-coder:14b",
   });
-  const [projects, setProjects] = useState([
+  const [projects, setProjects] = useState<WorkspaceProjectEntry[]>([
     {
       id: "project-local-1",
       name: localShell.project.workspaceName,
       description: "Default local workspace",
       projectType: "web-app",
-      source: "local" as const,
+      source: "local",
       localPath: localShell.project.activeProjectRoot,
       projectRoot: localShell.project.activeProjectRoot,
       branch: localShell.project.gitBranch || "main",
-      status: "active" as const,
+      status: "active",
       repository: {
         connected: false,
-        syncStatus: "idle" as const,
+        syncStatus: "idle",
       },
       provider: {
         connected: true,
-        source: "ollama" as const,
+        source: "ollama",
       },
       instructions: {
         status: localShell.project.projectInstructionsDetected ? "found" : "not_found",
@@ -772,12 +772,12 @@ export function useChatWorkspaceState() {
     return decision;
   };
 
-  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "memory" | "contextEnvelope" | "operatorDashboard"> = {
+  const workspaceStateBase: Omit<WorkspaceRuntimeState, "contextPackets" | "contextEnvelope" | "operatorDashboard"> = {
     // runtime-selected route is reflected in chat/session metadata and surfaced here for badges
     currentProject: activeProject?.name ?? localShell.project.workspaceName,
     currentBranch:
       activeProject?.repository?.branch ??
-      repository.branch ??
+      (repository as any).branch ??
       activeWorkflowTask?.github?.branch?.localBranchName ??
       localShell.project.gitBranch ??
       activeWorkflowTask?.branchName ??
@@ -825,8 +825,8 @@ export function useChatWorkspaceState() {
     terminalCommandRegistryReady: localShell.terminal.state !== "error" && projectCommandRegistry.commands.length > 0,
     agentCommandRegistryReady: projectCommandRegistry.commands.length > 0,
     providerExecutionState,
+    projectInstructions: { status: "not_found" },
     memory: workspaceMemory,
-    contextEnvelope,
   };
 
   const contextPackets = useMemo<WorkspaceRuntimeState["contextPackets"]>(() => {

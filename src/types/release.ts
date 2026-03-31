@@ -125,6 +125,7 @@ export interface ReleaseBlockerSummary {
 }
 
 export interface ReleaseApprovalDetail {
+  id?: string;
   approvalId: string;
   category: WorkflowApproval["category"];
   title: string;
@@ -170,10 +171,13 @@ export interface ReleaseDomainReadiness {
 
 export interface ReleaseRollbackReadiness {
   availability: "available" | "limited" | "unavailable";
+  rollbackAvailable?: boolean;
   rollbackTarget?: string;
   fallbackPlanRequired: boolean;
   summary: string;
   status: ReleaseOperationsSignalState;
+  recommendedAction?: string;
+  notes?: string[];
 }
 
 export interface ReleaseGoNoGoSurface {
@@ -229,10 +233,35 @@ export interface ReleaseOperationsPanel {
     auditResults: string[];
     executionTraces: ReleaseExecutionTraceReference[];
     evidence: ReleaseEvidenceReference[];
+    linkedTaskIds?: string[];
+    linkedSubtaskIds?: string[];
+    evidenceReferences?: string[];
+    executionTraceSummaries?: Array<{ traceId: string; outcome: string }>;
   };
   activityLinks: string[];
   reviewChatReferences: string[];
   auditChatReferences: string[];
+  relatedChatSessions?: {
+    reviewChatId?: string;
+    auditChatId?: string;
+  };
+  readiness?: {
+    review?: string;
+    domain?: string;
+    rollback?: string;
+  };
+}
+
+export interface ReleaseControlOperations {
+  goNoGo: { status: GoNoGoStatus; warnings: string[] };
+  blockerSummary: { total: number; critical: number };
+  approvalSummary: ReleaseApprovalSummary;
+  decisionFactors: { unresolvedExecutionFailures: number };
+  readiness: { review: string; domain: string; rollback: string };
+  auditSummary: { verdict: string };
+  deployReadiness: ReleaseDeployReadiness;
+  rollbackReadiness: ReleaseRollbackReadiness;
+  domainReadiness: ReleaseDomainReadiness;
 }
 
 export interface ReleaseControlState {
@@ -243,4 +272,5 @@ export interface ReleaseControlState {
   activeCandidateId: string;
   finalDecision: GoNoGoDecision;
   operationsPanel: ReleaseOperationsPanel;
+  operations: ReleaseControlOperations;
 }

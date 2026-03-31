@@ -319,13 +319,28 @@ export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export interface WorkflowSubtask {
   id: string;
-  taskId: string;
+  taskId?: string;
+  parentTaskId?: string;
   title: string;
+  description?: string;
+  assignedAgentId?: string;
   status: TaskStatus;
+  dependencies?: string[];
+  priority?: TaskPriority;
   linkedAgentId?: string;
-  linkedFindingIds: string[];
-  evidenceIds: string[];
-  criticalPath: boolean;
+  linkedFindingIds?: string[];
+  evidenceIds?: string[];
+  criticalPath?: boolean;
+  linkedChatContext?: {
+    chatSessionId: string;
+    chatType: "main" | "agent" | "audit" | "review";
+  };
+  linkedExecutionContext?: {
+    executionContextId: string;
+    source: "planner" | "orchestrator" | "agent_handoff" | "audit";
+  };
+  resultSummary?: string;
+  createdAtIso?: string;
   updatedAtIso: string;
 }
 
@@ -365,31 +380,17 @@ export interface WorkflowTask {
   blockedByTaskIds?: string[];
   failureReason?: string;
   updatedAtIso: string;
-  parentTaskId?: string;
   rollup?: WorkflowTaskRollup;
   github?: TaskGitHubState;
 }
 
-export interface WorkflowSubtask {
+export interface AgentExecutionRun {
   id: string;
-  parentTaskId: string;
-  title: string;
-  description: string;
-  assignedAgentId: string;
-  status: TaskStatus;
-  dependencies: string[];
-  priority: TaskPriority;
-  linkedChatContext: {
-    chatSessionId: string;
-    chatType: "main" | "agent" | "audit" | "review";
-  };
-  linkedExecutionContext: {
-    executionContextId: string;
-    source: "planner" | "orchestrator" | "agent_handoff" | "audit";
-  };
-  resultSummary?: string;
-  createdAtIso: string;
-  updatedAtIso: string;
+  taskId: string;
+  agentId: string;
+  status: "queued" | "running" | "completed" | "failed";
+  startedAtIso: string;
+  completedAtIso?: string;
 }
 
 export type DelegationState =
