@@ -143,8 +143,8 @@ export default function AppLayout() {
     ];
 
     const agentCommands: KeyboardCommand[] = [
-      { id: "agent.run", label: "Run agent on current task", category: "agents", icon: Bot, shortcut: "⌘⇧R", handler: async () => activeTask ? executeTaskCommand(activeTask.id, "Agent") : toast({ title: "No active task" }) },
-      { id: "agent.rerun", label: "Re-run last agent", category: "agents", icon: RefreshCcw, handler: async () => lastAgentTaskId ? executeTaskCommand(lastAgentTaskId, "Agent rerun") : toast({ title: "No previous agent run" }) },
+      { id: "agent.run", label: "Run agent on current task", category: "agents", icon: Bot, shortcut: "⌘⇧R", handler: async () => { if (activeTask) await executeTaskCommand(activeTask.id, "Agent"); else toast({ title: "No active task" }); } },
+      { id: "agent.rerun", label: "Re-run last agent", category: "agents", icon: RefreshCcw, handler: async () => { if (lastAgentTaskId) await executeTaskCommand(lastAgentTaskId, "Agent rerun"); else toast({ title: "No previous agent run" }); } },
       { id: "agent.change", label: "Change agent (focus tasks)", category: "agents", icon: Bot, handler: () => handleSectionChange("agents") },
     ];
 

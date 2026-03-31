@@ -246,8 +246,8 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
               <h3 className="font-semibold flex items-center gap-1.5"><Undo2 className="h-3.5 w-3.5 text-primary" /> Rollback readiness</h3>
               <div className="flex justify-between"><span className="text-muted-foreground">Rollback availability</span><span className={`font-mono ${operations.rollbackReadiness.rollbackAvailable ? "text-success" : "text-warning"}`}>{operations.rollbackReadiness.rollbackAvailable ? "available" : "unavailable"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Rollback target</span><span className="font-mono">{operations.rollbackReadiness.rollbackTarget ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Guidance</span><span className="font-mono">{operations.rollbackReadiness.recommendedAction}</span></div>
-              {operations.rollbackReadiness.notes.map((note) => (
+              <div className="flex justify-between"><span className="text-muted-foreground">Guidance</span><span className="font-mono">{operations.rollbackReadiness.recommendedAction ?? "—"}</span></div>
+              {(operations.rollbackReadiness.notes ?? []).map((note: string) => (
                 <div key={note} className="text-[11px] text-muted-foreground">• {note}</div>
               ))}
             </div>
