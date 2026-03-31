@@ -3,13 +3,13 @@ import { workerAgents, auditorAgents, remediatorAgents, type Agent, type AgentSt
 import { Bot, Shield, Wrench, ActivitySquare } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/ui";
 
-const statusVariant: Record<AgentStatus, "neutral" | "default" | "success" | "destructive" | "warning"> = {
+const statusVariant: Record<AgentStatus, "neutral" | "primary" | "success" | "error" | "warning"> = {
   idle: "neutral",
-  running: "default",
+  running: "primary",
   completed: "success",
-  error: "destructive",
+  error: "error",
   queued: "warning",
 };
 
