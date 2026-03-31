@@ -117,9 +117,9 @@ export default function AppLayout() {
           toast({ title: result.ok ? "Command executed" : "Command failed", description: result.message });
         },
       },
-      { id: "exec.retry-run", label: "Retry latest run", category: "execution", icon: RefreshCcw, shortcut: "R", handler: async () => activeTask ? executeTaskCommand(activeTask.id, "Retry") : toast({ title: "No active task to retry" }) },
-      { id: "exec.stop-run", label: "Stop run", category: "execution", icon: Square, shortcut: "S", handler: () => toast({ title: "Stop requested", description: "The stop action was queued for active execution." }) },
-      { id: "exec.force-fallback", label: "Force fallback mode", category: "execution", icon: Gauge, handler: () => { setRoutingProfile("cost_saver"); toast({ title: "Routing changed", description: "Fallback-leaning routing profile applied." }); } },
+      { id: "exec.retry-run", label: "Retry latest run", category: "execution", icon: RefreshCcw, shortcut: "R", handler: async () => { if (activeTask) await executeTaskCommand(activeTask.id, "Retry"); else toast({ title: "No active task to retry" }); } },
+      { id: "exec.stop-run", label: "Stop run", category: "execution", icon: Square, shortcut: "S", handler: () => { toast({ title: "Stop requested", description: "The stop action was queued for active execution." }); } },
+      { id: "exec.force-fallback", label: "Force fallback mode", category: "execution", icon: Gauge, handler: () => { setRoutingProfile("cheap_fast"); toast({ title: "Routing changed", description: "Fallback-leaning routing profile applied." }); } },
     ];
 
     const approvalCommands: KeyboardCommand[] = pendingApproval
