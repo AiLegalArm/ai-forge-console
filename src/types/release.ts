@@ -171,10 +171,13 @@ export interface ReleaseDomainReadiness {
 
 export interface ReleaseRollbackReadiness {
   availability: "available" | "limited" | "unavailable";
+  rollbackAvailable?: boolean;
   rollbackTarget?: string;
   fallbackPlanRequired: boolean;
   summary: string;
   status: ReleaseOperationsSignalState;
+  recommendedAction?: string;
+  notes?: string[];
 }
 
 export interface ReleaseGoNoGoSurface {
