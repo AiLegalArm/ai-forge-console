@@ -43,7 +43,7 @@ import type { EvidenceFlowState, EvidenceRecord } from "@/types/evidence";
 import type { AgentRole, AppRoutingModeProfile, LocalInferenceRuntimeState, RoutingMode, TaskType, RoutingDecision } from "@/types/local-inference";
 import type { LocalShellWorkspaceState, TerminalCommand } from "@/types/local-shell";
 import type { AgentCommandRequest, WorkflowState } from "@/types/workflow";
-import type { ChatContextMap, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
+import type { ChatContextMap, WorkspaceProjectEntry, WorkspaceRepositoryState, WorkspaceRuntimeState } from "@/types/workspace";
 import type { ProjectCommandEntry, ProjectCommandExecutionRecord, ProjectCommandRegistry } from "@/types/project-commands";
 import type { WorkspaceMemoryState } from "@/types/memory";
 import type { ContextInjectionPacket } from "@/types/context";
