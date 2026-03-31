@@ -138,7 +138,7 @@ export default function AppLayout() {
     const systemCommands: KeyboardCommand[] = [
       { id: "sys.model", label: "Change model (toggle)", category: "system", icon: Settings, handler: () => setActiveModel(workspaceState.providerSource === "openrouter" ? "openai/gpt-4.1" : "qwen3-coder:14b") },
       { id: "sys.provider", label: "Change provider", category: "system", icon: Settings, handler: () => setProviderSource(workspaceState.providerSource === "openrouter" ? "ollama" : "openrouter") },
-      { id: "sys.routing", label: "Change routing mode", category: "system", icon: Gauge, handler: () => setRoutingProfile(workspaceState.routingProfile === "balanced" ? "quality_max" : "balanced") },
+      { id: "sys.routing", label: "Change routing mode", category: "system", icon: Gauge, handler: () => setRoutingProfile(workspaceState.routingProfile === "balanced" ? "quality_first" : "balanced") },
       { id: "sys.deployment", label: "Toggle local/cloud", category: "system", icon: Settings, handler: () => setDeploymentMode(workspaceState.deploymentMode === "local" ? "cloud" : "local") },
     ];
 
