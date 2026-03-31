@@ -178,7 +178,7 @@ export function buildOperatorDashboard(
     ],
     entryPoints: {
       fromActivityStream: workspace.workflow.activityEvents.filter((event) => event.traceId).map((event) => event.traceId ?? ""),
-      fromTaskGraph: workspace.workflow.tasks.map((task) => task.linkedExecutionContext?.executionContextId ?? "").filter(Boolean),
+      fromTaskGraph: workspace.workflow.tasks.map((task) => task.linkedExecutionContextId ?? "").filter(Boolean),
       fromAuditSummaries: workspace.auditors.runs.map((run) => run.id),
       fromReleaseSurface: workspace.releaseControl.finalDecision.blockers,
       fromDashboardCards: executionDrillDowns.slice(0, 5).map((drill) => drill.traceId),

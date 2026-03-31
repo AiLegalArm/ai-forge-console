@@ -124,7 +124,7 @@ export class RoutedAgentExecutionService {
       `Role context: ${resolveAgentRole(input.routingInput.agentRole, input.taskType)}`,
       `Routing decision: ${decision.selectedProvider}/${decision.selectedModelId ?? "auto"} fallback ${decision.fallbackProvider}/${decision.fallbackModelId ?? "none"}.`,
       `Task context: ${input.contextPacket.summary}`,
-      `Context snippets: ${input.contextPacket.snippets.map((snippet) => `${snippet.key}=${snippet.content}`).join(" | ")}`,
+      `Context snippets: ${input.contextPacket.snippets.map((snippet) => `${snippet.label}=${snippet.value}`).join(" | ")}`,,
       input.prompt,
     ].join("\n\n");
 
