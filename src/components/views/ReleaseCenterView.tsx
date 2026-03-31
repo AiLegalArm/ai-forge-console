@@ -210,7 +210,7 @@ export function ReleaseCenterView({ workspaceState }: { workspaceState: Workspac
 
           <div className="grid md:grid-cols-2 gap-3">
             <div className="bg-card border border-border rounded-lg p-3 space-y-1.5 text-xs">
-              <h3 className="font-semibold flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5 text-primary" /> Approval collection</h3>
+              <h3 className="font-semibold flex items-center gap-1.5"><ListCheck className="h-3.5 w-3.5 text-primary" /> Approval collection</h3>
               <div className="flex justify-between"><span className="text-muted-foreground">Required</span><span className="font-mono">{operations.approvalSummary.required.length}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Completed</span><span className="font-mono text-success">{operations.approvalSummary.completed.length}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Missing</span><span className="font-mono text-warning">{operations.approvalSummary.missing.length}</span></div>
