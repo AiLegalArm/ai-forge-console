@@ -69,11 +69,13 @@ export function buildOperatorDashboard(
         .filter((approval) => approval.id === trace.approvalId || approval.taskId === trace.taskId)
         .map((approval) => `${approval.id}:${approval.status}`);
 
+      const role: ExecutionDrillDown["actor"]["role"] = trace.auditorId ? "auditor" : trace.agentId ? "agent" : "orchestrator";
+
       return {
         traceId: trace.traceId,
         runId: trace.runId,
         actor: {
-          role: trace.auditorId ? "auditor" : trace.agentId ? "agent" : "orchestrator",
+          role,
           id: trace.auditorId ?? trace.agentId,
         },
         linked: {
