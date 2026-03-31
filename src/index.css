@@ -138,8 +138,13 @@
     transition-duration: var(--motion-base);
     transition-timing-function: var(--ease-standard);
   }
+  .ui-transition-fast {
+    transition-property: background-color, border-color, color, opacity, transform, box-shadow;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-standard);
+  }
   .ui-focus {
-    @apply focus-visible:ring-1 focus-visible:ring-primary/55 focus-visible:ring-offset-0;
+    @apply focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/55 focus-visible:ring-offset-0;
   }
   .ui-press {
     transform: translateY(0);
@@ -156,7 +161,8 @@
     animation: live-pulse 1.4s ease-out infinite;
   }
   .state-hover {
-    transition: background-color 100ms ease, border-color 100ms ease;
+    transition: background-color var(--motion-fast) var(--ease-standard),
+                border-color var(--motion-fast) var(--ease-standard);
   }
   .state-hover:hover {
     background-color: hsl(var(--surface-hover));
@@ -174,6 +180,50 @@
     background-color: hsl(var(--error) / 0.1);
     border-color: hsl(var(--error) / 0.3);
   }
+
+  /* ── Typography utilities ── */
+  .text-label {
+    @apply text-[10px] font-mono uppercase tracking-wider text-muted-foreground;
+  }
+  .text-caption {
+    @apply text-[11px] text-muted-foreground;
+  }
+  .text-body {
+    @apply text-xs text-foreground leading-relaxed;
+  }
+  .text-mono {
+    @apply font-mono text-[11px];
+  }
+  .text-heading {
+    @apply text-sm font-semibold text-foreground tracking-tight;
+  }
+
+  /* ── Surface utilities ── */
+  .surface-panel {
+    @apply bg-panel border border-border-subtle;
+  }
+  .surface-card {
+    @apply bg-card border border-border-subtle rounded-sm;
+  }
+  .surface-elevated {
+    background-color: hsl(var(--bg-elevated));
+    border: 1px solid hsl(var(--border-default));
+    box-shadow: var(--shadow-sm);
+  }
+  .surface-overlay {
+    background-color: hsl(var(--bg-elevated));
+    border: 1px solid hsl(var(--border-default));
+    box-shadow: var(--shadow-overlay);
+  }
+
+  /* ── Keyboard shortcut chip ── */
+  .kbd {
+    @apply inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-[3px] text-[10px] font-mono font-medium;
+    background: hsl(var(--bg-tertiary));
+    border: 1px solid hsl(var(--border-default));
+    color: hsl(var(--muted-foreground));
+    box-shadow: 0 1px 0 hsl(var(--border-default));
+  }
 }
 
 @keyframes live-pulse {
@@ -187,3 +237,4 @@
     opacity: 0;
   }
 }
+
