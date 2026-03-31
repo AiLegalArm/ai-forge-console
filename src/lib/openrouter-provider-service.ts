@@ -116,7 +116,7 @@ export class OpenRouterProviderService {
     });
 
     if (!requestResult.ok) {
-      const error = requestResult.error;
+      const error = (requestResult as { ok: false; error: string }).error;
       if (error === "openrouter_timeout") {
         return {
           provider: "openrouter",

@@ -55,6 +55,17 @@ describe("RealDeployIntegrationService", () => {
       reviewChatReferences: [],
       auditChatReferences: [],
     },
+    operations: {
+      goNoGo: { status: "warning" as const, warnings: [] },
+      blockerSummary: { total: 0, critical: 0 },
+      approvalSummary: { required: [], completed: [], missing: [] },
+      decisionFactors: { unresolvedExecutionFailures: 0 },
+      readiness: { review: "warning", domain: "warning", rollback: "warning" },
+      auditSummary: { verdict: "not_ready" },
+      deployReadiness: { previewStatus: "missing", productionStatus: "missing", rolloutState: "rollout-blocked", dependencyState: [], blockers: [], status: "warning" },
+      rollbackReadiness: { availability: "unavailable", fallbackPlanRequired: true, summary: "stub", status: "warning" },
+      domainReadiness: { status: "warning", summary: "stub", blockingDomains: [] },
+    },
   };
   it("requires approval for production trigger", async () => {
     const service = new RealDeployIntegrationService(new FakeProvider());

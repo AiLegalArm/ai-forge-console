@@ -173,7 +173,7 @@ export class OllamaRuntimeService {
     });
 
     if (!requestResult.ok) {
-      const error = requestResult.error;
+      const error = (requestResult as { ok: false; error: string }).error;
       if (error === "ollama_timeout") {
         return {
           provider: "ollama",
@@ -241,13 +241,14 @@ export class OllamaRuntimeService {
   private async fetchWithTimeout(path: string): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     const response = await this.requestWithTimeout(path, { method: "GET" });
     if (!response.ok) {
-      const mappedError = response.error === "ollama_timeout"
+      const err = (response as { ok: false; error: string }).error;
+      const mappedError = err === "ollama_timeout"
         ? "Connection to Ollama timed out."
-        : response.error === "ollama_network_error"
+        : err === "ollama_network_error"
           ? "Unable to reach Ollama runtime."
-          : response.error.startsWith("ollama_http_")
-            ? `HTTP ${response.error.replace("ollama_http_", "")} from Ollama.`
-            : response.error;
+          : err.startsWith("ollama_http_")
+            ? `HTTP ${err.replace("ollama_http_", "")} from Ollama.`
+            : err;
       return { ok: false, error: mappedError };
     }
     return response;

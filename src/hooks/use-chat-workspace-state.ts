@@ -2657,8 +2657,8 @@ export function useChatWorkspaceState() {
                     {
                       atIso: fallbackIso,
                       reason: fallbackReason,
-                      from: "openrouter",
-                      to: "ollama",
+                      from: "openrouter" as const,
+                      to: "ollama" as const,
                       runId,
                     },
                     ...localInferenceRef.current.operational.fallbackEvents,
@@ -2775,7 +2775,7 @@ export function useChatWorkspaceState() {
                     ? {
                         ...message,
                         content: `Execution failed before completion.\n\n${openRouterResult.errorMessage}`,
-                        role: chatType === "audit" ? "auditor" : chatType === "review" ? "reviewer" : chatType === "agent" ? "agent" : "orchestrator",
+                        role: (chatType as string) === "audit" ? "auditor" : (chatType as string) === "review" ? "reviewer" : (chatType as string) === "agent" ? "agent" : "orchestrator",
                         status: "failed" as const,
                         liveState: "failed" as const,
                         phaseLabel: "Blocked",
@@ -3194,7 +3194,7 @@ export function useChatWorkspaceState() {
       const result = await deployIntegrationService.triggerDeploy({
         releaseControl,
         projectId: activeProjectId,
-        repository: repository.name ?? localShell.project.repositoryName ?? activeProject?.name ?? "workspace",
+        repository: repository.name ?? (localShell.project as any).repositoryName ?? activeProject?.name ?? "workspace",
         branch,
         taskId,
         chatId: currentChatSessionId,
@@ -3522,8 +3522,8 @@ export function useChatWorkspaceState() {
                         linkedSubtaskIds: draft.linkedSubtaskIds,
                         linkedAuditId: draft.linkedAuditId,
                         draftPreparedAtIso: new Date().toISOString(),
-                        draftPreparationStatus: "ready",
-                        creationStatus: "ready",
+                        draftPreparationStatus: "ready" as const,
+                        creationStatus: "ready" as const,
                         pendingError: undefined,
                         };
                         const reviewOps = evaluatePullRequestReviewOperations({
@@ -3666,7 +3666,7 @@ export function useChatWorkspaceState() {
                           number: prCreateResult.number ?? entry.github.pullRequest.number,
                           url: prCreateResult.url ?? entry.github.pullRequest.url,
                           status: prCreateResult.ok ? "draft_review" : entry.github.pullRequest.status,
-                          creationStatus: prCreateResult.ok ? "created" : "failed",
+                          creationStatus: prCreateResult.ok ? "created" as const : "failed" as const,
                           pendingError: prCreateResult.ok ? undefined : prCreateResult.details,
                           reviewChatSessionId: prCreateResult.ok ? task.linkedChatSessionId : entry.github.pullRequest.reviewChatSessionId,
                         };

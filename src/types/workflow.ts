@@ -386,11 +386,30 @@ export interface WorkflowTask {
 
 export interface AgentExecutionRun {
   id: string;
-  taskId: string;
-  agentId: string;
+  taskId?: string;
+  agentId?: string;
+  agentRole?: "worker" | "auditor" | "orchestrator";
+  subtaskId?: string;
+  chatSessionId?: string;
+  chatType?: ChatType;
+  provider?: "openrouter" | "ollama";
+  backend?: "local" | "cloud";
+  modelId?: string;
+  providerModelId?: string;
+  routingDecision?: RoutingDecision;
   status: "queued" | "running" | "completed" | "failed";
+  usedFallback?: boolean;
+  fallbackFromRunId?: string;
   startedAtIso: string;
+  endedAtIso?: string;
   completedAtIso?: string;
+  error?: {
+    code: string;
+    message: string;
+  };
+  responsePayload?: {
+    text: string;
+  };
 }
 
 export type DelegationState =

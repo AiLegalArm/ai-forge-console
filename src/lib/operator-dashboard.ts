@@ -69,11 +69,13 @@ export function buildOperatorDashboard(
         .filter((approval) => approval.id === trace.approvalId || approval.taskId === trace.taskId)
         .map((approval) => `${approval.id}:${approval.status}`);
 
+      const role: ExecutionDrillDown["actor"]["role"] = trace.auditorId ? "auditor" : trace.agentId ? "agent" : "orchestrator";
+
       return {
         traceId: trace.traceId,
         runId: trace.runId,
         actor: {
-          role: trace.auditorId ? "auditor" : trace.agentId ? "agent" : "orchestrator",
+          role,
           id: trace.auditorId ?? trace.agentId,
         },
         linked: {
@@ -92,7 +94,7 @@ export function buildOperatorDashboard(
           fallbackUsed: trace.fallbackUsed,
           degradedExecution: workspace.localInference.resources.degradedMode || workspace.localInference.operational.degradedMode,
           contributedToFailure: trace.error?.type === "routing_failure" || trace.error?.type === "fallback_failure",
-          costControlSignal: trace.fallbackUsed || workspace.localInference.operational.budgetPressure !== "normal" ? "observed" : "none",
+          costControlSignal: (trace.fallbackUsed || (workspace.localInference.operational.budgetPressure as string) !== "normal" ? "observed" : "none") as "none" | "observed",
         },
         status: trace.status,
         failureType: trace.error?.type,
@@ -176,7 +178,7 @@ export function buildOperatorDashboard(
     ],
     entryPoints: {
       fromActivityStream: workspace.workflow.activityEvents.filter((event) => event.traceId).map((event) => event.traceId ?? ""),
-      fromTaskGraph: workspace.workflow.tasks.map((task) => task.linkedExecutionContext?.executionContextId ?? "").filter(Boolean),
+      fromTaskGraph: workspace.workflow.tasks.map((task) => task.linkedExecutionContextId ?? "").filter(Boolean),
       fromAuditSummaries: workspace.auditors.runs.map((run) => run.id),
       fromReleaseSurface: workspace.releaseControl.finalDecision.blockers,
       fromDashboardCards: executionDrillDowns.slice(0, 5).map((drill) => drill.traceId),

@@ -178,7 +178,7 @@ export class ModelRoutingEngine {
     }
     const preferred = input.operatorOverride?.provider ?? input.preferredProvider ?? (input.preferredBackend === "local" || input.preferredBackend === "ollama" ? "ollama" : "openrouter");
     const fallback = input.fallbackProvider ?? (preferred === "openrouter" ? "ollama" : "openrouter");
-    return [preferred, fallback, preferred === "openrouter" ? "ollama" : "openrouter"].filter((value, index, all) => all.indexOf(value) === index);
+    return ([preferred, fallback, preferred === "openrouter" ? "ollama" : "openrouter"] as ModelProvider[]).filter((value, index, all) => all.indexOf(value) === index);
   }
 
   private resolveSelectedModel(
