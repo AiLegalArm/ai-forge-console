@@ -430,8 +430,9 @@ export function useChatWorkspaceState() {
     const localModels = localInference.modelRegistry.map((entry) => ({
       id: entry.name,
       displayName: entry.displayName,
+      group: "Ollama",
     }));
-    return localModels.length > 0 ? localModels : [{ id: "qwen3-coder:14b", displayName: "Qwen3 Coder 14B" }];
+    return localModels.length > 0 ? localModels : [{ id: "qwen3-coder:14b", displayName: "Qwen3 Coder 14B", group: "Ollama" }];
   };
 
   const activeWorkflowTask =

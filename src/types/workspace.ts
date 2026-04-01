@@ -91,7 +91,7 @@ export interface WorkspaceRuntimeState {
   activeProvider: string;
   activeModel: string;
   lastUsedModel: string;
-  availableModels: Array<{ id: string; displayName: string }>;
+  availableModels: Array<{ id: string; displayName: string; group?: string }>;
   providerSource: "openrouter" | "ollama";
   activeBackend: ProviderBackend;
   deploymentMode: "local" | "cloud" | "hybrid";
