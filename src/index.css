@@ -94,6 +94,13 @@
     --shadow-md: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
     --shadow-lg: 0 4px 16px -4px hsl(0 0% 0% / 0.4);
     --shadow-overlay: 0 8px 32px -8px hsl(0 0% 0% / 0.5);
+
+
+    /* ── Armenian gradient background ── */
+    --gradient-ararat: 
+      radial-gradient(ellipse 120% 80% at 80% 20%, hsl(270 40% 12% / 0.6) 0%, transparent 60%),
+      radial-gradient(ellipse 100% 60% at 20% 80%, hsl(24 60% 12% / 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse 80% 80% at 50% 50%, hsl(232 28% 9%) 0%, hsl(235 30% 6%) 100%);
   }
 
   * {
