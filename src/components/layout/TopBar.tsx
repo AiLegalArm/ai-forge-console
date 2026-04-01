@@ -1,9 +1,10 @@
 import { type AppMode } from "./AppLayout";
-import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
+import { Cloud, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
 import { Button, TopBarMeta, Tabs, TabButton } from "@/ui";
+import araratLogo from "@/assets/armvibecode-logo.png";
 
 const modeKeys = {
   operator: "operator" as const,
@@ -35,7 +36,7 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           <Menu className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          <Cpu className="h-3.5 w-3.5 text-primary" />
+          <img src={araratLogo} alt="ArmVibeCode" className="h-5 w-5" />
           <span className="font-mono font-semibold text-xs text-foreground tracking-wide">ArmVibeCode</span>
         </div>
         <span className="text-border-default text-xs hidden sm:inline">•</span>
