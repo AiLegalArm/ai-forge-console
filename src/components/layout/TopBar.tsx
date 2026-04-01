@@ -36,7 +36,7 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
           <Menu className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          <Cpu className="h-3.5 w-3.5 text-primary" />
+          <img src={araratLogo} alt="ArmVibeCode" className="h-5 w-5" />
           <span className="font-mono font-semibold text-xs text-foreground tracking-wide">ArmVibeCode</span>
         </div>
         <span className="text-border-default text-xs hidden sm:inline">•</span>
