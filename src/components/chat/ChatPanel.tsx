@@ -122,6 +122,13 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <span className="uppercase tracking-wider">{activeSession?.title ?? "Command Surface"}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Connection status dot */}
+          <div className="flex items-center gap-1 text-[10px] font-mono" title={hasProviderConnection ? "OpenRouter connected" : "Demo mode — no API key"}>
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${hasProviderConnection ? "bg-success shadow-[0_0_4px_hsl(var(--success))]" : "bg-warning shadow-[0_0_4px_hsl(var(--warning))]"}`} />
+            <span className={hasProviderConnection ? "text-success" : "text-warning"}>
+              {hasProviderConnection ? "live" : "demo"}
+            </span>
+          </div>
           {/* Inline model selector */}
           <div className="flex items-center gap-1 text-[10px] font-mono">
             <Cpu className="h-3 w-3 text-muted-foreground" />
