@@ -249,7 +249,7 @@ export default function AppLayout() {
   }, [activeTask, approveWorkflowApproval, commandPaletteOpen, executeTaskCommand, pendingApproval]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
+    <div className="flex flex-col h-screen w-screen overflow-hidden" style={{ background: 'var(--gradient-ararat)' }}>
       <TopBar
         mode={mode}
         onModeChange={setMode}
