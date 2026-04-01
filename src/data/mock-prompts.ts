@@ -16,6 +16,7 @@ export interface PromptEntry {
   usageCount: number;
   lastUsed: string;
   isFavorite: boolean;
+  content?: string;
 }
 
 export const promptChainSteps: PromptChainStep[] = [
