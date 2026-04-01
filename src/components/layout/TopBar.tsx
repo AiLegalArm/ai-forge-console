@@ -1,9 +1,10 @@
 import { type AppMode } from "./AppLayout";
-import { Cloud, Cpu, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
+import { Cloud, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
 import { Button, TopBarMeta, Tabs, TabButton } from "@/ui";
+import araratLogo from "@/assets/armvibecode-logo.png";
 
 const modeKeys = {
   operator: "operator" as const,
