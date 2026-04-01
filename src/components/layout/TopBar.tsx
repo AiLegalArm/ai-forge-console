@@ -36,7 +36,7 @@ export function TopBar({ mode, onModeChange, onToggleSidebar, onToggleRight, onT
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
           <Cpu className="h-3.5 w-3.5 text-primary" />
-          <span className="font-mono font-semibold text-xs text-foreground tracking-wide">NEXUS/OS</span>
+          <span className="font-mono font-semibold text-xs text-foreground tracking-wide">ArmVibeCode</span>
         </div>
         <span className="text-border-default text-xs hidden sm:inline">•</span>
         <span className="text-[11px] text-muted-foreground font-mono hidden md:inline truncate max-w-[220px]">{currentProject}</span>
