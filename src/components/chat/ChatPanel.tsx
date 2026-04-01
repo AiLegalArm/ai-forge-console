@@ -115,13 +115,27 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Compact header */}
+      {/* Compact header with inline model selector */}
       <div className="flex items-center justify-between border-b border-border-subtle px-3 py-1.5 bg-card/30">
         <div className="flex items-center gap-1.5 text-[10px] font-mono text-primary">
           <Waypoints className="h-3 w-3" />
           <span className="uppercase tracking-wider">{activeSession?.title ?? "Command Surface"}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Inline model selector */}
+          <div className="flex items-center gap-1 text-[10px] font-mono">
+            <Cpu className="h-3 w-3 text-muted-foreground" />
+            <select
+              value={workspaceState.activeModel}
+              onChange={(e) => onModelChange(e.target.value)}
+              className="bg-transparent border border-border-subtle rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground hover:border-primary/50 focus:border-primary focus:outline-none transition-colors cursor-pointer max-w-[140px] truncate"
+              title={workspaceState.activeModel}
+            >
+              {workspaceState.availableModels.map((m) => (
+                <option key={m.id} value={m.id}>{m.displayName}</option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={() => setShowConfig(!showConfig)}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
