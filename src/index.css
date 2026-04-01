@@ -6,81 +6,81 @@
 
 @layer base {
   :root {
-    /* ── Background surfaces ── */
-    --bg-primary: 220 12% 5%;
-    --bg-secondary: 225 12% 8%;
-    --bg-tertiary: 226 11% 10%;
-    --bg-elevated: 226 11% 12%;
+    /* ── Background surfaces (deep indigo-navy) ── */
+    --bg-primary: 232 28% 7%;
+    --bg-secondary: 230 24% 10%;
+    --bg-tertiary: 228 22% 13%;
+    --bg-elevated: 228 20% 16%;
 
     /* ── Semantic surfaces ── */
     --background: var(--bg-primary);
-    --foreground: 220 12% 92%;
+    --foreground: 220 18% 90%;
 
     --card: var(--bg-secondary);
-    --card-foreground: 220 12% 92%;
+    --card-foreground: 220 18% 90%;
 
     --popover: var(--bg-tertiary);
-    --popover-foreground: 220 12% 92%;
+    --popover-foreground: 220 18% 90%;
 
-    /* ── Brand ── */
-    --primary: 214 88% 60%;
-    --primary-foreground: 220 20% 97%;
-    --primary-muted: 214 50% 25%;
+    /* ── Brand (warm orange-amber) ── */
+    --primary: 24 92% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 24 50% 25%;
 
     /* ── Secondary ── */
     --secondary: var(--bg-tertiary);
-    --secondary-foreground: 220 8% 68%;
+    --secondary-foreground: 220 12% 68%;
 
     /* ── Muted ── */
-    --muted: 226 10% 12%;
-    --muted-foreground: 220 8% 48%;
+    --muted: 230 18% 14%;
+    --muted-foreground: 220 12% 50%;
 
-    /* ── Accent ── */
-    --accent: 214 88% 60%;
-    --accent-foreground: 220 20% 97%;
+    /* ── Accent (warm amber-orange) ── */
+    --accent: 24 92% 55%;
+    --accent-foreground: 0 0% 100%;
 
     /* ── Destructive ── */
-    --destructive: 0 72% 56%;
-    --destructive-foreground: 220 20% 97%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
 
-    /* ── Borders ── */
-    --border-subtle: 224 11% 17%;
-    --border-default: 224 11% 22%;
-    --border-strong: 224 11% 28%;
+    /* ── Borders (warm-tinted) ── */
+    --border-subtle: 230 18% 18%;
+    --border-default: 228 16% 24%;
+    --border-strong: 226 14% 30%;
     --border: var(--border-subtle);
-    --input: 226 11% 11%;
-    --ring: 214 88% 60%;
+    --input: 230 20% 12%;
+    --ring: 24 92% 55%;
 
     /* ── Radius ── */
-    --radius: 4px;
-    --radius-sm: 3px;
-    --radius-xs: 2px;
+    --radius: 6px;
+    --radius-sm: 4px;
+    --radius-xs: 3px;
 
     /* ── Functional colors ── */
-    --success: 142 65% 45%;
-    --success-foreground: 220 20% 97%;
-    --warning: 42 93% 56%;
-    --warning-foreground: 220 20% 7%;
-    --info: 214 88% 60%;
-    --info-foreground: 220 20% 97%;
-    --error: 0 72% 56%;
+    --success: 152 60% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 230 28% 7%;
+    --info: 210 80% 58%;
+    --info-foreground: 0 0% 100%;
+    --error: 0 72% 52%;
 
     /* ── Panel / Surface ── */
     --panel: var(--bg-secondary);
     --panel-border: var(--border-subtle);
     --surface: var(--bg-tertiary);
-    --surface-hover: 225 11% 14%;
-    --surface-active: 225 11% 16%;
+    --surface-hover: 228 20% 16%;
+    --surface-active: 228 18% 19%;
 
-    /* ── Sidebar ── */
-    --sidebar-background: var(--bg-primary);
-    --sidebar-foreground: 220 8% 58%;
-    --sidebar-primary: 214 88% 60%;
-    --sidebar-primary-foreground: 220 20% 97%;
+    /* ── Sidebar (darker left panel) ── */
+    --sidebar-background: 235 30% 6%;
+    --sidebar-foreground: 220 12% 58%;
+    --sidebar-primary: 24 92% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: var(--bg-tertiary);
-    --sidebar-accent-foreground: 220 20% 97%;
-    --sidebar-border: var(--border-subtle);
-    --sidebar-ring: 214 88% 60%;
+    --sidebar-accent-foreground: 220 18% 90%;
+    --sidebar-border: 232 22% 16%;
+    --sidebar-ring: 24 92% 55%;
 
     /* ── Motion ── */
     --motion-fast: 90ms;
