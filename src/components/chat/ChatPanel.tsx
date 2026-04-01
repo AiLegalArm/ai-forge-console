@@ -11,6 +11,7 @@ import type { ChatState, ChatMessage } from "@/types/chat";
 import type { ChatContextMap, WorkspaceRuntimeState } from "@/types/workspace";
 import type { AppRoutingModeProfile } from "@/types/local-inference";
 import { Badge } from "@/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SmartActionChips } from "@/components/assistive/SmartActionChips";
 import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
 
@@ -122,13 +123,34 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
           <span className="uppercase tracking-wider">{activeSession?.title ?? "Command Surface"}</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Connection status dot */}
-          <div className="flex items-center gap-1 text-[10px] font-mono" title={hasProviderConnection ? "OpenRouter connected" : "Demo mode — no API key"}>
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${hasProviderConnection ? "bg-success shadow-[0_0_4px_hsl(var(--success))]" : "bg-warning shadow-[0_0_4px_hsl(var(--warning))]"}`} />
-            <span className={hasProviderConnection ? "text-success" : "text-warning"}>
-              {hasProviderConnection ? "live" : "demo"}
-            </span>
-          </div>
+          {/* Connection status with tooltip */}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 text-[10px] font-mono cursor-default">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${hasProviderConnection ? "bg-success shadow-[0_0_4px_hsl(var(--success))]" : "bg-warning shadow-[0_0_4px_hsl(var(--warning))]"}`} />
+                  <span className={hasProviderConnection ? "text-success" : "text-warning"}>
+                    {hasProviderConnection ? "live" : "demo"}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-[10px] font-mono p-2 space-y-1 max-w-[220px]">
+                <div className="flex items-center gap-1.5">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${hasProviderConnection ? "bg-success" : "bg-warning"}`} />
+                  <span className="font-semibold">{hasProviderConnection ? "Connected" : "Demo Mode"}</span>
+                </div>
+                <div className="text-muted-foreground space-y-0.5">
+                  <div>Provider: <span className="text-foreground">{workspaceState.providerSource}</span></div>
+                  <div>Model: <span className="text-foreground">{workspaceState.activeModel}</span></div>
+                  <div>Routing: <span className="text-foreground">{workspaceState.routingProfile}</span></div>
+                  <div>State: <span className="text-foreground">{workspaceState.providerExecutionState}</span></div>
+                  {!hasProviderConnection && (
+                    <div className="text-warning mt-1">Add VITE_OPENROUTER_API_KEY to enable live AI</div>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {/* Inline model selector */}
           <div className="flex items-center gap-1 text-[10px] font-mono">
             <Cpu className="h-3 w-3 text-muted-foreground" />
