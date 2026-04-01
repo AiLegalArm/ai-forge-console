@@ -1,41 +1,101 @@
 
+Что у вас происходит сейчас
 
-# Подключение OpenRouter к ArmVibeCode
+Для этого проекта OpenRouter берётся из переменной `VITE_OPENROUTER_API_KEY`. Это значит:
 
-## Что сейчас
+- секрет нужен именно как Build Secret
+- он должен быть добавлен на уровне workspace
+- после добавления нужен новый publish/update, потому что Vite подставляет `VITE_*` только во время сборки
 
-Код интеграции с OpenRouter **уже написан** — приложение вызывает `openRouterProviderService.executeChatCompletion()` из main chat. Однако есть баг: API ключ читается из `import.meta.env.OPENROUTER_API_KEY`, но Vite пропускает только переменные с префиксом `VITE_`.
+Если добавить ключ в Cloud → Secrets, это не поможет для текущей реализации, и UI так и останется в demo mode.
 
-## Что нужно сделать
+Что сделать пошагово
 
-### 1. Исправить чтение API ключа
-В `src/lib/openrouter-provider-service.ts` (строка 392) — заменить `import.meta.env.OPENROUTER_API_KEY` на `import.meta.env.VITE_OPENROUTER_API_KEY`.
+1. Откройте именно Workspace Settings, не Project Settings
+2. Найдите раздел Build Secrets
+3. Добавьте секрет:
+   - Name: `VITE_OPENROUTER_API_KEY`
+   - Value: ваш ключ OpenRouter
+4. Сохраните
+5. Нажмите Publish → Update
+6. После публикации сделайте жёсткое обновление страницы
 
-### 2. Добавить fallback на mock при отсутствии ключа
-В `src/hooks/use-chat-workspace-state.ts` (~строка 2446) — если OpenRouter возвращает `missing_api_key`, использовать mock-ответ вместо показа ошибки. Так приложение работает в demo-режиме без ключа, и с реальным AI при наличии ключа.
+Где это найти
 
-### 3. Обновить статус провайдера
-Обновить `getConfigState()` в openrouter-provider-service.ts чтобы при наличии ключа показывать `connected` вместо `degraded`.
+Desktop:
+- В правом верхнем углу откройте меню workspace/аккаунта и перейдите в Workspace Settings
+- Дальше: Build Secrets
+- Быстрый способ: `Cmd+K` / `Ctrl+K` → введите `Workspace Settings`
 
-### 4. Добавить API ключ
-Пользователю нужно будет добавить секрет `VITE_OPENROUTER_API_KEY` со своим ключом от openrouter.ai. Это публичный ключ (используется в клиентском коде), поэтому хранится в `.env` или как Lovable secret.
+Mobile:
+- Откройте Chat mode
+- Нажмите меню проекта/рабочей области или `...`
+- Перейдите в Workspace Settings
+- Дальше: Build Secrets
 
-## Технические детали
+Если на телефоне этот раздел не находится, лучше открыть Lovable с компьютера: workspace-настройки там заметно удобнее.
+
+Что именно вводить
 
 ```text
-Текущий поток:
-  User types message → sendMessage() → routing decision 
-  → if openrouter+main → openRouterProviderService.executeChatCompletion()
-  → result updates chat message
-
-Проблема: resolveApiKey() → import.meta.env.OPENROUTER_API_KEY → undefined
-Фикс:     resolveApiKey() → import.meta.env.VITE_OPENROUTER_API_KEY → "sk-or-..."
+Name:  VITE_OPENROUTER_API_KEY
+Value: sk-or-v1-...
 ```
 
-### Файлы для изменения
-- `src/lib/openrouter-provider-service.ts` — фикс env var name
-- `src/hooks/use-chat-workspace-state.ts` — graceful fallback при missing key
+Важно:
+- имя должно совпадать символ в символ
+- без пробелов в начале и конце
+- не `OPENROUTER_API_KEY`, а именно `VITE_OPENROUTER_API_KEY`
 
-## Примечание по безопасности
-OpenRouter API ключ в клиентском коде — это не идеально, но допустимо для dev/demo. Для продакшена стоит проксировать через edge function (можно добавить позже).
+Как понять, что вы открыли не тот раздел
 
+Если вы видите:
+- Cloud
+- Secrets
+- Project Settings
+
+то это не Build Secrets.
+
+Вам нужен именно:
+```text
+Workspace Settings → Build Secrets
+```
+
+Если раздела Build Secrets вообще нет
+
+Скорее всего одна из причин:
+
+1. Вы открыли настройки проекта, а не workspace
+2. Вы смотрите Cloud → Secrets, это runtime secrets
+3. У вас нет прав на workspace settings
+
+Если проблема в правах, попросите владельца workspace добавить секрет за вас.
+
+После добавления проверьте так
+
+```text
+1. Publish → Update
+2. Откройте опубликованную версию
+3. Обновите страницу с очисткой кэша
+4. Посмотрите на индикатор провайдера в чате
+```
+
+Ожидаемый результат:
+- было: `demo mode`
+- должно стать: `connected`
+
+Коротко о разнице секретов
+
+```text
+Build Secrets
+- уровень: workspace
+- используются во время сборки
+- нужны для Vite-переменных `VITE_*`
+
+Runtime Secrets
+- уровень: project / cloud
+- доступны backend/edge functions во время выполнения
+- для текущего OpenRouter UI-варианта не подходят
+```
+
+Если хотите, следующим сообщением я дам вам совсем короткую инструкцию на 3 шага именно под ваш экран: куда нажать на desktop и куда нажать на mobile.
