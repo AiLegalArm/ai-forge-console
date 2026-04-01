@@ -97,412 +97,124 @@ export function WorkspaceView({ section, mode, workspaceState, chatContexts, cha
   );
 }
 
+function CollapsibleSection({ title, icon, defaultOpen = false, badge, children }: { title: string; icon?: React.ReactNode; defaultOpen?: boolean; badge?: React.ReactNode; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border-subtle/50 last:border-0">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+        <span className="text-[9px]">{open ? "▾" : "▸"}</span>
+        {icon}
+        <span className="flex-1 text-left">{title}</span>
+        {badge}
+      </button>
+      {open && <div className="px-2 pb-2 space-y-1 text-[10px]">{children}</div>}
+    </div>
+  );
+}
+
+function KV({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-muted-foreground truncate">{label}</span>
+      <span className={`font-mono truncate max-w-[130px] ${color ?? "text-foreground"}`}>{value}</span>
+    </div>
+  );
+}
+
 function SideRail({ mode, workspaceState, chatState, onWorkflowApprovalResolve, onFocusTask, onLaunchTask }: { mode: AppMode; workspaceState: WorkspaceRuntimeState; chatState: ChatState; onWorkflowApprovalResolve: (approvalId: string) => void | Promise<void>; onFocusTask: (taskId: string) => void; onLaunchTask: (taskId: string) => void }) {
   const { t } = useI18n();
-  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const tasks = workspaceState.workflow.tasks;
   const subtasks = workspaceState.workflow.subtasks;
   const completed = tasks.filter((s) => s.status === "completed").length;
   const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
-
-  const activeSession = chatState.sessions.find((session) => session.id === workspaceState.currentChatSessionId);
-  const linkedContext = activeSession?.linked;
   const activeTask = tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? tasks[0];
-  const parentTask = tasks.find((task) => task.id === "task-rbac") ?? activeTask;
-  const delegatedSubtasks = subtasks.filter((subtask) => subtask.parentTaskId === parentTask?.id);
-  const taskEvidence = activeTask?.id ? workspaceState.evidenceFlow.linkedByTaskId[activeTask.id] ?? [] : [];
-  const blockerEvidence = workspaceState.evidenceFlow.records.filter((record) => record.blocking);
-  const blockedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "blocked");
-  const completedSubtasks = delegatedSubtasks.filter((subtask) => subtask.status === "completed");
-  const activeBlockers = workspaceState.workflow.tasks.filter((task) => task.status === "blocked" || (task.designBrowserBlockers ?? 0) > 0);
-  const criticalPath = workspaceState.workflow.tasks.filter((task) => task.status !== "completed" && task.phase !== "planning");
-  const activeReleaseTask = workspaceState.workflow.tasks.find((task) => task.phase === "release");
   const operatorMode = mode === "operator";
-  const operatorDashboard = workspaceState.operatorDashboard;
-  const selectedDrillDown = useMemo(
-    () => operatorDashboard.executionDrillDowns.find((trace) => trace.traceId === selectedTraceId) ?? operatorDashboard.executionDrillDowns[0],
-    [operatorDashboard.executionDrillDowns, selectedTraceId],
-  );
-  const operatorActions = getSmartActionSuggestions(workspaceState);
-  const handleOperatorAction = (actionId: SmartActionId) => {
-    const activeTaskId = activeTask?.id ?? workspaceState.currentTask;
-    if (actionId === "approve_push" && workspaceState.pendingApprovals[0]) {
-      void onWorkflowApprovalResolve(workspaceState.pendingApprovals[0].id);
-      return;
-    }
-    if (actionId === "retry_failed_run" || actionId === "resume_last_task" || actionId === "plan_subtasks") {
-      if (activeTaskId) onLaunchTask(activeTaskId);
-      return;
-    }
-    if (actionId === "review_blockers" || actionId === "inspect_release_blockers") {
-      if (activeTaskId) onFocusTask(activeTaskId);
-    }
-  };
 
   return (
-    <div className="p-2 space-y-2 text-[11px]">
-      <div className={`border p-2 ${operatorMode ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-foreground flex items-center gap-1"><Radar className="h-3 w-3 text-primary" /> Operator Mode</span>
-          <span className={`text-[9px] font-mono uppercase ${operatorMode ? "text-success" : "text-muted-foreground"}`}>{operatorMode ? "active" : "standby"}</span>
-        </div>
-        <div className="mt-2 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">project</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.currentProject}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">task</span><span className="font-mono text-primary truncate max-w-[120px]">{activeTask?.id ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">provider/model</span><span className="font-mono text-foreground truncate max-w-[120px]">{workspaceState.providerSource}/{workspaceState.activeModel}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">routing</span><span className="font-mono text-foreground uppercase">{workspaceState.routingMode.replace(/_/g, " ")}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">budget pressure</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.budgetPressure === "critical" ? "text-destructive" : workspaceState.localInference.operational.budgetPressure === "high" ? "text-warning" : "text-foreground"}`}>{workspaceState.localInference.operational.budgetPressure}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">degraded mode</span><span className={`font-mono uppercase ${workspaceState.localInference.operational.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.operational.degradedMode ? "enabled" : "off"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">fallback activity</span><span className="font-mono text-info">{workspaceState.localInference.operational.fallbackEvents.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">release readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">missing approvals</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">rollback readiness</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.readiness.rollback === "ready" ? "text-success" : "text-warning"}`}>{workspaceState.releaseControl.operations.readiness.rollback}</span></div>
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">operator dashboard</span>
-        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
-          <div className="grid grid-cols-2 gap-1">
-            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">active tasks</div><div className="font-mono text-primary">{operatorDashboard.globalSummary.activeTasks}</div></div>
-            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">blocked</div><div className="font-mono text-destructive">{operatorDashboard.globalSummary.blockedTasks}</div></div>
-            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">pending approvals</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.pendingApprovals}</div></div>
-            <div className="border border-border-subtle p-1"><div className="text-muted-foreground">routing anomalies</div><div className="font-mono text-warning">{operatorDashboard.globalSummary.routingAnomalies}</div></div>
-          </div>
-          <div className="text-muted-foreground">release blockers {workspaceState.releaseControl.operations.blockerSummary.total} • failures {workspaceState.releaseControl.operations.decisionFactors.unresolvedExecutionFailures}</div>
-          <div className={`font-mono uppercase ${operatorDashboard.globalSummary.degradedProviderRuntime ? "text-warning" : "text-success"}`}>
-            provider/runtime {operatorDashboard.globalSummary.degradedProviderRuntime ? "degraded" : "healthy"}
-          </div>
-        </div>
-      </div>
-      {operatorMode ? (
-        <SmartActionChips
-          title="Operator interventions"
-          suggestions={operatorActions}
-          maxVisible={3}
-          onAction={handleOperatorAction}
-        />
-      ) : null}
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">project summaries</span>
-        <div className="mt-1.5 space-y-1">
-          {operatorDashboard.projectSummaries.map((project) => (
-            <div key={project.projectId} className={`border p-1.5 text-[10px] ${project.isActiveProject ? "border-primary/40 bg-primary/5" : "border-border"}`}>
-              <div className="font-mono text-foreground truncate">{project.projectName}</div>
-              <div className="text-muted-foreground">active {project.activeTaskCount} • blocked {project.blockedTaskCount} • subtasks {project.activeSubtaskCount}</div>
-              <div className="text-muted-foreground">agents {project.agentUtilization.active}/{project.agentUtilization.active + project.agentUtilization.idle} • {(project.agentUtilization.utilizationRatio * 100).toFixed(0)}%</div>
-              <div className="text-muted-foreground">{project.providerModelState.providerSource}/{project.providerModelState.model} • {project.providerModelState.routingProfile}</div>
-              <div className={`${project.releaseReadiness === "go" ? "text-success" : "text-warning"} font-mono uppercase`}>release {project.releaseReadiness}</div>
-              <div className="text-muted-foreground">audit sev c:{project.auditSeveritySummary.critical} h:{project.auditSeveritySummary.high} m:{project.auditSeveritySummary.medium}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">execution drill-down</span>
-        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
-          <div className="flex flex-wrap gap-1">
-            {operatorDashboard.entryPoints.fromDashboardCards.slice(0, 4).map((traceId) => (
-              <button key={traceId} onClick={() => setSelectedTraceId(traceId)} className={`border rounded px-1 py-0.5 font-mono ${selectedDrillDown?.traceId === traceId ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>card:{traceId}</button>
-            ))}
-            {operatorDashboard.entryPoints.fromActivityStream.slice(0, 2).map((traceId) => (
-              <button key={`act-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">activity:{traceId}</button>
-            ))}
-            {operatorDashboard.entryPoints.fromTaskGraph.slice(0, 2).map((traceId) => (
-              <button key={`task-${traceId}`} onClick={() => setSelectedTraceId(traceId)} className="border border-border rounded px-1 py-0.5 font-mono text-muted-foreground">task:{traceId}</button>
-            ))}
-          </div>
-          {selectedDrillDown ? (
-            <div className="space-y-1">
-              <div className="font-mono text-foreground">{selectedDrillDown.traceId} • {selectedDrillDown.runId}</div>
-              <div className="text-muted-foreground">{selectedDrillDown.actor.role} {selectedDrillDown.actor.id ?? "system"} • task {selectedDrillDown.linked.taskId ?? "—"} / subtask {selectedDrillDown.linked.subtaskId ?? "—"}</div>
-              <div className="text-muted-foreground">provider/model {selectedDrillDown.providerModel.provider ?? "—"}/{selectedDrillDown.providerModel.model ?? "—"}</div>
-              <div className="text-muted-foreground">routing: {selectedDrillDown.routing.decision ?? "n/a"} • fallback {selectedDrillDown.routing.fallbackUsed ? "yes" : "no"} • degraded {selectedDrillDown.routing.degradedExecution ? "yes" : "no"}</div>
-              <div className="text-muted-foreground">cost control {selectedDrillDown.routing.costControlSignal} • outcome {selectedDrillDown.outcome}</div>
-              <div className="text-muted-foreground">approvals {selectedDrillDown.approvalInteractions.join(", ") || "none"} • blockers/findings {selectedDrillDown.findingsOrBlockers.join(", ") || "none"}</div>
-              <div className="text-muted-foreground">steps {selectedDrillDown.steps.length} • final status {selectedDrillDown.status}{selectedDrillDown.failureType ? ` • ${selectedDrillDown.failureType}` : ""}</div>
-            </div>
-          ) : <div className="text-muted-foreground">No execution traces available.</div>}
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">task launch + focus</span>
-        <div className="mt-1.5 space-y-1">
-          {tasks.map((task) => (
-            <div key={task.id} className="border border-border-subtle p-1.5">
-              <div className="flex items-center gap-1.5">
-                {taskStatusIcons[task.status]}
-                <span className="text-[10px] text-foreground truncate">{task.title}</span>
-              </div>
-              <div className="text-[9px] text-muted-foreground font-mono">{task.phase} • {task.status} • owner {task.ownerAgentId ?? "orchestrator"}</div>
-              <div className="mt-1 flex gap-1">
-                <button onClick={() => onLaunchTask(task.id)} className="text-[9px] font-mono border border-primary/30 text-primary rounded px-1.5 py-0.5 hover:bg-primary/10">launch</button>
-                <button onClick={() => onFocusTask(task.id)} className="text-[9px] font-mono border border-border rounded px-1.5 py-0.5 hover:bg-muted">focus</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><GitCommitHorizontal className="h-3 w-3" /> subtask command map</span>
-        <div className="mt-1.5 border border-border-subtle p-2 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">parent task</span><span className="font-mono text-foreground">{parentTask?.id ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">active subtasks</span><span className="font-mono text-primary">{delegatedSubtasks.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">blocked</span><span className="font-mono text-destructive">{blockedSubtasks.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">completed</span><span className="font-mono text-success">{completedSubtasks.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">critical path</span><span className="font-mono text-warning">{criticalPath.map((task) => task.id).join(" → ")}</span></div>
-        </div>
-      </div>
-
-      <div>
+    <div className="text-[11px] overflow-auto">
+      {/* Status summary — always visible */}
+      <div className="px-2 py-2 border-b border-border-subtle bg-card/30">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.task_graph" as never)}</span>
-          <span className="text-[10px] font-mono text-primary">{Math.round(progress)}%</span>
+          <span className="text-[10px] font-mono font-medium text-foreground uppercase tracking-wider flex items-center gap-1">
+            <Radar className="h-3 w-3 text-primary" />
+            {operatorMode ? "Operator" : "Status"}
+          </span>
+          <span className={`text-[9px] font-mono uppercase ${operatorMode ? "text-success" : "text-muted-foreground"}`}>
+            {operatorMode ? "active" : "standby"}
+          </span>
         </div>
-        <div className="h-1 bg-muted  overflow-hidden mb-2">
-          <div className="h-full bg-primary  transition-all" style={{ width: `${progress}%` }} />
+        <div className="space-y-0.5 text-[10px]">
+          <KV label="task" value={activeTask?.id ?? "—"} color="text-primary" />
+          <KV label="model" value={`${workspaceState.providerSource}/${workspaceState.activeModel}`} />
+          <KV label="release" value={workspaceState.releaseControl.operations.goNoGo.status} color={workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"} />
+        </div>
+      </div>
+
+      {/* Task graph */}
+      <CollapsibleSection title="Task Graph" icon={<Flag className="h-3 w-3 text-primary" />} defaultOpen badge={<span className="text-primary font-mono">{Math.round(progress)}%</span>}>
+        <div className="h-1 bg-muted rounded-full overflow-hidden mb-1.5">
+          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
         <div className="space-y-0.5">
-          {parentTask ? (
-            <div className="py-1 border-b border-border/30">
-              <div className="flex items-center gap-1.5">
-                {taskStatusIcons[parentTask.status]}
-                <span className="text-[10px] text-foreground truncate font-semibold">{parentTask.title}</span>
-              </div>
-              <div className="text-[9px] text-muted-foreground font-mono pl-4">
-                owner {parentTask.ownerAgentId ?? "orchestrator"} • {Math.round(parentTask.completionRate ?? 0)}% rollup
-              </div>
-            </div>
-          ) : null}
-          {delegatedSubtasks.map((subtask) => (
-            <div key={subtask.id} className="py-1 border-b border-border/30 last:border-0 pl-2">
-              <div className="flex items-center gap-1.5">
-                {taskStatusIcons[subtask.status]}
-                <span className="text-[10px] text-foreground truncate">{subtask.title}</span>
-              </div>
-              <div className="text-[9px] text-muted-foreground font-mono pl-4">
-                {subtask.assignedAgentId} • {subtask.priority} • {subtask.status}
-              </div>
-            </div>
-          ))}
-          {tasks.filter((task) => !task.parentTaskId).map((task) => (
-            <div key={task.id} className="py-1 border-b border-border/30 last:border-0">
-              <div className="flex items-center gap-1.5">
-                {taskStatusIcons[task.status]}
-                <span className="text-[10px] text-foreground truncate">{task.title}</span>
-              </div>
-              <div className="text-[9px] text-muted-foreground font-mono pl-4">{task.phase} • {task.github?.branchLifecycle ?? "no_branch"}</div>
-              {task.rollup ? (
-                <div className="text-[9px] font-mono pl-4 text-muted-foreground">
-                  subtasks {task.rollup.completedSubtasks}/{task.rollup.totalSubtasks} • blocked {task.rollup.blockedSubtasks}
-                </div>
-              ) : null}
-              {task.designBrowserBlockers ? (
-                <div className="text-[9px] text-warning font-mono pl-4">{t("rail.design_blockers" as never)} {task.designBrowserBlockers}</div>
-              ) : null}
-              {task.rollup?.blockerIds.length ? (
-                <div className="text-[9px] text-destructive font-mono pl-4">audit blockers: {task.rollup.blockerIds.length}</div>
-              ) : null}
+          {tasks.slice(0, 5).map((task) => (
+            <div key={task.id} className="flex items-center gap-1.5 py-0.5 group">
+              {taskStatusIcons[task.status]}
+              <span className="text-foreground truncate flex-1">{task.title}</span>
+              <button onClick={() => onLaunchTask(task.id)} className="text-[9px] text-primary opacity-0 group-hover:opacity-100 transition-opacity">▶</button>
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">delegations</span>
-        <div className="mt-1.5 space-y-1">
-          {workspaceState.workflow.delegations.map((delegation) => (
-            <div key={delegation.id} className="border border-border-subtle p-1.5 text-[10px]">
-              <div className="text-foreground font-mono truncate">
-                {delegation.subtaskId} → {delegation.toAgentId}
-              </div>
-              <div className="text-muted-foreground">
-                {delegation.state} • {delegation.assignmentMetadata.expectedOutcome}
-              </div>
+      {/* Approvals */}
+      {workspaceState.pendingApprovals.length > 0 && (
+        <CollapsibleSection title="Approvals" icon={<Flag className="h-3 w-3 text-warning" />} defaultOpen badge={<span className="text-warning font-mono">{workspaceState.pendingApprovals.length}</span>}>
+          {workspaceState.pendingApprovals.map((approval) => (
+            <div key={approval.id} className="flex items-center justify-between gap-1 py-0.5">
+              <span className="text-foreground truncate">{approval.title}</span>
+              <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="text-[9px] font-mono text-primary hover:underline shrink-0">approve</button>
             </div>
           ))}
-        </div>
-      </div>
+        </CollapsibleSection>
+      )}
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Flag className="h-3 w-3 text-warning" /> approval command center</span>
-        <div className="mt-1.5 space-y-1">
-          {workspaceState.pendingApprovals.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground font-mono">{t("rail.no_approvals" as never)}</div>
-          ) : (
-            workspaceState.pendingApprovals.map((approval: WorkflowApproval) => (
-              <div key={approval.id} className="border border-warning/30 bg-warning/5 p-1.5">
-                <div className="text-[10px] text-warning font-mono">{approval.category}</div>
-                <div className="text-[10px] text-foreground">{approval.title}</div>
-                <div className="text-[9px] text-muted-foreground font-mono">task {approval.taskId ?? "—"} • agent {approval.agentId ?? "operator"} • risk {approval.category}</div>
-                <button onClick={() => onWorkflowApprovalResolve(approval.id)} className="mt-1 text-[10px] font-mono text-primary hover:underline">
-                  {t("chat.approve" as never)}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      {/* Release */}
+      <CollapsibleSection title="Release" icon={<Bot className="h-3 w-3 text-primary" />}>
+        <KV label="go/no-go" value={workspaceState.releaseControl.operations.goNoGo.status} color={workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"} />
+        <KV label="blockers" value={workspaceState.releaseControl.operations.blockerSummary.total} color="text-destructive" />
+        <KV label="warnings" value={workspaceState.releaseControl.operations.goNoGo.warnings.length} color="text-warning" />
+        <KV label="missing approvals" value={workspaceState.releaseControl.operations.approvalSummary.missing.length} color="text-warning" />
+      </CollapsibleSection>
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">agent commands</span>
-        <div className="mt-1.5 space-y-1">
-          {workspaceState.workflow.agentCommandRequests.slice(0, 3).map((request) => (
-            <div key={request.id} className="border border-border-subtle p-1.5 text-[10px]">
-              <div className="text-foreground font-mono truncate">{request.rawCommand}</div>
-              <div className="text-muted-foreground">{request.origin.replace(/_/g, " ")} • {request.executionState}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* GitHub */}
+      <CollapsibleSection title="GitHub" icon={<GitCommitHorizontal className="h-3 w-3" />}>
+        <KV label="branch" value={activeTask?.github?.branch?.localBranchName ?? "—"} />
+        <KV label="sync" value={activeTask?.github?.syncMode ?? "manual"} />
+        <KV label="push gate" value={activeTask?.github?.pushWorkflow.requiresApproval ? "required" : "none"} color={activeTask?.github?.pushWorkflow.requiresApproval ? "text-warning" : "text-success"} />
+        <KV label="review" value={activeTask?.github?.pullRequest?.status ?? "—"} />
+      </CollapsibleSection>
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.github_flow" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.branch" as never)}</span><span className="text-foreground font-mono truncate max-w-[130px]">{activeTask?.github?.branch?.localBranchName ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.task_link" as never)}</span><span className="text-primary font-mono">{activeTask?.id ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.sync_mode" as never)}</span><span className="text-foreground font-mono uppercase">{activeTask?.github?.syncMode ?? "manual"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.push_gate" as never)}</span><span className="text-warning font-mono">{activeTask?.github?.pushWorkflow.requiresApproval ? t("rail.approval_required" as never) : t("rail.no_gate" as never)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review" as never)}</span><span className="text-foreground font-mono">{activeTask?.github?.pullRequest?.status ?? "—"}</span></div>
-        </div>
-      </div>
+      {/* Routing */}
+      <CollapsibleSection title="Routing" icon={<Cpu className="h-3 w-3" />}>
+        <KV label="mode" value={workspaceState.localInference.routing.activeMode.replace(/_/g, " ")} color="text-primary" />
+        <KV label="fallback" value={workspaceState.localInference.resources.autoFallbackReady ? "ready" : "not ready"} color={workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"} />
+        <KV label="pressure" value={workspaceState.localInference.operational.budgetPressure} color={workspaceState.localInference.operational.budgetPressure === "critical" ? "text-destructive" : "text-foreground"} />
+        <KV label="jobs" value={`${workspaceState.localInference.resources.activeJobs}/${workspaceState.localInference.resources.maxConcurrentJobs}`} />
+      </CollapsibleSection>
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.evidence" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.task_evidence" as never)}</span><span className="text-foreground font-mono">{taskEvidence.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blocking" as never)}</span><span className="text-destructive font-mono">{blockerEvidence.length}</span></div>
-          {taskEvidence.slice(0, 2).map((evidenceId) => (
-            <div key={evidenceId} className="text-muted-foreground truncate">• {workspaceState.evidenceFlow.records.find((entry) => entry.id === evidenceId)?.title ?? evidenceId}</div>
-          ))}
-        </div>
-      </div>
+      {/* Shell */}
+      <CollapsibleSection title="Shell" icon={<Globe className="h-3 w-3" />}>
+        <KV label="exec mode" value={workspaceState.localShell.executionMode.replace(/_/g, " ")} color="text-primary" />
+        <KV label="changes" value={workspaceState.localShell.project.hasLocalChanges ? "dirty" : "clean"} color={workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"} />
+        <KV label="terminal" value={workspaceState.localShell.terminal.state} />
+      </CollapsibleSection>
 
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><ShieldAlert className="h-3 w-3 text-warning" /> audit control</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">active blockers</span><span className="text-destructive font-mono">{activeBlockers.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">severity overview</span><span className="text-warning font-mono uppercase">{activeBlockers.length > 0 ? "elevated" : "stable"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "audit")?.linkedAuditId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.review_link" as never)}</span><span className="text-foreground font-mono">{tasks.find((task) => task.phase === "release")?.linkedReviewId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.design_state" as never)}</span><span className="text-foreground font-mono">{workspaceState.designSession.state}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.browser_run" as never)}</span><span className="text-foreground font-mono">{workspaceState.browserSession.runState}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.mode" as never)}</span><span className="text-primary font-mono uppercase">{mode}</span></div>
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider flex items-center gap-1"><Bot className="h-3 w-3 text-primary" /> release command layer</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">release candidate</span><span className="text-foreground font-mono">{activeReleaseTask?.linkedReleaseCandidateId ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.decision" as never)}</span><span className={`font-mono uppercase ${workspaceState.releaseControl.operations.goNoGo.status === "go" ? "text-success" : "text-destructive"}`}>{workspaceState.releaseControl.operations.goNoGo.status}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.blockers" as never)}</span><span className="font-mono text-destructive">{workspaceState.releaseControl.operations.blockerSummary.total}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.warnings" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.goNoGo.warnings.length}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pending_approvals" as never)}</span><span className="font-mono text-warning">{workspaceState.releaseControl.operations.approvalSummary.missing.length}</span></div>
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.chat_link" as never)}</span>
-        <div className="mt-1.5 space-y-0.5 text-[10px]">
-          <div className="flex justify-between text-muted-foreground"><span>{t("rail.session" as never)}</span><span className="text-foreground font-mono truncate max-w-[120px]">{activeSession?.title}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("rail.task_graph" as never)}</span><span className="text-foreground font-mono">{linkedContext?.taskId ?? "—"}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("rail.agent_link" as never)}</span><span className="text-foreground font-mono">{linkedContext?.agentName ?? "—"}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("rail.audit_link" as never)}</span><span className="text-foreground font-mono">{linkedContext?.auditFindingId ?? "—"}</span></div>
-        </div>
-      </div>
-
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.backend_routing" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.conv_mode" as never)}</span><span className="text-primary font-mono uppercase">{(workspaceState.localInference.routing.conversationOverrides[workspaceState.currentChatSessionId] ?? workspaceState.localInference.routing.activeMode).replace(/_/g, " ")}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.privacy_mode" as never)}</span><span className="text-success font-mono uppercase">{workspaceState.localInference.routing.rules.find((rule) => rule.scope === "task" && rule.scopeRefId === activeTask?.id)?.privacyMode ?? "standard"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.active_model" as never)}</span><span className="text-foreground font-mono">{workspaceState.localInference.modelRegistry.find((model) => model.id === workspaceState.localInference.ollama.selectedModelId)?.displayName ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.fallback" as never)}</span><span className={`font-mono ${workspaceState.localInference.resources.autoFallbackReady ? "text-success" : "text-warning"}`}>{workspaceState.localInference.resources.autoFallbackReady ? t("rail.yes" as never) : t("rail.no" as never)}</span></div>
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.local_resources" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.concurrent" as never)}</span><span className="text-foreground font-mono">{workspaceState.localInference.resources.activeJobs}/{workspaceState.localInference.resources.maxConcurrentJobs}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.queue" as never)}</span><span className="text-warning font-mono">{workspaceState.localInference.resources.queuedJobs}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.pressure" as never)}</span><span className="text-foreground font-mono uppercase">{workspaceState.localInference.resources.resourcePressure}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.degraded" as never)}</span><span className={`font-mono ${workspaceState.localInference.resources.degradedMode ? "text-warning" : "text-success"}`}>{workspaceState.localInference.resources.degradedMode ? t("rail.yes" as never) : t("rail.no" as never)}</span></div>
-        </div>
-      </div>
-
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.local_shell" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.exec_mode" as never)}</span><span className="text-primary font-mono uppercase">{workspaceState.localShell.executionMode.replace(/_/g, " ")}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.workspace" as never)}</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.localShell.project.workspaceName}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.instructions" as never)}</span><span className={`font-mono ${workspaceState.localShell.project.projectInstructionsDetected ? "text-success" : "text-warning"}`}>{workspaceState.projectInstructions.status}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>instruction file</span><span className="text-foreground font-mono truncate max-w-[120px]">{workspaceState.projectInstructions.source?.fileType ?? "none"}</span></div>
-          <div className="text-muted-foreground truncate">{workspaceState.projectInstructions.summary}</div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.git_changes" as never)}</span><span className={`font-mono ${workspaceState.localShell.project.hasLocalChanges ? "text-warning" : "text-success"}`}>{workspaceState.localShell.project.hasLocalChanges ? t("rail.dirty" as never) : t("rail.clean" as never)}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">{t("rail.terminal" as never)}</span><span className="text-foreground font-mono">{workspaceState.localShell.terminal.state}</span></div>
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.capability_gates" as never)}</span>
-        <div className="mt-1.5 space-y-1 text-[10px]">
-          {workspaceState.localShell.capabilities.map((gate) => (
-            <div key={gate.capability} className="flex justify-between gap-2 text-muted-foreground">
-              <span>{gate.capability.replace(/_/g, " ")}</span>
-              <span className={`font-mono ${gate.requiresApproval ? "text-warning" : "text-success"}`}>{gate.requiresApproval ? "require_approval" : "allow"}</span>
-            </div>
-          ))}
-          {workspaceState.policyState.lastDecision ? (
-            <div className="mt-2 border border-warning/30 bg-warning/5 p-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-warning font-mono uppercase">policy</span>
-                <span
-                  className={`font-mono ${
-                    workspaceState.policyState.lastDecision.blocked
-                      ? "text-destructive"
-                      : workspaceState.policyState.lastDecision.requiresApproval
-                        ? "text-warning"
-                        : "text-success"
-                  }`}
-                >
-                  {workspaceState.policyState.lastDecision.outcome}
-                </span>
-              </div>
-              <div className="text-muted-foreground">{workspaceState.policyState.lastDecision.rationale}</div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("rail.per_agent" as never)}</span>
-        <div className="mt-1.5 space-y-0.5 text-[10px]">
-          {workspaceState.localInference.routing.agentAssignments.slice(0, 6).map((assignment) => (
-            <div key={assignment.agentId} className="flex justify-between text-muted-foreground gap-1">
-              <span className="truncate">{assignment.agentRole}</span>
-              <span className="text-foreground font-mono truncate">{assignment.preferredBackend}→{assignment.fallbackBackend}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <span className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">{t("memory")}</span>
-        <div className="mt-1.5 space-y-0.5 text-[10px]">
-          <div className="flex justify-between text-muted-foreground"><span>{t("snapshots")}</span><span className="text-foreground font-mono">{workspaceState.memory.tasks.length}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>{t("context")}</span><span className="text-foreground font-mono">{workspaceState.contextEnvelope.decisions.length + workspaceState.contextEnvelope.chat.recentProjectActions.length} scoped</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>AGENTS.md</span><span className={`font-mono ${workspaceState.memory.project.discoveredInstructions.some((entry) => entry.toLowerCase().includes("agent")) ? "text-success" : "text-warning"}`}>{workspaceState.memory.project.discoveredInstructions.length > 0 ? t("ctx.synced") : t("rail.missing" as never)}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Provider defaults</span><span className="text-primary font-mono">{workspaceState.memory.providerPreferences.preferredProvider}/{workspaceState.memory.providerPreferences.preferredModelByProvider[workspaceState.memory.providerPreferences.preferredProvider]}</span></div>
-          <div className="flex justify-between text-muted-foreground"><span>Task blockers</span><span className={`font-mono ${workspaceState.contextEnvelope.task?.blockerSummary.length ? "text-warning" : "text-success"}`}>{workspaceState.contextEnvelope.task?.blockerSummary.length ?? 0}</span></div>
-        </div>
-      </div>
+      {/* Memory */}
+      <CollapsibleSection title="Memory">
+        <KV label="snapshots" value={workspaceState.memory.tasks.length} />
+        <KV label="context" value={`${workspaceState.contextEnvelope.decisions.length} scoped`} />
+        <KV label="provider" value={`${workspaceState.memory.providerPreferences.preferredProvider}`} color="text-primary" />
+      </CollapsibleSection>
     </div>
   );
 }
