@@ -87,7 +87,7 @@ export class OpenRouterProviderService {
       enabled: configured,
       active: configured,
       apiKeyConfigured: configured,
-      status: configured ? "degraded" : "disconnected",
+      status: configured ? "connected" : "disconnected",
       baseUrl: this.baseUrl,
       lastHealthCheckIso: null,
       failureState: configured ? "unchecked" : "missing_api_key",
@@ -389,7 +389,7 @@ export class OpenRouterProviderService {
   }
 
   private resolveApiKey(): string | undefined {
-    return import.meta.env.OPENROUTER_API_KEY as string | undefined;
+    return (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined);
   }
 
   private rankCost(modelId: string): HybridModelRegistryEntry["costTier"] {

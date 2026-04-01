@@ -2501,6 +2501,55 @@ export function useChatWorkspaceState() {
           const latestChat = chatStateRef.current;
           const sessionMessages = latestChat.messagesBySessionId[sessionId] ?? [];
 
+          // Graceful fallback to mock when API key is not configured (demo mode)
+          if (openRouterResult.executionState === "failed" && openRouterResult.errorCode === "missing_api_key") {
+            const demoIso = new Date().toISOString();
+            const demoText = mockResponse.content;
+            dispatch({
+              type: "set_workflow",
+              workflow: completeExecutionTrace(
+                appendExecutionTraceStep(workflowRef.current, {
+                  traceId,
+                  nowIso: demoIso,
+                  type: "result_received",
+                  title: "Demo mode — mock response",
+                  details: "OpenRouter API key not configured. Using mock response.",
+                  phaseLabel: "Demo mode",
+                  liveState: "completed",
+                  provider: "Demo",
+                  model: selectedProviderModel,
+                  nextStatus: "completed",
+                }),
+                traceId,
+                { nowIso: demoIso, outcome: "success", usage: { executionLocation: "local", executionWeight: "light" } },
+              ),
+            });
+            dispatch({
+              type: "set_chat",
+              chat: {
+                ...latestChat,
+                messagesBySessionId: {
+                  ...latestChat.messagesBySessionId,
+                  [sessionId]: sessionMessages.map((msg) =>
+                    msg.id === responseId
+                      ? {
+                          ...msg,
+                          content: demoText,
+                          status: "completed" as const,
+                          liveState: "completed" as const,
+                          phaseLabel: "Demo mode",
+                          createdAtIso: demoIso,
+                          providerMeta: { provider: "Demo (no API key)", model: selectedProviderModel, backend: "local" as const, routingKey: "demo" },
+                        }
+                      : msg,
+                  ),
+                },
+              },
+            });
+            setProviderExecutionState("completed");
+            return;
+          }
+
           if (openRouterResult.executionState === "completed") {
             setProviderExecutionState("streaming_ready");
             dispatch({
