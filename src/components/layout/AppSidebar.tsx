@@ -1,12 +1,12 @@
 import {
   FolderKanban, Files, GitBranch, Wand2, Library, Bot, Plug, ShieldCheck,
   Database, Rocket, Globe, Package, Settings, ChevronLeft, X, MessageSquare,
-  Palette, MonitorPlay, CircleDot, Folder, Link2, Workflow,
+  Palette, MonitorPlay, CircleDot,
 } from "lucide-react";
 import type { NavSection } from "./AppLayout";
 import { useI18n } from "@/lib/i18n";
 import type { WorkspaceRuntimeState } from "@/types/workspace";
-import { SidebarNavRow, Badge, Button } from "@/ui";
+import { SidebarNavRow } from "@/ui";
 
 const navItems: { id: NavSection; icon: React.ElementType; labelKey: string }[] = [
   { id: "workspace", icon: MessageSquare, labelKey: "nav.workspace" },
@@ -38,34 +38,22 @@ interface SidebarProps {
 
 export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle, workspaceState, isMobile }: SidebarProps) {
   const { t } = useI18n();
-  const activeTask = workspaceState.workflow.tasks.find((task) => task.linkedChatSessionId === workspaceState.currentChatSessionId) ?? workspaceState.workflow.tasks[0];
-  const connectedRepo = workspaceState.repository.connected || Boolean(workspaceState.workflow.github.activeRepositoryId);
-  const openRouterConnected = workspaceState.localInference.cloud.status === "connected";
-  const ollamaHealthy = workspaceState.localInference.ollama.connectionHealthy;
-  const blockingAudits = workspaceState.auditors.gateDecisions.reduce((sum, gate) => sum + gate.blockingFindingIds.length, 0);
 
   return (
     <aside
       className={`flex flex-col border-r border-border-subtle bg-sidebar shrink-0 ui-transition h-full ${
-        isMobile ? "w-56" : collapsed ? "w-12" : "w-56"
+        isMobile ? "w-52" : collapsed ? "w-12" : "w-52"
       }`}
     >
-      {!collapsed || isMobile ? (
-        <div className="px-2.5 py-2 border-b border-border-subtle space-y-1 text-[10px] font-mono">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground uppercase tracking-wider">project</span>
-            <span className="text-foreground font-medium truncate">{workspaceState.currentProject}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-muted-foreground">
-            <span className="flex items-center gap-1"><Link2 className={`h-3 w-3 ${connectedRepo ? "text-success" : "text-warning"}`} />repo {connectedRepo ? "ok" : "--"}</span>
-            <span className="flex items-center gap-1"><Plug className={`h-3 w-3 ${openRouterConnected || ollamaHealthy ? "text-success" : "text-warning"}`} />runtime {(openRouterConnected || ollamaHealthy) ? "ok" : "--"}</span>
-            <span className="flex items-center gap-1"><ShieldCheck className={`h-3 w-3 ${blockingAudits > 0 ? "text-warning" : "text-success"}`} />gate {blockingAudits > 0 ? `${blockingAudits}` : "ok"}</span>
-            <span className="flex items-center gap-1"><Workflow className="h-3 w-3" />{workspaceState.currentTaskStatus.replace(/_/g, " ")}</span>
-          </div>
-          <div className="text-muted-foreground truncate">task <span className="text-foreground">{activeTask?.title ?? workspaceState.currentTask}</span></div>
+      {/* Brand header */}
+      {(!collapsed || isMobile) && (
+        <div className="px-3 py-2.5 border-b border-border-subtle">
+          <div className="text-[11px] font-mono font-medium text-foreground truncate">{workspaceState.currentProject}</div>
+          <div className="text-[9px] font-mono text-muted-foreground mt-0.5">{workspaceState.currentTaskStatus.replace(/_/g, " ")}</div>
         </div>
-      ) : null}
+      )}
 
+      {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-1">
         {navItems.map((item) => {
           const isActive = activeSection === item.id;
@@ -83,17 +71,7 @@ export function AppSidebar({ activeSection, onSectionChange, collapsed, onToggle
         })}
       </div>
 
-      {!collapsed || isMobile ? (
-        <div className="px-2 py-2 border-t border-border-subtle space-y-1">
-          <div className="flex flex-wrap gap-1">
-            <Badge variant={connectedRepo ? "success" : "warning"}>repo</Badge>
-            <Badge variant={openRouterConnected || ollamaHealthy ? "success" : "warning"}>runtime</Badge>
-          </div>
-          <Button onClick={() => onSectionChange("projects")} variant="ghost" className="w-full justify-start text-[10px] font-mono"><Folder className="h-3 w-3" /> switch project</Button>
-          {!connectedRepo && <Button onClick={() => onSectionChange("git")} variant="ghost" className="w-full justify-start text-[10px] font-mono">connect repository</Button>}
-          {!(openRouterConnected || ollamaHealthy) && <Button onClick={() => onSectionChange("providers")} variant="ghost" className="w-full justify-start text-[10px] font-mono">connect provider</Button>}
-        </div>
-      ) : null}
+      {/* Collapse toggle */}
       <button
         onClick={onToggle}
         className="h-8 flex items-center justify-center border-t border-border-subtle text-muted-foreground hover:text-foreground transition-colors"
