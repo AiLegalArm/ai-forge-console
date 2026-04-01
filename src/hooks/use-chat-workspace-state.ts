@@ -2539,7 +2539,7 @@ export function useChatWorkspaceState() {
                           liveState: "completed" as const,
                           phaseLabel: "Demo mode",
                           createdAtIso: demoIso,
-                          providerMeta: { provider: "Demo (no API key)", model: selectedProviderModel, backend: "mock" as const, routingKey: "demo" },
+                          providerMeta: { provider: "Demo (no API key)", model: selectedProviderModel, backend: "local" as const, routingKey: "demo" },
                         }
                       : msg,
                   ),
