@@ -1,5 +1,6 @@
 import { type AppMode } from "./AppLayout";
 import { Cloud, Smartphone, Menu, PanelRight, Terminal, ShieldCheck, GitBranch } from "lucide-react";
+
 import { useI18n } from "@/lib/i18n";
 import type { LocalShellWorkspaceState } from "@/types/local-shell";
 import type { WorkspaceRepositoryState } from "@/types/workspace";
