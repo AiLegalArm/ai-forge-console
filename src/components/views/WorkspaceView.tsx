@@ -28,6 +28,7 @@ import {
   Radar,
   Bot,
   Flag,
+  Cpu,
 } from "lucide-react";
 import { SmartActionChips } from "@/components/assistive/SmartActionChips";
 import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
