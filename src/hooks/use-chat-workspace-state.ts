@@ -282,13 +282,13 @@ export function useChatWorkspaceState() {
   const [projectScopedStateById, setProjectScopedStateById] = useState<Record<string, ProjectScopedWorkspaceState>>({
     [defaultProjectId]: buildProjectScopedState(defaultProjectId, defaultProjectName, defaultProjectRoot),
   });
-  const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
-  const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
-  const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
+  const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("openrouter");
+  const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("cloud");
+  const [activeModel, setActiveModel] = useState("anthropic/claude-sonnet-4");
   const [routingProfile, setRoutingProfile] = useState<AppRoutingModeProfile>("balanced");
   const [providerExecutionState, setProviderExecutionState] = useState<OpenRouterExecutionState>("idle");
   const [lastUsedModelByProvider, setLastUsedModelByProvider] = useState<Record<"openrouter" | "ollama", string>>({
-    openrouter: "openai/gpt-4.1",
+    openrouter: "anthropic/claude-sonnet-4",
     ollama: "qwen3-coder:14b",
   });
   const [projects, setProjects] = useState<WorkspaceProjectEntry[]>([
