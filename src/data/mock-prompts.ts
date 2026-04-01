@@ -55,15 +55,8 @@ export const promptStudioTabs = [
 ];
 
 export const promptLibraryTabs = [
+  "Все",
+  "Избранное",
   "My Prompts",
-  "Project Prompts",
-  "Generated",
-  "Chains",
-  "Instructions",
-  "Tool Plans",
-  "Updates",
-  "Favorites",
-  "Versions",
-  "Ratings",
-  "Analytics",
+  "Импортированные",
 ];
