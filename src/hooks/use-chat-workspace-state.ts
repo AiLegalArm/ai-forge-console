@@ -282,13 +282,13 @@ export function useChatWorkspaceState() {
   const [projectScopedStateById, setProjectScopedStateById] = useState<Record<string, ProjectScopedWorkspaceState>>({
     [defaultProjectId]: buildProjectScopedState(defaultProjectId, defaultProjectName, defaultProjectRoot),
   });
-  const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("ollama");
-  const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("hybrid");
-  const [activeModel, setActiveModel] = useState("qwen3-coder:14b");
+  const [providerSource, setProviderSource] = useState<"openrouter" | "ollama">("openrouter");
+  const [deploymentMode, setDeploymentMode] = useState<"local" | "cloud" | "hybrid">("cloud");
+  const [activeModel, setActiveModel] = useState("anthropic/claude-sonnet-4");
   const [routingProfile, setRoutingProfile] = useState<AppRoutingModeProfile>("balanced");
   const [providerExecutionState, setProviderExecutionState] = useState<OpenRouterExecutionState>("idle");
   const [lastUsedModelByProvider, setLastUsedModelByProvider] = useState<Record<"openrouter" | "ollama", string>>({
-    openrouter: "openai/gpt-4.1",
+    openrouter: "anthropic/claude-sonnet-4",
     ollama: "qwen3-coder:14b",
   });
   const [projects, setProjects] = useState<WorkspaceProjectEntry[]>([
@@ -394,30 +394,45 @@ export function useChatWorkspaceState() {
     if (provider === "openrouter") {
       const cloudModels = localInference.hybridModelRegistry.filter((entry) => entry.provider === "openrouter");
       const fallbackCloud = [
-        { id: "anthropic/claude-sonnet-4", displayName: "Claude Sonnet 4" },
-        { id: "anthropic/claude-3.5-sonnet", displayName: "Claude 3.5 Sonnet" },
-        { id: "openai/gpt-4.1", displayName: "GPT-4.1" },
-        { id: "openai/gpt-4.1-mini", displayName: "GPT-4.1 Mini" },
-        { id: "openai/o3", displayName: "OpenAI o3" },
-        { id: "openai/o4-mini", displayName: "OpenAI o4-mini" },
-        { id: "google/gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
-        { id: "google/gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
-        { id: "deepseek/deepseek-r1", displayName: "DeepSeek R1" },
-        { id: "deepseek/deepseek-chat", displayName: "DeepSeek V3" },
-        { id: "qwen/qwen3-235b-a22b", displayName: "Qwen3 235B" },
-        { id: "meta-llama/llama-4-maverick", displayName: "Llama 4 Maverick" },
+        // Anthropic
+        { id: "anthropic/claude-sonnet-4", displayName: "Claude Sonnet 4", group: "Anthropic" },
+        { id: "anthropic/claude-3.5-sonnet", displayName: "Claude 3.5 Sonnet", group: "Anthropic" },
+        { id: "anthropic/claude-3.5-haiku", displayName: "Claude 3.5 Haiku", group: "Anthropic" },
+        // OpenAI
+        { id: "openai/gpt-4.1", displayName: "GPT-4.1", group: "OpenAI" },
+        { id: "openai/gpt-4.1-mini", displayName: "GPT-4.1 Mini", group: "OpenAI" },
+        { id: "openai/gpt-4.1-nano", displayName: "GPT-4.1 Nano", group: "OpenAI" },
+        { id: "openai/o3", displayName: "OpenAI o3", group: "OpenAI" },
+        { id: "openai/o4-mini", displayName: "OpenAI o4-mini", group: "OpenAI" },
+        // Google
+        { id: "google/gemini-2.5-pro", displayName: "Gemini 2.5 Pro", group: "Google" },
+        { id: "google/gemini-2.5-flash", displayName: "Gemini 2.5 Flash", group: "Google" },
+        { id: "google/gemini-2.5-flash-lite", displayName: "Gemini 2.5 Flash Lite", group: "Google" },
+        // DeepSeek
+        { id: "deepseek/deepseek-r1", displayName: "DeepSeek R1", group: "DeepSeek" },
+        { id: "deepseek/deepseek-chat", displayName: "DeepSeek V3", group: "DeepSeek" },
+        // Qwen
+        { id: "qwen/qwen3-235b-a22b", displayName: "Qwen3 235B", group: "Qwen" },
+        { id: "qwen/qwen3-30b-a3b", displayName: "Qwen3 30B", group: "Qwen" },
+        // Meta
+        { id: "meta-llama/llama-4-maverick", displayName: "Llama 4 Maverick", group: "Meta" },
+        { id: "meta-llama/llama-4-scout", displayName: "Llama 4 Scout", group: "Meta" },
+        // Mistral
+        { id: "mistralai/mistral-large", displayName: "Mistral Large", group: "Mistral" },
+        { id: "mistralai/codestral", displayName: "Codestral", group: "Mistral" },
       ];
 
       return cloudModels.length > 0
-        ? cloudModels.map((entry) => ({ id: entry.providerModelId, displayName: entry.displayName }))
+        ? cloudModels.map((entry) => ({ id: entry.providerModelId, displayName: entry.displayName, group: "OpenRouter" }))
         : fallbackCloud;
     }
 
     const localModels = localInference.modelRegistry.map((entry) => ({
       id: entry.name,
       displayName: entry.displayName,
+      group: "Ollama",
     }));
-    return localModels.length > 0 ? localModels : [{ id: "qwen3-coder:14b", displayName: "Qwen3 Coder 14B" }];
+    return localModels.length > 0 ? localModels : [{ id: "qwen3-coder:14b", displayName: "Qwen3 Coder 14B", group: "Ollama" }];
   };
 
   const activeWorkflowTask =

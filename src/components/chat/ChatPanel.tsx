@@ -151,18 +151,29 @@ export function ChatPanel({ workspaceState, chatState, chatContexts, onConversat
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {/* Inline model selector */}
+          {/* Inline model selector with groups */}
           <div className="flex items-center gap-1 text-[10px] font-mono">
             <Cpu className="h-3 w-3 text-muted-foreground" />
             <select
               value={workspaceState.activeModel}
               onChange={(e) => onModelChange(e.target.value)}
-              className="bg-transparent border border-border-subtle rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground hover:border-primary/50 focus:border-primary focus:outline-none transition-colors cursor-pointer max-w-[140px] truncate"
+              className="bg-transparent border border-border-subtle rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground hover:border-primary/50 focus:border-primary focus:outline-none transition-colors cursor-pointer max-w-[160px] truncate"
               title={workspaceState.activeModel}
             >
-              {workspaceState.availableModels.map((m) => (
-                <option key={m.id} value={m.id}>{m.displayName}</option>
-              ))}
+              {(() => {
+                const models = workspaceState.availableModels;
+                const groups = [...new Set(models.map(m => m.group).filter(Boolean))];
+                if (groups.length > 1) {
+                  return groups.map(group => (
+                    <optgroup key={group} label={group}>
+                      {models.filter(m => m.group === group).map(m => (
+                        <option key={m.id} value={m.id}>{m.displayName}</option>
+                      ))}
+                    </optgroup>
+                  ));
+                }
+                return models.map(m => <option key={m.id} value={m.id}>{m.displayName}</option>);
+              })()}
             </select>
           </div>
           <button
