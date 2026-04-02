@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { ORACLE_SYSTEM_PROMPT } from "@/data/oracle-system-prompt";
 import type { AgentActivityEventType, ActivitySeverity } from "@/types/workflow";
 import { activeAgents, initialChatState } from "@/data/mock-chat";
 import { workflowState as initialWorkflowState } from "@/data/mock-workflow";
