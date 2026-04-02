@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { SmartActionChips } from "@/components/assistive/SmartActionChips";
 import { getSmartActionSuggestions, type SmartActionId } from "@/lib/ai-native-suggestions";
+import { ZipRepositoryView } from "@/components/views/ZipRepositoryView";
+import { GitHubConnectView } from "@/components/views/GitHubConnectView";
 
 const taskStatusIcons: Record<WorkflowTask["status"], React.ReactNode> = {
   proposed: <Clock className="h-3 w-3 text-muted-foreground" />,
