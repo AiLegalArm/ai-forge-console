@@ -2520,7 +2520,7 @@ export function useChatWorkspaceState() {
             userInput: draft,
             contextMessages: recentMessages,
             systemPrompt:
-              `You are assisting in a chat-first software workspace. Routing profile: ${routingDecision.profile}. Routing mode: ${workspaceState.routingMode}. Route reason: ${routingDecision.reason}.\n` +
+              ORACLE_SYSTEM_PROMPT + `\n\nWorkspace context: Routing profile: ${routingDecision.profile}. Routing mode: ${workspaceState.routingMode}. Route reason: ${routingDecision.reason}.\n` +
               `${contextSystemPrompt}`,
           });
 
