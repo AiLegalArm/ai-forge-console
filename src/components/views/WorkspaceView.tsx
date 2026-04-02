@@ -365,6 +365,7 @@ function GitView({
 
   return (
     <div className="p-4 space-y-3">
+      <GitHubConnectView onConnect={(repo) => void onGitAction("pull", activeTask?.id ?? "")} />
       <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><GitBranch className="h-4 w-4 text-primary" /> {t("git")}</h1>
       <div className="bg-card border border-border rounded-lg p-3 grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px] font-mono">
         <div><span className="text-muted-foreground block">repo</span><span className={repoConnected ? "text-success" : "text-warning"}>{repoConnected ? "connected" : "disconnected"}</span></div>
