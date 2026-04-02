@@ -1,5 +1,5 @@
-import AppLayout from "@/components/layout/AppLayout";
+import LandingPage from "./LandingPage";
 
 export default function Index() {
-  return <AppLayout />;
+  return <LandingPage />;
 }
