@@ -284,22 +284,43 @@ function BrowserView({ workspaceState, onRunBrowserScenario }: { workspaceState:
 
 function FilesView() {
   const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<"project" | "zip">("zip");
   const files = [
     { name: "src/", children: ["components/", "hooks/", "lib/", "pages/", "data/", "App.tsx", "main.tsx", "index.css"] },
     { name: "supabase/", children: ["migrations/", "functions/", "config.toml"] },
     { name: "public/", children: ["favicon.ico", "robots.txt"] },
   ];
   return (
-    <div className="p-4 space-y-2">
-      <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Files className="h-4 w-4 text-primary" /> {t("files")}</h1>
-      <div className="bg-card border border-border rounded-lg p-3 font-mono text-xs space-y-1">
-        {files.map((f) => (
-          <div key={f.name}>
-            <div className="text-primary cursor-pointer hover:underline">{f.name}</div>
-            {f.children.map((c) => (<div key={c} className="ml-4 text-foreground cursor-pointer hover:text-primary">{c}</div>))}
-          </div>
-        ))}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-border-subtle">
+        <button
+          onClick={() => setActiveTab("project")}
+          className={`px-2 py-1 text-[10px] font-mono rounded ${activeTab === "project" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          Проект
+        </button>
+        <button
+          onClick={() => setActiveTab("zip")}
+          className={`px-2 py-1 text-[10px] font-mono rounded flex items-center gap-1 ${activeTab === "zip" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Upload className="h-3 w-3" /> ZIP-репо
+        </button>
       </div>
+      {activeTab === "project" ? (
+        <div className="p-4 space-y-2">
+          <h1 className="text-sm font-semibold text-foreground flex items-center gap-2"><Files className="h-4 w-4 text-primary" /> {t("files")}</h1>
+          <div className="bg-card border border-border rounded-lg p-3 font-mono text-xs space-y-1">
+            {files.map((f) => (
+              <div key={f.name}>
+                <div className="text-primary cursor-pointer hover:underline">{f.name}</div>
+                {f.children.map((c) => (<div key={c} className="ml-4 text-foreground cursor-pointer hover:text-primary">{c}</div>))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <ZipRepositoryView />
+      )}
     </div>
   );
 }
