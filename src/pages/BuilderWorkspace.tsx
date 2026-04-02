@@ -1,9 +1,8 @@
-import { Envelope, GitBranch, MonitorPlay, Play, Settings, Zap } from "lucide-react";
+import { MonitorPlay, Play, Settings, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Text } from "@/components/ui/text";
-import { Tabs, TabButton } from "@/components/ui/tabs";
 import { Panel, PanelBody, PanelHeader, PanelFooter } from "@/components/ui/panel";
 import { ListRow } from "@/components/ui/list-row";
 import { TraceRow } from "@/components/ui/trace-row";

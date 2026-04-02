@@ -45,7 +45,9 @@ const initialSummary: ProjectInstructionSectionSummary = {
   workflowNotes: [],
 };
 
-const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+async function dynamicImport(specifier: string): Promise<unknown> {
+  return import(/* @vite-ignore */ specifier);
+}
 
 function cloneInitialSummary(): ProjectInstructionSectionSummary {
   return {

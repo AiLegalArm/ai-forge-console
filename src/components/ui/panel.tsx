@@ -32,17 +32,39 @@ const Panel = React.forwardRef<HTMLDivElement, PanelProps>(
 Panel.displayName = "Panel";
 
 interface PanelHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
-  title: string;
+  title?: React.ReactNode;
   actions?: React.ReactNode;
 }
 
-function PanelHeader({ title, actions, className, ...props }: PanelHeaderProps) {
+function PanelHeader({ title, actions, className, children, ...props }: PanelHeaderProps) {
+  if (title || actions) {
+    return (
+      <div className={cn("flex items-center justify-between gap-2 mb-2", className)} {...props}>
+        <h3 className="text-xs font-semibold text-foreground">{title}</h3>
+        {actions && <div className="flex items-center gap-1">{actions}</div>}
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex items-center justify-between gap-2 mb-2", className)} {...props}>
-      <h3 className="text-xs font-semibold text-foreground">{title}</h3>
-      {actions && <div className="flex items-center gap-1">{actions}</div>}
+    <div
+      className={cn(
+        "px-3 py-2 text-[10px] uppercase tracking-wider font-mono text-muted-foreground flex items-center justify-between",
+        className,
+      )}
+      {...props}
+    >
+      {children}
     </div>
   );
 }
 
-export { Panel, PanelHeader };
+function PanelBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("px-3 py-2", className)} {...props} />;
+}
+
+function PanelFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("px-3 py-2 border-t border-border-subtle", className)} {...props} />;
+}
+
+export { Panel, PanelHeader, PanelBody, PanelFooter };
